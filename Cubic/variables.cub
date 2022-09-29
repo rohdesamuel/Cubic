@@ -1,0 +1,15 @@
+let x := 1
+let y : int = 1
+let z : int | nil = 1
+let i : int
+
+
+
+function identity(x) do
+  return x
+end
+
+function identity(x: int) do
+  print(x)
+  return x
+end

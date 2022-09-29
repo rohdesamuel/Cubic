@@ -1,0 +1,19 @@
+import time
+
+function main() do
+ 
+  # 1ms
+  let dt := 0.001
+  let accum := 0.0
+  while true do
+ 
+    let start := time.now()
+    while accum < dt:
+      game_engine
+      accum += time
+      
+
+  end
+end
+
+main()

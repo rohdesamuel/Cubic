@@ -1,0 +1,14 @@
+enum Foo
+  A
+  B
+  C
+end
+
+# Prints 0
+print(Foo.A)
+
+# Prints 1
+print(Foo.B)
+
+# Prints 2
+print(Foo.C)

@@ -1,0 +1,46 @@
+component Position 
+  x : float
+  y : float
+  z : float
+end
+
+component Velocity
+  x : float
+  y : float
+  z : float
+end
+
+entity Ball
+  p : Position
+  v : Velocity
+end
+
+for b in Ball do
+  print('Updating entity {}', b)
+  b.p += b.v
+end
+
+for x in Position do
+  # Is x an entity or a position struct?
+end
+
+######################
+
+component Position 
+  x : float
+  y : float
+  z : float
+end
+
+component Velocity
+  x : float
+  y : float
+  z : float
+end
+
+let ball : entity = Position + Velocity
+
+for e, p, v in entity with Position, Velocity do
+  print('Updating entity {}', e)
+  p += v
+end

@@ -1,0 +1,23 @@
+match typeof(arg)
+  int => print('int')
+
+  float => print('float')
+
+  string => do
+    print('string')
+  end
+
+  _ => print(typeof(arg))
+
+end
+
+
+let x : int | float
+
+match x do:
+  int =>
+    0 => pass
+    _ => pass
+  0. => pass
+  _ => pass
+end

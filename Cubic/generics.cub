@@ -1,0 +1,16 @@
+component Iterable
+
+
+function[T is Iterable] sum(nums: T) -> int do
+  let accum := 0
+  for x in nums do
+    accum += x
+  end
+
+  return accum
+end
+
+print(List is Iterable)  # true
+print(int is Iterable)   # false
+print(int[] is Iterable) # true
+

@@ -1,0 +1,71 @@
+
+struct Foo
+  x: float
+  y: float
+  z: float
+end
+
+a : int
+
+struct Bar
+  x: float y: float z:float
+end
+
+struct Baz float float float end
+
+# OK
+struct Vec3
+  x, y, z: float
+  i, j, k: float
+end
+
+# NOT ALLOWED
+# struct Vec2
+#   x:float, y, z: float
+# def
+
+struct Buzz
+  x: float | int
+  id: int | string
+end
+
+# Generic struct
+struct Optional[T] 
+  T | nil = nil
+end
+
+function optional_arg(x: Optional[int]) -> Optional[int] do
+  match x
+    Some(_) => return _ + 1
+    nil => return nil
+  end
+end
+
+
+do
+  a: Foo
+  a.x = 0
+  a.y = 0
+  a.z = 0
+  print(a.x, a.y, a.z)
+end
+
+do
+  a: Foo = (1, 2, 3)
+  print(a.x, a.y, a.z)
+end
+
+do
+  a: Baz = (1, 2, 3)
+  let x, y, z := a
+  print(x, y, z)
+end
+
+do
+  a: Buzz = (1.f, 'string')
+  x: float, y: string = a
+
+  # Error
+  i: float, j: int = a
+
+end

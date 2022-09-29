@@ -1,0 +1,11 @@
+# Single statement block
+do print('a') end
+
+# Multi statement block
+do
+  print('a')
+  print('b')
+end
+
+# Single line, multi statement block
+do x := 1 x += 1 + x print(x) end

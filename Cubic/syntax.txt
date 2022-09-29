@@ -1,0 +1,142 @@
+Program ::= Block
+Block ::= {Statement} [ReturnStmt]
+
+///////////////////////////////////////////////////////////////////////////////
+// Statements
+///////////////////////////////////////////////////////////////////////////////
+
+Statement ::= ';'
+    | AssignmentStmt
+    | DeclarationStmt
+    | FunctionCall
+    | BlockStmt
+    | IfStmt 
+    | ForStmt
+    | WhileStmt
+    | RepeatStmt
+    | PassStmt
+    | MatchStmt
+    | YieldStmt
+
+AssignmentStmt ::= VarList '=' ExprList
+DeclarationStmt ::= VarDecl | StructDecl
+BlockStmt ::= 'do' Block 'end'
+IfStmt ::= 'if' Expr 'then' Block {'elif' Expr 'then' Block} ['else' Block] 'end'
+ForStmt ::= 'for' Expr 'in' Expr ['step' Expr] 'do' Block 'end'
+WhileStmt ::= 'while' Expr 'do' Block 'end'
+RepeatStmt ::= 'repeat' Block 'until' Expr
+YieldStmt ::= 'yield' Expr
+PassStmt ::= 'pass'
+ReturnStmt ::= 'return' Expr
+
+// TODO: Consider adding syntax for having nested `MatchStatement`s.
+// TODO: Add more matching patterns for lists, maps, etc.
+MatchStmt ::= 'match' Expr {MatchCase} 'end'
+MatchCase ::= ('_' | Type | Expr) '=>' Block
+
+// Calling a function
+FunctionCall ::= PrefixExpr FunctionArgs
+FunctionArgs ::= '(' [ExprList] ')'
+
+// Defining a function
+FunctionDef ::= 'function' [Id] FunctionBody
+FunctionParam ::= (Id | UnionType | Id ':' UnionType) ['=' Expr]
+FunctionParamList ::= FunctionParam {',' FunctionParam}
+FunctionBody ::= '(' [FunctionParamList] ')' ['->' UnionType] Block
+
+///////////////////////////////////////////////////////////////////////////////
+// Declarations
+///////////////////////////////////////////////////////////////////////////////
+
+VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
+StructDecl ::= 'struct' {StructMemberDecl} 'end'
+StructMemberDecl ::= [IdList ':'] UnionType ['=' ExprList]
+
+///////////////////////////////////////////////////////////////////////////////
+// Helpers
+///////////////////////////////////////////////////////////////////////////////
+IdList ::= Id {',' Id}
+IdType ::= IdList ':' [UnionType]
+
+VarList ::= Var {',' Var}
+ExprList ::= Expr {',' Expr}
+
+///////////////////////////////////////////////////////////////////////////////
+// Typing Information
+///////////////////////////////////////////////////////////////////////////////
+Type ::= (Id | PrimitiveType | CompositeType | FunctionType | 'nil') [ArrayFieldList]
+UnionType ::= Type {'|' Type}
+
+ArrayFieldDecl ::= '[' [(Number | '..')] ']'
+ArrayFieldList ::= {ArrayFieldDecl}
+
+PrimitiveType ::= ['u']'int'(8|16|32|64)
+    | 'float'
+    | 'double'
+    | 'bool'
+    | 'string'
+
+CompositeType ::= 'Set' '[' [UnionType] ']'
+    | 'Map' '[' [PrimitiveType] ':' [UnionType] ']'
+    | 'List' '[' [UnionType] ']'
+
+// Declaring a function, e.g.
+//   let sum : function (int, int) -> int
+FunctionType ::= '(' [UnionType {',' UnionType } [',' '...']] ')' '->' UnionType
+
+// TODO: Extend with [1..3] syntax.
+Field ::= Expr ':' Expr
+FieldList ::= Field {',' Field} [',']
+
+ArrayValue ::= '[' ExprList ']'
+MapValue ::= '{' [FieldList] '}'
+SetValue ::= '{' [ExprList] '}'
+
+///////////////////////////////////////////////////////////////////////////////
+// Expressions
+///////////////////////////////////////////////////////////////////////////////
+
+// TODO: This will incorrectly match `FunctionDef`s in `MatchStatement`s
+Var ::= Id | PrefixExpr '[' Expr ']' | PrefixExpr '.' Id
+PrefixExpr ::= Var | FunctionCall | '(' Expr ')'
+Expr ::= Primary
+    | ArrayValue
+    | MapValue
+    | SetValue
+    | '...'
+    | FunctionDef
+    | PrefixExpr
+    | Expr BinaryOp Expr
+    | UnaryOp Expr
+    | 'await' Expr
+    | 'async' Expr
+
+Primary ::= 'nil'
+    | 'false'
+    | 'true'
+    | Number
+    | String
+
+BinaryOp ::= ArithmeticBinaryOp
+    | BitwiseBinaryOp
+    | LogicalBinaryOp
+    | EqualityOp
+    | RangeOp
+
+UnaryOp ::= ArithmeticUnaryOp
+    | BitwiseUnaryOp
+    | LogicalUnaryOp
+    | PointerOp
+
+ArithmeticBinaryOp ::= '+' | '-' | '*' | '/' | '//' | '%'
+ArithmeticUnaryOp ::= '-'
+
+BitwiseBinaryOp ::= '&' | '|' | '^' | '<<' | '>>' 
+BitwiseUnaryOp ::= '~'
+
+LogicalBinaryOp ::= 'and' | 'or' | 'xor' | '<' | '<=' | '>' | '>='
+LogicalUnaryOp ::= 'not'
+
+EqualityOp ::= '==' | '!='
+RangeOp ::= '..'
+PointerOp ::= '*' | '&'

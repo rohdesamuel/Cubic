@@ -1,0 +1,11 @@
+let x := 0
+
+if x == 0 then print('Single line conditional')
+
+if x == 0 then do
+  print('Multi line conditional')
+end
+
+while x == 0 do
+  x += 1
+end

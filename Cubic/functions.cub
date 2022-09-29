@@ -1,0 +1,52 @@
+function simple_print(x: string) do
+  print(x)
+end
+
+function closure(x: string) -> () -> string do
+  return function() -> string x
+end
+
+function variadic(args: ..) do
+  for arg in args do
+    print(arg)
+  end
+end
+
+function typed_variadic(args: ..int) do
+  let result := 0
+  for arg in args
+    result += arg
+
+  return result
+end
+
+function other_coroutine() do
+  yield 3
+end
+
+function coroutine() do
+  yield 1
+  yield 2
+  yield other_coroutine
+end
+
+function loadfile() do
+  let f := open("some/file")
+  return f.read()
+end
+
+function some_filecoroutine() do
+  let file_contents := async loadfile()
+
+  # Suspends this coroutine until file_contents is filled.
+  await file_contents
+
+  print(file_contents)
+end
+
+simple_print('Hello, world!')
+
+closure('Hello, world!')()
+
+let lambda := function() print('Hello, World!')
+lambda()
