@@ -1,0 +1,15 @@
+do
+  let x := 1
+  assert x == 1
+
+  x = 2
+  assert x == 2
+end
+
+do
+  let x : double = 1.0
+  assert x == 1.0
+
+  x = 3.14
+  assert x == 3.14
+end

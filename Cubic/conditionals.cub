@@ -1,8 +1,8 @@
 let x := 0
 
-if x == 0 then print('Single line conditional')
+if x == 0 then print('Single line conditional') end
 
-if x == 0 then do
+if x == 0 then
   print('Multi line conditional')
 end
 

@@ -4,6 +4,7 @@
 #include "common.h"
 
 typedef enum {
+  VAL_UNKNOWN = -1,
   VAL_NIL,
   VAL_BOOL,
   VAL_INT,
@@ -17,21 +18,29 @@ typedef enum {
   VAL_UINT32,
   VAL_UINT64,
   VAL_FLOAT,
-  VAL_DOUBLE
+  VAL_DOUBLE,
 } ValueType;
 
-#define AS_BOOL(value)         ((value).as.b)
-#define AS_INT(value)          ((value).as.i)
-#define AS_INTX(value, width)  ((value).as.i##width)
-#define AS_UINT(value)         ((value).as.i)
-#define AS_UINTX(value, width) ((value).as.i##width)
+#define AS_BOOL(value)          ((value).as.b)
+#define AS_INT(value)           ((value).as.i)
+#define AS_INT8(value)          ((value).as.i8)
+#define AS_INT16(value)         ((value).as.i16)
+#define AS_INT32(value)         ((value).as.i32)
+#define AS_INT64(value)         ((value).as.i64)
+#define AS_UINT(value)          ((value).as.u)
+#define AS_UINT8(value)         ((value).as.u8)
+#define AS_UINT16(value)        ((value).as.u16)
+#define AS_UINT32(value)        ((value).as.u32)
+#define AS_UINT64(value)        ((value).as.u64)
+
 #define AS_FLOAT(value)        ((value).as.f)
 #define AS_DOUBLE(value)       ((value).as.d)
 
 #define IS_BOOL(value)         ((value).type == VAL_BOOL)
 #define IS_NIL(value)          ((value).type == VAL_NIL)
 #define ISA_NUMBER(value)       ((value).type >= VAL_INT && (value).type <= VAL_DOUBLE)
-#define ISA_INT(value)          ((value).type >= VAL_INT && (value).type <= VAL_INT64)
+#define ISA_INTEGER(value)       ((value).type >= VAL_INT && (value).type <= VAL_DOUBLE)
+#define ISA_INT(value)          ((value).type >= VAL_INT && (value).type <= VAL_UINT64)
 #define ISA_UINT(value)         ((value).type >= VAL_UINT && (value).type <= VAL_UINT64)
 
 #define IS_INT(value)          ((value).type == VAL_INT)
@@ -43,6 +52,8 @@ typedef enum {
 
 #define NIL_VAL                  ((Value_){{.i = 0}, VAL_NIL})
 #define BOOL_VAL(value)          ((Value_){{.b = value}, VAL_BOOL, 0})
+#define TRUE_VAL BOOL_VAL(true)
+#define FALSE_VAL BOOL_VAL(false)
 #define INT_VAL(value)           ((Value_){{.i = value}, VAL_INT, 0})
 #define INT8_VAL(value)           ((Value_){{.i8 = value}, VAL_INT8, 0})
 #define INT16_VAL(value)           ((Value_){{.i16 = value}, VAL_INT16, 0})

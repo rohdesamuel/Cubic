@@ -1,0 +1,121 @@
+#######################################
+# Simple single if statements
+#######################################
+if true then
+  assert true
+end
+
+if false then
+  assert false
+end
+
+#######################################
+# 2-if statements
+#######################################
+if true then
+  assert true
+else
+  assert false
+end
+
+if false then
+  assert false
+else
+  assert true
+end
+
+if 1 + 1 == 2 then
+  assert true
+else
+  assert false
+end
+
+#######################################
+# 3-if statements
+#######################################
+if true then
+  assert true
+elif false then
+  assert false
+else
+  assert false
+end
+
+if false then
+  assert false
+elif true then
+  assert true
+else
+  assert false
+end
+
+if false then
+  assert false
+elif false then
+  assert false
+else
+  assert true
+end
+
+#######################################
+# 4-if statements
+#######################################
+if true then
+  assert true
+elif false then
+  assert false
+elif false then
+  assert false
+elif false then
+  assert false
+else
+  assert false
+end
+
+if false then
+  assert false
+elif true then
+  assert true
+elif false then
+  assert false
+elif false then
+  assert false
+else
+  assert false
+end
+
+if false then
+  assert false
+elif false then
+  assert false
+elif true then
+  assert true
+elif false then
+  assert false
+else
+  assert false
+end
+
+if false then
+  assert false
+elif false then
+  assert false
+elif false then
+  assert false
+elif true then
+  assert true
+else
+  assert false
+end
+
+if false then
+  assert false
+elif false then
+  assert false
+elif false then
+  assert false
+elif false then
+  assert false
+else
+  assert true
+end

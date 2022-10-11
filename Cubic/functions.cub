@@ -6,13 +6,13 @@ function closure(x: string) -> () -> string do
   return function() -> string x
 end
 
-function variadic(args: ..) do
+function variadic(args: ...) do
   for arg in args do
     print(arg)
   end
 end
 
-function typed_variadic(args: ..int) do
+function typed_variadic(args: ...int) do
   let result := 0
   for arg in args
     result += arg

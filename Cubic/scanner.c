@@ -13,7 +13,7 @@ static bool isatend(Scanner scanner);
 static Token_ make_token(Scanner scanner, TokenType type);
 static Token_ error_token(Scanner scanner, const char* message);
 static bool match(Scanner scanner, char expected);
-static void skip_whitespace(Scanner scanner);
+static Token_ skip_whitespace(Scanner scanner);
 
 static char peek(Scanner scanner);
 static char peek_next(Scanner scanner);
@@ -33,7 +33,10 @@ void scanner_init(Scanner_* scanner, const char* source) {
 }
 
 Token_ scanner_scan(Scanner scanner) {
-  skip_whitespace(scanner);
+  Token_ err_tk = skip_whitespace(scanner);
+  if (err_tk.type == TK_ERR) {
+    return err_tk;
+  }
 
   scanner->start = scanner->current;
 
@@ -72,8 +75,8 @@ Token_ scanner_scan(Scanner scanner) {
     {
       char c = peek(scanner);
       switch (c) {
-        case '=': return make_token(scanner, TK_EQUAL_EQUAL);
-        case '>': return make_token(scanner, TK_FAT_ARROW);
+        case '=': advance(scanner); return make_token(scanner, TK_EQUAL_EQUAL);
+        case '>': advance(scanner); return make_token(scanner, TK_FAT_ARROW);
       }
       return make_token(scanner, TK_EQUAL);
     }
@@ -81,8 +84,8 @@ Token_ scanner_scan(Scanner scanner) {
     {
       char c = peek(scanner);
       switch (c) {
-        case '=': return make_token(scanner, TK_LTE);
-        case '<': return make_token(scanner, TK_LSHIFT);
+        case '=': advance(scanner); return make_token(scanner, TK_LTE);
+        case '<': advance(scanner); return make_token(scanner, TK_LSHIFT);
       }
       return make_token(scanner, TK_LT);
     }
@@ -90,8 +93,8 @@ Token_ scanner_scan(Scanner scanner) {
     {
       char c = peek(scanner);
       switch (c) {
-        case '=': return make_token(scanner, TK_GTE);
-        case '>': return make_token(scanner, TK_RSHIFT);
+        case '=': advance(scanner); return make_token(scanner, TK_GTE);
+        case '>': advance(scanner); return make_token(scanner, TK_RSHIFT);
       }
       return make_token(scanner, TK_GT);
     }
@@ -158,7 +161,7 @@ static bool match(Scanner scanner, char expected) {
   return true;
 }
 
-static void skip_whitespace(Scanner scanner) {
+static Token_ skip_whitespace(Scanner scanner) {
   for (;;) {
     switch (peek(scanner)) {
       case ' ':
@@ -170,15 +173,37 @@ static void skip_whitespace(Scanner scanner) {
         ++scanner->line;
         advance(scanner);
         break;
+#if 1
+      case '/':
+        if (*(scanner->current + 1) == '#') {
+          advance(scanner);  // Consume '/'
+          for (;;) {
+            advance(scanner);
+            if (isatend(scanner)) {
+              return error_token(scanner, "Unmatched multi-line comment.");
+            }
+
+            if (peek(scanner) == '#' && *(scanner->current + 1) == '/') {
+              advance(scanner);
+              break;
+            }            
+          }
+          advance(scanner);
+          break;
+        }
+        return (Token_) { .type = TK_NIL };
+#endif
       case '#':
         while (peek(scanner) != '\n' && !isatend(scanner)) {
           advance(scanner);
         }
         break;
       default:
-        return;
+        return (Token_) { .type = TK_NIL };
     }
   }
+
+  return (Token_) {.type = TK_NIL};
 }
 
 static bool isatend(Scanner scanner) {
@@ -249,7 +274,13 @@ static TokenType identifier_type(Scanner scanner) {
       if (length > 1) {
         switch (scanner->start[1]) {
           case 'n': return check_keyword(scanner, 2, 1, "d", TK_AND);
-          case 's': return check_keyword(scanner, 2, 3, "ync", TK_ASYNC);
+          case 's':
+            if (scanner->current - scanner->start > 2) {
+              switch (scanner->start[2]) {
+                case 's': return check_keyword(scanner, 3, 3, "ert", TK_ASSERT);
+                case 'y': return check_keyword(scanner, 3, 2, "nc", TK_ASYNC);
+              }
+            }
           case 'w': return check_keyword(scanner, 2, 3, "ait", TK_AWAIT);
         }
       }
@@ -257,6 +288,9 @@ static TokenType identifier_type(Scanner scanner) {
 
     // bool
     case 'b': return check_keyword(scanner, 1, 3, "ool", TK_BOOL);
+
+    // case
+    case 'c': return check_keyword(scanner, 1, 3, "ase", TK_CASE);
 
 
     // do, double

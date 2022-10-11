@@ -5,32 +5,53 @@
 #include "value.h"
 
 typedef enum {
+  OP_NOP,
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,  
+  
   OP_CONSTANT,
-  OP_CONSTANT_LONG,  // Unimplemented.
+  OP_CONSTANT_LONG,  // Unimplemented.  
+
+  OP_EQ,
+  OP_NEQ,
+
+  OP_GT,
+  OP_GTE,
+  OP_LT,
+  OP_LTE,
+
   OP_ADD,
   OP_SUB,
   OP_MUL,
   OP_DIV,
-  OP_FADD,
-  OP_FSUB,
-  OP_FMUL,
-  OP_FDIV,
+  OP_FADD, // Unimplemented.
+  OP_FSUB, // Unimplemented.
+  OP_FMUL, // Unimplemented.
+  OP_FDIV, // Unimplemented.
 
-  OP_MOD,  // Unimplemented.
-  OP_BITWISE_AND,  // Unimplemented.
-  OP_BITWISE_OR,  // Unimplemented.
-  OP_BITWISE_XOR,  // Unimplemented.
-  OP_LSHIFT,  // Unimplemented.
-  OP_RSHIFT,  // Unimplemented.
+  OP_MOD, 
+  OP_BITWISE_AND,
+  OP_BITWISE_OR,
+  OP_BITWISE_XOR,
+  OP_BITWISE_NOT,
+  OP_LSHIFT,
+  OP_RSHIFT,
 
-  OP_AND,  // Unimplemented.
-  OP_OR,  // Unimplemented.
-  OP_XOR,  // Unimplemented.
-
-  OP_NOT,  // Unimplemented.
+  OP_AND,
+  OP_OR,
+  OP_XOR,
+  OP_NOT,
 
   OP_NEGATE,
   OP_RETURN,
+  
+  OP_POP,
+  OP_JMP,
+  OP_JMP_IF_FALSE,
+
+  OP_PRINT,
+  OP_ASSERT,
 } OpCode;
 
 typedef struct Chunk_ {

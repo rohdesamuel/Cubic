@@ -1,0 +1,80 @@
+#######################################
+# Boolean operators
+#######################################
+assert true
+assert not false
+assert true and true
+assert not (false and true)
+assert not (true and false)
+assert not (false and false)
+
+assert true or true
+assert true or false
+assert false or true
+assert not (false or false)
+
+assert not (true xor true)
+assert true xor false
+assert false xor true
+assert not (false xor false)
+
+#######################################
+# Arithmetic operators
+#######################################
+assert 1 % 5 == 1
+assert 5 % 5 == 0
+assert 6 % 5 == 1
+
+assert 1 + 1 == 2
+assert 1 - 1 == 0
+assert 2 * 3 == 6
+assert 6 / 3 == 2
+
+assert 1 == 1
+assert 1 != 0
+assert 1 > 0
+assert 1 >= 0
+assert 1 >= 1
+assert 0 <= 1
+assert 0 <= 0
+
+assert 1.0 + 1.0 == 2.0
+assert 1.0 - 1.0 == 0.0
+assert 2.0 * 3.0 == 6.0
+assert 6.0 / 3.0 == 2.0
+
+assert 1.0 == 1.0
+assert 1.0 != 0.0
+assert 1.0 > 0.0
+assert 1.0 >= 0.0
+assert 1.0 >= 1.0
+assert 0.0 <= 1.0
+assert 0.0 <= 0.0
+
+#######################################
+# Comparison operators
+#######################################
+assert true == true
+assert false == false
+assert true != false
+
+assert 1 == 1
+assert 1 != 0
+assert 1 > 0
+assert 1 >= 0
+assert 1 >= 1
+assert 0 < 1
+assert 0 <= 1
+assert 0 <= 0
+
+#######################################
+# Bitwise operators
+#######################################
+assert 1 << 3 == 8
+assert 8 >> 3 == 1
+
+assert 7 & 5 == 5
+assert 6 & 3 == 2
+
+assert 2 | 1 == 3
+assert 5 ^ 3 == 6

@@ -1,0 +1,5 @@
+let a: int = 1
+assert a == 1
+
+let c: double = 1.0
+assert c == 1.0

@@ -149,7 +149,6 @@ static void repl(VM vm) {
       printf("\n");
       break;
     }
-
     vm_interpret(vm, line);
   }
 }
@@ -195,12 +194,15 @@ static void run_file(VM vm, const char* path) {
 
   if (result == INTERPRET_COMPILE_ERROR) exit(65);
   if (result == INTERPRET_RUNTIME_ERROR) exit(70);
+  if (result == INTERPRET_ASSERTION_FAILED) exit(75);
 }
 
 int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
 
+  // const char* filename = "C:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\conditionals.cub";
+  // run_file(&vm, filename);
   
   if (argc == 1) {
     repl(&vm);

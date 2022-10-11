@@ -1,0 +1,161 @@
+/##################
+
+###################
+# USE CASE 1
+#
+# Creating a custom allocator / Reinterpreting raw bytes
+###################
+struct Block {
+  size_t size;
+};
+
+size_t size = 4096;
+Block* block = malloc(sizeof(Block) + size);
+block->size = size;
+block->memory = (char*)block + sizeof(Block);
+
+
+###################
+# USE CASE 2
+#
+# Co-locating multiple arrays.
+###################
+struct Mesh {
+  int num_verts;
+  Vec3* pos;
+  Vec3* norms;
+  Vec2* uvs;
+};
+
+int num_verts = 100;
+Mesh* mesh = malloc(sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3) + sizeof(Vec2)));
+mesh->pos   = (char*)mesh + sizeof(Mesh);
+mesh->norms = (char*)mesh + sizeof(Mesh) + num_verts * sizeof(Vec3);
+mesh->uvs   = (char*)mesh + sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3));
+
+
+###################
+# USE CASE 3
+#
+# Co-locating multiple arrays.
+###################
+struct Mesh {
+  int num_verts;
+  Vec3* pos;
+  Vec3* norms;
+  Vec2* uvs;
+};
+
+int num_verts = 100;
+Mesh* mesh = malloc(sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3) + sizeof(Vec2)));
+mesh->pos   = (char*)mesh + sizeof(Mesh);
+mesh->norms = (char*)mesh + sizeof(Mesh) + num_verts * sizeof(Vec3);
+mesh->uvs   = (char*)mesh + sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3));
+
+
+###################
+# USE CASE 4
+#
+# Should you free or not free memory from an API?
+###################
+
+struct Foo_* foo_create();
+
+struct Foo_* f = foo_create();
+
+// free(f)?
+// not free(f)?
+// foo_destroy(f)?
+
+
+###################
+# USE CASE 5
+#
+# Who should free memory in structs?
+###################
+
+struct A {
+  int* arr;
+};
+
+A a;
+a.arr = calloc(10, sizeof(int));
+
+free(A);  // leaks a.arr
+
+Categories:
+  - Reinterpreting bytes 
+  - Colocating arrays
+  - Memory Ownership (out of scope then free)
+
+##################/
+
+struct Vec3
+  x: int
+  y: int
+  z: int
+end
+
+struct Body
+  pos: Vec3*
+  vel: Vec3
+end
+
+# *  --- Non-null raw Pointer
+# &  --- unique pointer
+# && --- shared pointer (ref counted)
+# (nothing) --- co-located member
+
+
+let b: Body = Body(pos=new Vec3(0, 0, 0), vel=new Vec3(0, 0, 0))
+
+do
+  let b_ptr: Body* = &b
+  let b_unq: Body& = &b  # ERROR: cannot create unique pointer to stack var
+  let b_shd: Body&& = &b # ERROR: cannot create shared pointer to stack var
+end
+
+# Copies b onto the stack
+function do_smth(b: Body) pass
+
+# Copies b onto the stack
+function do_smth(b: Body*) pass
+
+# Copies b onto the stack and 
+function do_smth(b: Body&) pass
+
+
+variable = assignee
+
+variable, assignee, method
+---     , ---     , copies value
+---     , *       , copies value
+---     , &       , copies value
+---     , &&      , copies value
+
+*       , ---     , copies value to ptr
+*       , *       , copies ptr
+*       , &       , borrows ownership, weak reference
+*       , &&      , borrows ownership, weak reference
+
+&       , ---     , copies value to ptr
+&       , *       , copies ptr
+&       , &       , moves ownership of variable to parameter
+&       , &&      , ERROR: Unique ptr cannot borrow from shared ptr
+
+&&      , ---     , copies value to ptr
+&&      , *       , moves ownership of variable to shared ptr
+&&      , &       , moves ownership of variable to shared ptr
+&&      , &&      , 
+
+
+
+# Creates a Vec3 on the stack.
+let pos_on_stack: Vec3 = (1, 2, 3)
+
+# Creates a Vec3 on the heap.
+let pos_on_heap* := (1, 2, 3)
+
+function del_vec(v: Vec3&) do
+  
+end

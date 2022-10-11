@@ -1,23 +1,24 @@
 match typeof(arg)
-  int => print('int')
+  case int => print('int')
 
-  float => print('float')
+  case float => print('float')
 
-  string => do
+  case string => do
     print('string')
   end
 
-  _ => print(typeof(arg))
+  case _ => print(typeof(arg))
 
 end
-
 
 let x : int | float
 
 match x do:
-  int =>
-    0 => pass
-    _ => pass
-  0. => pass
-  _ => pass
+  case int =>
+    case 0 => pass
+    case _ => pass
+
+  case float =>
+    case 0. => pass
+    case _ => pass
 end

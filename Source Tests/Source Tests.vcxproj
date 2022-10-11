@@ -21,10 +21,10 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{a38513db-3f30-4ab8-a9e5-29d77d9ed4bc}</ProjectGuid>
-    <RootNamespace>Cubic</RootNamespace>
+    <ProjectGuid>{a09e8b77-53a5-40de-aa38-3ce5bb073dd7}</ProjectGuid>
+    <RootNamespace>SourceTests</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>cubic</ProjectName>
+    <ProjectName>Source Tests</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -79,9 +79,13 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <CustomBuildAfterTargets>
+    </CustomBuildAfterTargets>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -117,13 +121,23 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <TreatWarningAsError>true</TreatWarningAsError>
-      <ExceptionHandling>false</ExceptionHandling>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y "$(ProjectDir)*.cub"  "$(OutDir)"</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -133,8 +147,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <TreatWarningAsError>true</TreatWarningAsError>
-      <ExceptionHandling>false</ExceptionHandling>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -142,56 +155,41 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y "$(ProjectDir)*.cub"  "$(OutDir)"</Command>
+    </PostBuildEvent>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="arrays.cub" />
-    <None Include="code_blocks.cub" />
-    <None Include="ecs.cub" />
-    <None Include="conditionals.cub" />
-    <None Include="enums.cub" />
-    <None Include="functions.cub" />
-    <None Include="generics.cub" />
-    <None Include="hello_world.cub" />
-    <None Include="imports.cub" />
-    <None Include="loops.cub" />
-    <None Include="memory.cub" />
-    <None Include="pattern_matching.cub" />
-    <None Include="structs.cub" />
-    <None Include="type_methods.cub" />
-    <None Include="variables.cub" />
+    <CopyFileToFolders Include="conditionals.cub">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="hello_world.cub">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ast.c" />
-    <ClCompile Include="chunk.c" />
-    <ClCompile Include="compiler.c" />
-    <ClCompile Include="debug.c" />
-    <ClCompile Include="lexer.c" />
-    <ClCompile Include="main.c" />
-    <ClCompile Include="map.c" />
-    <ClCompile Include="memory.c" />
-    <ClCompile Include="parser.c" />
-    <ClCompile Include="scanner.c" />
-    <ClCompile Include="value.c" />
-    <ClCompile Include="vm.c" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="process_utils.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ast.h" />
-    <ClInclude Include="chunk.h" />
-    <ClInclude Include="common.h" />
-    <ClInclude Include="compiler.h" />
-    <ClInclude Include="debug.h" />
-    <ClInclude Include="lexer.h" />
-    <ClInclude Include="map.h" />
-    <ClInclude Include="memory.h" />
-    <ClInclude Include="parser.h" />
-    <ClInclude Include="scanner.h" />
-    <ClInclude Include="tokens.h" />
-    <ClInclude Include="types.h" />
-    <ClInclude Include="value.h" />
-    <ClInclude Include="vm.h" />
+    <ClInclude Include="process_utils.h" />
+    <ClInclude Include="utest.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="syntax.txt" />
+    <None Include="global_variables.cub" />
+    <None Include="multiline_comments.cub" />
+    <None Include="operators.cub" />
+    <None Include="scope.cub" />
+    <None Include="local_variables.cub" />
+    <None Include="simple_type_inference.cub" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

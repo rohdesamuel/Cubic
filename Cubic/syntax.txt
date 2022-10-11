@@ -17,6 +17,7 @@ Statement ::= ';'
     | PassStmt
     | MatchStmt
     | YieldStmt
+    | AssertStmt
 
 AssignmentStmt ::= VarList '=' ExprList
 DeclarationStmt ::= VarDecl | StructDecl
@@ -27,12 +28,13 @@ WhileStmt ::= 'while' Expr 'do' Block 'end'
 RepeatStmt ::= 'repeat' Block 'until' Expr
 YieldStmt ::= 'yield' Expr
 PassStmt ::= 'pass'
-ReturnStmt ::= 'return' Expr
+ReturnStmt ::= 'return' [Expr {',' Expr}]
+AssertStmt ::= 'assert' Expr
 
 // TODO: Consider adding syntax for having nested `MatchStatement`s.
 // TODO: Add more matching patterns for lists, maps, etc.
 MatchStmt ::= 'match' Expr {MatchCase} 'end'
-MatchCase ::= ('_' | Type | Expr) '=>' Block
+MatchCase ::= 'case' ('_' | Type | Expr) '=>' Block
 
 // Calling a function
 FunctionCall ::= PrefixExpr FunctionArgs
@@ -42,7 +44,7 @@ FunctionArgs ::= '(' [ExprList] ')'
 FunctionDef ::= 'function' [Id] FunctionBody
 FunctionParam ::= (Id | UnionType | Id ':' UnionType) ['=' Expr]
 FunctionParamList ::= FunctionParam {',' FunctionParam}
-FunctionBody ::= '(' [FunctionParamList] ')' ['->' UnionType] Block
+FunctionBody ::= '(' [FunctionParamList] ')' ['->' UnionType] Statement
 
 ///////////////////////////////////////////////////////////////////////////////
 // Declarations

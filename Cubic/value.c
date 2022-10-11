@@ -24,20 +24,23 @@ void valuearray_free(ValueArray array) {
   valuearray_init(array);
 }
 
+const char* kTrue = "true";
+const char* kFalse = "false";
+
 void value_print(Value_ value) {
   switch (value.type) {
     case VAL_NIL:    printf("nil"); break;
-    case VAL_BOOL:   printf("%s", AS_BOOL(value) ? "true" : "false"); break;
+    case VAL_BOOL:   printf("%s", AS_BOOL(value) ? kTrue : kFalse); break;
     case VAL_INT:    printf("%lld", AS_INT(value)); break;
-    case VAL_INT8:   printf("%hhd", AS_INTX(value, 8)); break;
-    case VAL_INT16:  printf("%hd", AS_INTX(value, 16)); break;
-    case VAL_INT32:  printf("%ld", AS_INTX(value, 32)); break;
-    case VAL_INT64:  printf("%lld", AS_INTX(value, 64)); break;
+    case VAL_INT8:   printf("%hhd", AS_INT8(value)); break;
+    case VAL_INT16:  printf("%hd", AS_INT16(value)); break;
+    case VAL_INT32:  printf("%ld", AS_INT32(value)); break;
+    case VAL_INT64:  printf("%lld", AS_INT64(value)); break;
     case VAL_UINT:   printf("%llu", AS_INT(value)); break;
-    case VAL_UINT8:  printf("%hhu", AS_UINTX(value, 8)); break;
-    case VAL_UINT16: printf("%hu", AS_UINTX(value, 16)); break;
-    case VAL_UINT32: printf("%lu", AS_UINTX(value, 32)); break;
-    case VAL_UINT64: printf("%llu", AS_UINTX(value, 64)); break;
+    case VAL_UINT8:  printf("%hhu", AS_UINT8(value)); break;
+    case VAL_UINT16: printf("%hu", AS_UINT16(value)); break;
+    case VAL_UINT32: printf("%lu", AS_UINT32(value)); break;
+    case VAL_UINT64: printf("%llu", AS_UINT64(value)); break;
     case VAL_FLOAT:  printf("%f", AS_FLOAT(value)); break;
     case VAL_DOUBLE: printf("%f", AS_DOUBLE(value)); break;
   }

@@ -1,0 +1,38 @@
+# Static array.
+let static: float[2] = [2.f, 2.f]
+
+# Static array, size determined by array.
+let static : float[] = [1.f, 2.f]
+
+#### Multi-dimensional static and dynamic arrays.
+# std::array<std::array<float, 3>, 2> d;
+let multi_2d: float[3][2] = [[1.f, 0.f, 0.f], [0.f, 1.f, 0.f]]
+
+# std::vector<float>
+let vector: list[float] = [ 1.f, 2.f ]
+
+# std::vector<std::vector<float>> d;
+let vector_2d: list[list[float]] = [ [1.f], [2.f, 3.f] ]
+
+# std::vector<std::array<float, 2>> d;
+let vector_of_static: list[float[2]] =  [[1.f, 0.f], [0.f, 1.f], [0.f, 0.f]]
+
+# std::array<std::vector<float>, 2> d;
+let static_of_vector: list[float][2] =  [[1.f], [0.f, 1.f]]
+
+# std::array<std::unordered_set<int>, 2> d;
+d: set[int][2] = [ {1.f, 2.f}, {3.f, 4.f, 5.f} ]
+d: set[set[int]] = { {1.f, 2.f}, {3.f, 4.f, 5.f} }
+
+# Set of ints.
+e: set[int] = { 1, 2, 3}
+
+# Set of boxes.
+e: set[] = { 1, "a", 5.f }
+e: list[] = [1, "b", 10.f]
+
+f: dict[int: str]  = { 1: "a", 2: "b" }
+
+g: dict[:] = { 1: "a", "b": 2.f }
+
+h: float[2][2]

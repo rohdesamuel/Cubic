@@ -24,6 +24,7 @@
     <ProjectGuid>{373d6f82-7048-4141-a857-edefe2b31c1f}</ProjectGuid>
     <RootNamespace>tests</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Unit Tests</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -145,6 +146,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="tests.h" />
+    <ClInclude Include="utest.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cubic\Cubic.vcxproj">
+      <Project>{a38513db-3f30-4ab8-a9e5-29d77d9ed4bc}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

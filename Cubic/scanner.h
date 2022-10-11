@@ -1,6 +1,7 @@
 #ifndef SCANNER__H
 #define SCANNER__H
 
+#include "common.h"
 #include "tokens.h"
 
 typedef struct Scanner_ {

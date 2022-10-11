@@ -56,6 +56,11 @@ void test_token_stream(TokenType expected_tokens[], const char* source) {
   for (;;) {
     Token_ token = scanner_scan(&scanner);
 
+    if (expected_tokens[pos] != TK_ERR && token.type == TK_ERR) {
+      fprintf(stderr, "Got scanner error at position %d: %s\n", pos, token.start);
+      break;
+    }
+
     if (token.type != expected_tokens[pos]) {
       fprintf(stderr, "At position %d Tokens did not match. Got %d expected %d\n",
         pos, token.type, expected_tokens[pos]);
@@ -136,6 +141,7 @@ extern void scanner_all_tests() {
   TEST_TOKEN_AS_STRING(UNTIL);
   TEST_TOKEN_AS_STRING(STRUCT);
   TEST_TOKEN_AS_STRING(MATCH);
+  TEST_TOKEN_AS_STRING(CASE);
   TEST_TOKEN_AS_STRING(FUNCTION);
   TEST_TOKEN_AS_STRING(RETURN);
   TEST_TOKEN_AS_STRING(AND);
@@ -147,6 +153,7 @@ extern void scanner_all_tests() {
   TEST_TOKEN_AS_STRING(PASS);
   TEST_TOKEN_AS_STRING(LET);
   TEST_TOKEN_AS_STRING(NIL);
+  TEST_TOKEN_AS_STRING(ASSERT);
 
   TEST_LITERAL(TK_NUMBER, "1.", "1.");
   TEST_LITERAL(TK_NUMBER, "1.23", "1.23");
@@ -205,4 +212,24 @@ extern void scanner_all_tests() {
 
   TEST_TOKEN_STREAM("1 + 1",
     TK_INTEGER, TK_PLUS, TK_INTEGER, TK_EOF);
+
+  TEST_TOKEN_STREAM("1 == 1",
+    TK_INTEGER, TK_EQUAL_EQUAL, TK_INTEGER, TK_EOF);
+
+  TEST_TOKEN_STREAM("1 / 1",
+    TK_INTEGER, TK_SLASH, TK_INTEGER, TK_EOF);
+
+  TEST_TOKEN_STREAM("1 // 1",
+    TK_INTEGER, TK_DOUBLE_SLASH, TK_INTEGER, TK_EOF);
+
+  TEST_TOKEN_STREAM("assert 6 / 3 == 2",
+    TK_ASSERT, TK_INTEGER, TK_SLASH, TK_INTEGER, TK_EQUAL_EQUAL, TK_INTEGER, TK_EOF);  
+
+  TEST_TOKEN_STREAM("/#//", TK_ERR, TK_EOF);
+  TEST_TOKEN_STREAM("/##/", TK_EOF);
+  TEST_TOKEN_STREAM("/###/", TK_EOF);
+  TEST_TOKEN_STREAM("/###### #######/", TK_EOF);
+  TEST_TOKEN_STREAM("/#/##/", TK_EOF);
+  TEST_TOKEN_STREAM("/# /# #/", TK_EOF);
+  TEST_TOKEN_STREAM("1 /# /# #/ 2.0", TK_INTEGER, TK_NUMBER, TK_EOF);
 }
