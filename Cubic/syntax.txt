@@ -50,7 +50,7 @@ FunctionBody ::= '(' [FunctionParamList] ')' ['->' UnionType] Statement
 // Declarations
 ///////////////////////////////////////////////////////////////////////////////
 
-VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
+VarDecl ::= ('let' | 'ref' | 'unq') IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 StructDecl ::= 'struct' {StructMemberDecl} 'end'
 StructMemberDecl ::= [IdList ':'] UnionType ['=' ExprList]
 

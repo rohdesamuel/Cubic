@@ -37,26 +37,7 @@ mesh->uvs   = (char*)mesh + sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Ve
 ###################
 # USE CASE 3
 #
-# Co-locating multiple arrays.
-###################
-struct Mesh {
-  int num_verts;
-  Vec3* pos;
-  Vec3* norms;
-  Vec2* uvs;
-};
-
-int num_verts = 100;
-Mesh* mesh = malloc(sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3) + sizeof(Vec2)));
-mesh->pos   = (char*)mesh + sizeof(Mesh);
-mesh->norms = (char*)mesh + sizeof(Mesh) + num_verts * sizeof(Vec3);
-mesh->uvs   = (char*)mesh + sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3));
-
-
-###################
-# USE CASE 4
-#
-# Should you free or not free memory from an API?
+# Should you free or not free memory from an API? Whos owns the memory?
 ###################
 
 struct Foo_* foo_create();
@@ -69,7 +50,7 @@ struct Foo_* f = foo_create();
 
 
 ###################
-# USE CASE 5
+# USE CASE 4
 #
 # Who should free memory in structs?
 ###################
@@ -102,53 +83,63 @@ struct Body
 end
 
 # *  --- Non-null raw Pointer
-# &  --- unique pointer
-# && --- shared pointer (ref counted)
+# !  --- unique pointer
+# &  --- shared pointer (ref counted)
 # (nothing) --- co-located member
 
 
-let b: Body = Body(pos=new Vec3(0, 0, 0), vel=new Vec3(0, 0, 0))
-
 do
-  let b_ptr: Body* = &b
-  let b_unq: Body& = &b  # ERROR: cannot create unique pointer to stack var
-  let b_shd: Body&& = &b # ERROR: cannot create shared pointer to stack var
+  let b: Body = Body(pos=new Vec3(0, 0, 0), vel=new Vec3(0, 0, 0))
+
+  let b_ptr: Body*  = &b
+  let b_shd: Body&  = &b # ERROR: cannot create shared pointer to stack var
+  let b_unq: Body!  = &b # ERROR: cannot create unique pointer to stack var
 end
 
-# Copies b onto the stack
-function do_smth(b: Body) pass
-
-# Copies b onto the stack
-function do_smth(b: Body*) pass
-
-# Copies b onto the stack and 
-function do_smth(b: Body&) pass
-
+# & := address of operator
+# * := dereferencing operator
 
 variable = assignee
-
 variable, assignee, method
 ---     , ---     , copies value
----     , *       , copies value
----     , &       , copies value
----     , &&      , copies value
+---     , *       , ERROR: non-pointer cannot take value of pointer
+---     , !       , ERROR: non-pointer cannot take value of pointer
+---     , &       , ERROR: non-pointer cannot take value of pointer
 
-*       , ---     , copies value to ptr
-*       , *       , copies ptr
+*       , ---     , sets variable to assignee
+*       , *       , sets variable to assignee
+*       , !       , borrows ownership, weak reference
 *       , &       , borrows ownership, weak reference
-*       , &&      , borrows ownership, weak reference
 
-&       , ---     , copies value to ptr
-&       , *       , copies ptr
-&       , &       , moves ownership of variable to parameter
-&       , &&      , ERROR: Unique ptr cannot borrow from shared ptr
+&       , ---     , ERROR: shared ptr cannot be assigned to a raw location
+&       , *       , moves ownership of assignee to variable
+&       , !       , moves ownership of assignee to variable
+&       , &       , borrows ownership, strong reference
 
-&&      , ---     , copies value to ptr
-&&      , *       , moves ownership of variable to shared ptr
-&&      , &       , moves ownership of variable to shared ptr
-&&      , &&      , 
+!       , ---     , ERROR: unique ptr cannot be assigned to a raw location
+!       , *       , moves ownership of assignee to variable
+!       , !       , moves ownership of assignee to variable
+!       , &       , ERROR: Unique ptr cannot borrow from shared ptr
+
+*variable, method
+---      , ERROR: Cannot dereference a non-pointer
+*        , Copies pointed to value
+&        , Copies pointed to value
+!        , Copies pointed to value
 
 
+
+Equivalent(
+  'ref' Id ':' '=' Id,
+  'let' Id ':' Type '&' '=' '&' Id)
+
+Equivalent(
+  'ptr' Id ':' '=' Id,
+  'let' Id ':' Type '*' '=' '&' Id)
+
+Equivalent(
+  'unq' Id ':' '=' Id,
+  'let' Id ':' Type '!' '=' '&' Id)
 
 # Creates a Vec3 on the stack.
 let pos_on_stack: Vec3 = (1, 2, 3)
@@ -156,6 +147,27 @@ let pos_on_stack: Vec3 = (1, 2, 3)
 # Creates a Vec3 on the heap.
 let pos_on_heap* := (1, 2, 3)
 
+ref pos_from_ref := pos_on_heap
+
+
 function del_vec(v: Vec3&) do
-  
+end
+
+
+struct Vec3
+  x, y, z: float
+end
+
+entity Ball
+  pos: Vec3
+  vel: Vec3
+end
+
+let ball_pen: Arena[Ball] = ()
+
+for b in Ball do
+  pass
+end
+
+for b in ball_pen do
 end
