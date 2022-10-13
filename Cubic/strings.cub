@@ -1,0 +1,12 @@
+# String variable defined in global scope, can be interned.
+let a : string = 'hello'
+
+# struct string
+#   str: list[char]&
+# end
+
+do
+  # String variable defined in block scope, will be heap allocated and
+  # destroyed when out of scope.
+  let a : string = 'hello'
+end

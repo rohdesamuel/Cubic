@@ -99,6 +99,28 @@ end
 # & := address of operator
 # * := dereferencing operator
 
+let name: type = assignee
+type    , assignee, method
+---     , ---     , copies value
+---     , *       , ERROR: non-pointer cannot take value of pointer
+---     , !       , ERROR: non-pointer cannot take value of pointer
+---     , &       , ERROR: non-pointer cannot take value of pointer
+
+*       , ---     , sets variable to assignee
+*       , *       , sets variable to assignee
+*       , !       , borrows ownership, weak reference
+*       , &       , borrows ownership, weak reference
+
+&       , ---     , creates a new shared ptr copied from assignee
+&       , *       , moves ownership of assignee to variable
+&       , !       , moves ownership of assignee to variable
+&       , &       , borrows ownership, strong reference
+
+!       , ---     , creates a new unique ptr copied from assignee
+!       , *       , moves ownership of assignee to variable
+!       , !       , moves ownership of assignee to variable
+!       , &       , ERROR: Unique ptr cannot borrow from shared ptr
+
 variable = assignee
 variable, assignee, method
 ---     , ---     , copies value
@@ -130,16 +152,19 @@ variable, assignee, method
 
 
 Equivalent(
-  'ref' Id ':' '=' Id,
-  'let' Id ':' Type '&' '=' '&' Id)
+  'ref' Id ':' [Type] '=',
+  'let' Id ':' Type '&' '='
+  )
 
 Equivalent(
-  'ptr' Id ':' '=' Id,
-  'let' Id ':' Type '*' '=' '&' Id)
+  'ptr' Id ':' [Type] '=',
+  'let' Id ':' Type '*' '='
+  )
 
 Equivalent(
-  'unq' Id ':' '=' Id,
-  'let' Id ':' Type '!' '=' '&' Id)
+  'unq' Id ':' [Type] '=',
+  'let' Id ':' Type '!' '='
+  )
 
 # Creates a Vec3 on the stack.
 let pos_on_stack: Vec3 = (1, 2, 3)
@@ -170,4 +195,71 @@ for b in Ball do
 end
 
 for b in ball_pen do
+end
+
+let l : list[int] = [1, 2, 3]
+
+fn sum(l : list[int]) -> int do
+  let accum := 0
+  for i in l do
+    accum += i
+  end
+
+  return accum
+end
+
+# OK, copies `l`
+sum(l)
+
+
+fn sum(l : list[int]*) -> int do
+  ...
+end
+
+# OK, creates a new weak reference to `l`
+sum(l)
+
+fn sum(l : list[int]&) -> int do
+  ...
+end
+
+# OK, creates a new shared reference to `l`
+sum(l)
+
+fn sum(l : list[int]!) -> int do
+  ...
+end
+
+# OK, creates a new unique reference to `l`
+
+struct Bar
+  a: int!
+  b: string!
+end
+
+struct Foo
+  bar: Bar!
+end
+
+
+let f : Foo = (Bar(1, 'a'))
+
+function frobnicate(x: Foo)
+  ...
+end
+
+# ERROR: 'Foo' is not copyable because 'Foo.bar' is not copyable.
+frobnicate(f)
+
+# OK: Creates a shared ptr `x` to f
+function frobnicate(x: Foo&)
+
+# OK: Creates a unique ptr `x` to f
+function frobnicate(x: Foo!)
+
+do
+  let f : Foo = ...
+
+  ref g := &f
+  ptr i := &f
 end
