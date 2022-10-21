@@ -46,12 +46,29 @@ UTEST_F(MyTestFixture, global_variables) {
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, local_variables) {
+  auto output = run_file(exedir, "local_variables.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
 UTEST_F(MyTestFixture, multiline_comments) {
   auto output = run_file(exedir, "multiline_comments.cub");
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, scope) {
+  auto output = run_file(exedir, "scope.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, simple_type_inference) {
+  auto output = run_file(exedir, "simple_type_inference.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
 
 int main(int argc, char** argv) {
   exedir = std::filesystem::path(argv[0]).parent_path();

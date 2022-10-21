@@ -63,6 +63,10 @@
     <None Include="arrays.cub">
       <Filter>Source Files\test files</Filter>
     </None>
+    <None Include="strings.cub" />
+    <None Include="iterations.cub">
+      <Filter>Source Files\test files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lexer.c">

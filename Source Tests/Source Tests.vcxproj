@@ -184,6 +184,7 @@
     <ClInclude Include="utest.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="fib.cub" />
     <None Include="global_variables.cub" />
     <None Include="multiline_comments.cub" />
     <None Include="operators.cub" />

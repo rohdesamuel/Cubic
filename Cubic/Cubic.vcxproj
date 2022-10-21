@@ -153,6 +153,7 @@
     <None Include="generics.cub" />
     <None Include="hello_world.cub" />
     <None Include="imports.cub" />
+    <None Include="iterations.cub" />
     <None Include="loops.cub" />
     <None Include="memory.cub" />
     <None Include="pattern_matching.cub" />

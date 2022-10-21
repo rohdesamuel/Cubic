@@ -1,15 +1,11 @@
-do
-  let x := 1
-  assert x == 1
+let x : int = 1
 
-  x = 2
-  assert x == 2
-end
+assert x == 1
 
-do
-  let x : double = 1.0
-  assert x == 1.0
+x = x + 1
 
-  x = 3.14
-  assert x == 3.14
-end
+assert x == 2
+
+x = x << 1
+
+assert x == 4

@@ -189,11 +189,27 @@ static void program_code_gen(AstNode_* node) {
   code_gen((AstNode_*)program->block);
 }
 
+static void begin_scope() {
+  ++current_compiler->scope_depth;
+}
+
+static void end_scope() {
+  --current_compiler->scope_depth;
+  while (current_compiler->locals_count > 0 &&
+    current_compiler->locals[current_compiler->locals_count - 1].depth >
+    current_compiler->scope_depth) {
+    emit_byte(OP_POP, -1);
+    current_compiler->locals_count--;
+  }  
+}
+
 static void block_code_gen(AstNode_* node) {
   AstBlock_* block = (AstBlock_*)node;
-  for (int i = 0; i < block->statements.count; ++i) {
-    code_gen(block->statements.list[i]);
+  begin_scope();
+  for (AstListNode_* n = block->statements.head; n != NULL; n = n->next) {
+    code_gen(n->node);
   }
+  end_scope();
 }
 
 static void return_code_gen(AstNode_* node) {
@@ -258,9 +274,11 @@ static void if_code_gen(AstNode_* node) {
   int elif_jmp = -1;
 
   // elif true then ...
-  for (int i = 0; i < stmt->elif_exprs.count; ++i) {
-    AstNode_* elif_expr = stmt->elif_exprs.list[i];
-    AstNode_* elif_stmt = stmt->elif_stmts.list[i];
+  AstListNode_* elif_e = stmt->elif_exprs.head;
+  AstListNode_* elif_s = stmt->elif_stmts.head;
+  while(elif_e != NULL && elif_s != NULL) {
+    AstNode_* elif_expr = elif_e->node;
+    AstNode_* elif_stmt = elif_s->node;
 
     code_gen(elif_expr);
     elif_jmp = emit_jmp(OP_JMP_IF_FALSE, node->line);    
@@ -280,7 +298,14 @@ static void if_code_gen(AstNode_* node) {
     }
 
     patch_jmp(elif_jmp);
-    emit_byte(OP_POP, elif_expr->line);    
+    emit_byte(OP_POP, elif_expr->line);
+
+    elif_e = elif_e->next;
+    elif_s = elif_s->next;
+
+    assertf(elif_e == NULL && elif_s == NULL ||
+            elif_e != NULL && elif_s != NULL,
+            "Malformed list: every elif should have an expression and statement");
   }
 
   // :else
@@ -305,37 +330,104 @@ static void assert_code_gen(AstNode_* node) {
   emit_byte(OP_ASSERT, node->line);
 }
 
-static void declare_variable(AstVarDeclStmt_* stmt) {
-  if (current_compiler->scope_depth == 0) return;
+static int add_local(Token_* name) {
+  assertf(current_compiler->locals_count < current_compiler->locals_capacity,
+    "Exceeded number of maximum local variables %d >= %d",
+    current_compiler->locals_count,
+    current_compiler->locals_capacity);
 
-  // Token* name = &parser.previous;
-  // addLocal(*name);
+  Local* local = &current_compiler->locals[current_compiler->locals_count++];
+  local->name = *name;
+  local->depth = current_compiler->scope_depth;
+
+  return current_compiler->locals_count - 1;
+}
+
+static bool identifiers_equal(Token_* a, Token_* b) {
+  if (a->length != b->length) return false;
+  return memcmp(a->start, b->start, a->length) == 0;
+}
+
+static int declare_variable(AstVarDeclStmt_* stmt) {
+  for (int i = current_compiler->locals_count - 1; i >= 0; i--) {
+    Local* local = &current_compiler->locals[i];
+    if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
+      break;
+    }
+
+    if (identifiers_equal(&stmt->name, &local->name)) {
+      fprintf(stderr, "Already a variable with this name in this scope.");
+    }
+  }
+
+  return add_local(&stmt->name);
 }
 
 static void var_decl_code_gen(AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
-  declare_variable(stmt);
+  int slot = declare_variable(stmt);
+
+  // TODO: allow for multiple expressions.
+  for (AstListNode_* n = stmt->exprs.head; n != NULL; n = n->next) {
+    code_gen(n->node);
+    emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
+  }
 }
 
 static void var_expr_code_gen(AstNode_* node) {
+  AstVarExpr_* expr = (AstVarExpr_*)node;
+  code_gen((AstNode_*)expr->expr);
+}
+
+static int resolve_local(Compiler_* compiler, Token_* name) {
+  for (int i = compiler->locals_count - 1; i >= 0; i--) {
+    Local* local = &compiler->locals[i];
+    if (identifiers_equal(name, &local->name)) {
+      return i;
+    }
+  }
+
+  return -1;
 }
 
 static void id_expr_code_gen(AstNode_* node) {
+  AstIdExpr_* expr = (AstIdExpr_*)node;
+  int slot = resolve_local(current_compiler, &expr->name);
+  assertf(slot != -1, "Could not find variable %.*s", expr->name.length, expr->name.start);
+
+  emit_bytes(OP_GET_VAR, (uint8_t)slot, node->line);
+}
+
+static void assignment_stmt_code_gen(AstNode_* node) {
+  AstAssignmentStmt_* stmt = (AstAssignmentStmt_*)node;
+
+  // TODO: allow for assigning to more than simple variables
+  // TODO: allow for assigning to multiple variables.
+  AstVarExpr_* var = (AstVarExpr_*)stmt->vars.head->node;
+  assertf(var->expr->base.cls == AST_CLS(AstIdExpr_),
+    "Only assigning to variables is supported at this time.");
+  
+  AstIdExpr_* expr = (AstIdExpr_*)var->expr;
+  int slot = resolve_local(current_compiler, &expr->name);
+
+  code_gen(stmt->exprs.head->node);
+  emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
 }
 
 CodeGenRule_ code_gen_rules[] = {
-  [AST_CLS(AstProgram_)]     = {program_code_gen},
-  [AST_CLS(AstBlock_)]       = {block_code_gen},
-  [AST_CLS(AstPrintStmt_)]   = {print_code_gen},
-  [AST_CLS(AstUnaryExp_)]    = {unary_code_gen},
-  [AST_CLS(AstBinaryExp_)]   = {binary_code_gen},
-  [AST_CLS(AstPrimaryExp_)]  = {primary_code_gen},
-  [AST_CLS(AstReturnStmt_)]  = {return_code_gen},
-  [AST_CLS(AstIfStmt_)]      = {if_code_gen},
-  [AST_CLS(AstAssertStmt_)]  = {assert_code_gen},
-  [AST_CLS(AstVarDeclStmt_)] = {var_decl_code_gen},
-  [AST_CLS(AstVarExpr_)]     = {var_expr_code_gen},
-  [AST_CLS(AstIdExpr_)]      = {id_expr_code_gen},
+  [AST_CLS(AstProgram_)]        = {program_code_gen},
+  [AST_CLS(AstBlock_)]          = {block_code_gen},
+  [AST_CLS(AstPrintStmt_)]      = {print_code_gen},
+  [AST_CLS(AstUnaryExp_)]       = {unary_code_gen},
+  [AST_CLS(AstBinaryExp_)]      = {binary_code_gen},
+  [AST_CLS(AstPrimaryExp_)]     = {primary_code_gen},
+  [AST_CLS(AstReturnStmt_)]     = {return_code_gen},
+  [AST_CLS(AstIfStmt_)]         = {if_code_gen},
+  [AST_CLS(AstAssertStmt_)]     = {assert_code_gen},
+  [AST_CLS(AstVarDeclStmt_)]    = {var_decl_code_gen},
+  [AST_CLS(AstVarExpr_)]        = {var_expr_code_gen},
+  [AST_CLS(AstIdExpr_)]         = {id_expr_code_gen},
+  [AST_CLS(AstAssignmentStmt_)] = {assignment_stmt_code_gen},
 };
 
 static CodeGenRule_* get_rule(int type) {

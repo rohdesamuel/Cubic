@@ -50,6 +50,9 @@ typedef enum {
   OP_JMP,
   OP_JMP_IF_FALSE,
 
+  OP_GET_VAR,
+  OP_SET_VAR,
+
   OP_PRINT,
   OP_ASSERT,
 } OpCode;

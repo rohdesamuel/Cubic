@@ -1,0 +1,39 @@
+function fib_recur(n: int) -> int do
+  if n <= 0:
+    return 0
+
+  if n == 1:
+    return 1
+
+  return fib_recur(n - 1) + fib_recur(n - 2)
+end
+
+assert fib_recur(0) == 0
+assert fib_recur(1) == 1
+assert fib_recur(5) == 5
+assert fib_recur(10) == 55
+
+function fib_state(n: int) -> int do
+  let state_n_1 := 1
+  let state_n_2 := 0
+
+  if n <= 0:
+    return 0
+
+  if n == 1:
+    return 1
+
+  let ret := 1
+  for _ in 2..n do
+    ret = state_n_1 + state_n_2
+    state_n_2 = state_n_1
+    state_n_1 = ret
+  end
+
+  return ret
+end
+
+assert fib_state(0) == 0
+assert fib_state(1) == 1
+assert fib_state(5) == 5
+assert fib_state(10) == 55

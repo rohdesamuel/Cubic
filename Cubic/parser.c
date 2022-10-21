@@ -41,6 +41,7 @@ static AstNode_* Expr(Parser_* parser, Scanner_* scanner, int line);
 static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence);
 static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line);
 static AstNode_* Block(Parser_* parser, Scanner_* scanner, int line);
+static AstNode_* Var(Parser_* parser, Scanner_* scanner, int line);
 
 static void advance(Parser_* parser, Scanner_* scanner);
 static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message);
@@ -62,6 +63,48 @@ void parser_init(Parser_* parser) {
 
 void parser_clear(Parser_* parser) {
   pageallocator_deinit(&parser->allocator);
+}
+
+static AstList_* astlist_create(struct MemoryAllocator_* allocator) {
+  AstList_* ret = alloc(allocator, sizeof(AstList_));
+  memset(ret, 0, sizeof(AstList_));
+  return ret;
+}
+
+static void astlist_init(AstList_* list) {
+  memset(list, 0, sizeof(AstList_));
+}
+
+static void astlist_clear(AstList_* list, struct MemoryAllocator_* allocator) {
+  AstListNode_* cur = list->head;
+  while (cur) {
+    AstListNode_* next = cur->next;
+    dealloc(allocator, cur);
+    cur = next;
+  }
+}
+
+static void astlist_destroy(AstList_** list, struct MemoryAllocator_* allocator) {
+  astlist_clear(*list, allocator);
+  dealloc(allocator, *list);
+  *list = NULL;
+}
+
+static void astlist_append(AstList_* list, AstNode_* node, struct MemoryAllocator_* allocator) {
+  if (!node) return;
+
+  AstListNode_* n = alloc(allocator, sizeof(AstListNode_));
+  n->node = node;
+  
+  if (!list->head) {
+    list->head = n;
+  }
+
+  if (list->tail) {
+    list->tail->next = n;    
+  }
+
+  list->tail = n;
 }
 
 // Returns true if the current token is in the follow set of a block.
@@ -94,11 +137,10 @@ AstNode_* parse(Parser_* parser, Scanner_* scanner, const char* source) {
   return (AstNode_*)root;
 }
 
-char* parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
-  char* ret;
-  ret = alloc(&parser->allocator, token->length + 1);
-  memcpy(ret, token->start, token->length);
-  ret[token->length] = '\0';
+Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
+  Token_ ret = *token;
+  ret.start = alloc(&parser->allocator, ret.length);
+  memcpy((char*)ret.start, token->start, token->length);
 
   return ret;
 }
@@ -106,15 +148,9 @@ char* parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
 static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* statements) {
   // TODO: how to handle the 'pass' keyword? Should it stop parsing statement lists?
   while (!block_follow(parser, scanner, true)) {
-    if (statements->count >= statements->capacity) {
-      error(parser, "Too many statements in block");
-      continue;
-    }
+    
     AstNode_* statement = Statement(parser, scanner, parser->current.line);
-    if (statement) {
-      statements->list[statements->count] = statement;
-      statements->count += 1;
-    }
+    astlist_append(statements, statement, (MemoryAllocator_*)&parser->allocator);
 
     if (parser->previous.type == TK_RETURN) {
       return;
@@ -124,8 +160,7 @@ static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* stateme
 
 static AstNode_* Block(Parser_* parser, Scanner_* scanner, int line) {
   AstBlock_* block = MAKE_AST_NODE(&parser->allocator, AstBlock_);
-  block->statements.capacity = 100;  // TODO: remove the 100 restriction.
-  block->statements.list = alloc(&parser->allocator, block->statements.capacity * sizeof(AstNode_*));
+  astlist_init(&block->statements);
 
   statement_list(parser, scanner, &block->statements);
 
@@ -138,8 +173,48 @@ static AstNode_* BlockStatement(Parser_* parser, Scanner_* scanner, int line) {
   return block;
 }
 
+static bool in_assign_first(TokenType type) {
+  return
+    type == TK_ID ||
+    type == TK_LPAREN;
+}
+
+static void VarList(Parser_* parser, Scanner_* scanner, AstList_* vars) {
+  TokenType tk = parser->current.type;  
+  do {
+    astlist_append(vars, Var(parser, scanner, parser->current.line), (MemoryAllocator_*)&parser->allocator);
+  } while (match(parser, scanner, TK_COMMA));
+}
+
+static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs) {
+  TokenType tk = parser->current.type;
+  do {
+    astlist_append(exprs, Expr(parser, scanner, parser->current.line), (MemoryAllocator_*)&parser->allocator);
+  } while (match(parser, scanner, TK_COMMA));
+}
+
+static AstNode_* AssignmentStatement(Parser_* parser, Scanner_* scanner, int line) {
+  AstAssignmentStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstAssignmentStmt_);
+  astlist_init(&stmt->vars);
+  astlist_init(&stmt->exprs);
+
+  VarList(parser, scanner, &stmt->vars);
+
+  consume(parser, scanner, TK_EQUAL, "Expected a '=' in an assignment statement.");
+
+  ExprList(parser, scanner, &stmt->exprs);
+
+  return (AstNode_*)stmt;
+}
+
 static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
   TokenType tk = parser->current.type;
+
+  if (in_assign_first(tk)) {
+    advance(parser, scanner);
+    return AssignmentStatement(parser, scanner, line);
+  }
+
   switch (tk) {
     case TK_DO:
     {
@@ -152,7 +227,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
       advance(parser, scanner);
       AstVarDeclStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstVarDeclStmt_);
       consume(parser, scanner, TK_ID, "Expected variable name.");
-      stmt->id = parse_variable(parser, scanner, &parser->previous);
+      stmt->name = parse_variable(parser, scanner, &parser->previous);
       
       consume(parser, scanner, TK_COLON, "Expected a ':' for a variable declaration.");
 
@@ -174,13 +249,10 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
       }
 
       if (match(parser, scanner, TK_EQUAL)) {
-        stmt->exprs.capacity = 10;
-        stmt->exprs.count = 0;
-        stmt->exprs.list = alloc(&parser->allocator, stmt->exprs.capacity * sizeof(AstNode_*));
+        astlist_init(&stmt->exprs);
 
-        for (int i = 0; i < stmt->exprs.capacity; ++i) {
-          stmt->exprs.list[stmt->exprs.count] = Expr(parser, scanner, line);
-          ++stmt->exprs.count;
+        for(;;) {
+          astlist_append(&stmt->exprs, Expr(parser, scanner, line), (MemoryAllocator_*)&parser->allocator);
 
           if (!match(parser, scanner, TK_COMMA)) {
             break;
@@ -228,24 +300,16 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
       consume(parser, scanner, TK_THEN, "Expected 'then' after condition.");
 
       stmt->if_stmt = (AstNode_*)Block(parser, scanner, line);
-      stmt->elif_stmts.capacity = 100;  // TODO: remove the 100 restriction.
-      stmt->elif_stmts.list = alloc(&parser->allocator, stmt->elif_stmts.capacity * sizeof(AstNode_*));
+      astlist_init(&stmt->elif_stmts);
+      astlist_init(&stmt->elif_exprs);
 
-      stmt->elif_exprs.capacity = stmt->elif_stmts.capacity;
-      stmt->elif_exprs.list = alloc(&parser->allocator, stmt->elif_exprs.capacity * sizeof(AstNode_*));
-
-      for (int i = 0; i < stmt->elif_stmts.capacity; ++i) {
+      for(;;) {
         if (!match(parser, scanner, TK_ELIF)) {
           break;
         }
-
-        stmt->elif_exprs.list[stmt->elif_exprs.count] = Expr(parser, scanner, line);
-        stmt->elif_exprs.count++;
-
+        astlist_append(&stmt->elif_exprs, Expr(parser, scanner, line), (MemoryAllocator_*)&parser->allocator);
         consume(parser, scanner, TK_THEN, "Expected 'then' after condition.");
-
-        stmt->elif_stmts.list[stmt->elif_stmts.count] = (AstNode_*)Block(parser, scanner, line);
-        stmt->elif_stmts.count ++;
+        astlist_append(&stmt->elif_stmts, Block(parser, scanner, line), (MemoryAllocator_*)&parser->allocator);
       }
 
       if (match(parser, scanner, TK_ELSE)) {
@@ -386,7 +450,7 @@ static AstNode_* Var(Parser_* parser, Scanner_* scanner, int line) {
   AstVarExpr_* var_expr = MAKE_AST_NODE(&parser->allocator, AstVarExpr_);
   AstIdExpr_* expr = MAKE_AST_NODE(&parser->allocator, AstIdExpr_);
   var_expr->expr = (AstExpr_*)expr;
-  expr->id = parse_variable(parser, scanner, &parser->previous);
+  expr->name = parse_variable(parser, scanner, &parser->previous);
   return (AstNode_*)var_expr;
 }
 

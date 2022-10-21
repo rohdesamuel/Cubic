@@ -60,5 +60,8 @@
     <None Include="multiline_comments.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="fib.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

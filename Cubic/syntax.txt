@@ -23,7 +23,7 @@ AssignmentStmt ::= VarList '=' ExprList
 DeclarationStmt ::= VarDecl | StructDecl
 BlockStmt ::= 'do' Block 'end'
 IfStmt ::= 'if' Expr 'then' Block {'elif' Expr 'then' Block} ['else' Block] 'end'
-ForStmt ::= 'for' Expr 'in' Expr ['step' Expr] 'do' Block 'end'
+ForStmt ::= 'for' Expr 'in' Expr {'and' Expr} ['step' Expr] 'do' Block 'end'
 WhileStmt ::= 'while' Expr 'do' Block 'end'
 RepeatStmt ::= 'repeat' Block 'until' Expr
 YieldStmt ::= 'yield' Expr

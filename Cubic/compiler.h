@@ -5,9 +5,11 @@
 
 #include "chunk.h"
 #include "tokens.h"
+#include "value.h"
 
 typedef struct {
-  Token name;
+  Token_ name;
+  ValueType type;
   int depth;
 } Local;
 

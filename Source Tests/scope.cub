@@ -1,7 +1,32 @@
-let x := 1
+let x : int = 1
 assert x == 1
 do
-  let x := 2
+  let x : int = 2
+  do
+    let x : int = 3
+    do
+      let x : int = 4
+      assert x == 4
+    end
+    assert x == 3
+  end
   assert x == 2
 end
+
+do
+  let x : int = 1
+  assert x == 1
+
+  x = 3
+  assert x == 3
+end
+
+do
+  let x : double = 1.0
+  assert x == 1.0
+
+  x = 3.14
+  assert x == 3.14
+end
+
 assert x == 1

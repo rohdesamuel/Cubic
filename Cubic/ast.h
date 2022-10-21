@@ -22,6 +22,7 @@ typedef struct AstNode_ {
     AST_CLS(AstVarDeclStmt_),
     AST_CLS(AstVarExpr_),
     AST_CLS(AstIdExpr_),
+    AST_CLS(AstAssignmentStmt_),
   } cls;
   int line;
 } AstNode_;
@@ -32,10 +33,14 @@ typedef struct AstExpr_ {
   ValueType type;
 } AstExpr_;
 
-typedef struct AstList_ {
-  int capacity;
-  int count;
-  struct AstNode_** list;
+typedef struct AstListNode_ {
+  AstNode_* node;
+  struct AstListNode_* next;
+} AstListNode_;
+
+typedef struct AstList_ {  
+  AstListNode_* head;
+  AstListNode_* tail;
 } AstList_;
 
 // Program ::= Block
@@ -61,11 +66,19 @@ typedef struct AstPrintStmt_ {
 // VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 typedef struct AstVarDeclStmt_ {
   AstNode_ base;
-  char* id;
+  Token_ name;
   ValueType type;
 
   AstList_ exprs;
 } AstVarDeclStmt_;
+
+// AssignmentStmt ::= VarList '=' ExprList
+typedef struct AstAssignmentStmt_ {
+  AstNode_ base;
+
+  AstList_ vars;
+  AstList_ exprs;
+} AstAssignmentStmt_;
 
 // Expr ::= UnaryOp Expr
 typedef struct AstUnaryExp_ {
@@ -95,18 +108,31 @@ typedef struct AstPrimaryExp_ {
   Value_ value;
 } AstPrimaryExp_;
 
+// Var ::= Id | PrefixExpr '[' Expr ']' | PrefixExpr '.' Id
 typedef struct AstVarExpr_ {
   struct AstExpr_ base;
 
   AstExpr_* expr;
 } AstVarExpr_;
 
+// Var :: = Id
 typedef struct AstIdExpr_ {
   struct AstExpr_ base;
 
-  char* id;
-  int id_length;
+  Token_ name;
 } AstIdExpr_;
+
+// Var ::= PrefixExpr '[' Expr ']'
+typedef struct AstIndexExpr_ {
+  struct AstExpr_ base;
+
+  Token_ name;
+} AstIndexExpr_;
+
+// Var ::= PrefixExpr '.' Id
+typedef struct AstDotExpr_ {
+  struct AstExpr_ base;
+} AstDotExpr_;
 
 // ReturnStmt ::= 'return' [Expr {',' Expr}]
 typedef struct AstReturnStmt_ {

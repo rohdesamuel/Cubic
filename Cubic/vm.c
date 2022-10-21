@@ -57,7 +57,7 @@ Value_ vm_peek(VM_* vm, int distance) {
   return vm->stack_top[-1 - distance];
 }
 
-inline InterpretResult addi(VM_* vm) {
+inline InterpretResult add(VM_* vm) {
   Value_ a = vm_peek(vm, 0);
   Value_ b = vm_peek(vm, 1);
 
@@ -68,21 +68,6 @@ inline InterpretResult addi(VM_* vm) {
 
   vm_popx(vm, 2);
   vm_push(vm, INT_VAL(a.as.i + b.as.i));
-
-  return INTERPRET_OK;
-}
-
-inline InterpretResult addu(VM_* vm) {
-  Value_ a = vm_peek(vm, 0);
-  Value_ b = vm_peek(vm, 1);
-
-  if (a.type != b.type || !ISA_UINT(a)) {
-    runtime_error(vm, "Operands must be integers");
-    return INTERPRET_RUNTIME_ERROR;
-  }
-
-  vm_popx(vm, 2);
-  vm_push(vm, UINT_VAL(a.as.u + b.as.u));
 
   return INTERPRET_OK;
 }
@@ -133,6 +118,14 @@ static InterpretResult run(VM vm) {
       double a = vm_pop(vm); \
       vm_push(vm, a op b); \
     } while (false)
+
+#define FBINARY_OP(op) \
+    do { \
+      double b = vm_pop(vm); \
+      double a = vm_pop(vm); \
+      vm_push(vm, a op b); \
+    } while (false)
+
 #define READ_SHORT() \
     (vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
 
@@ -169,6 +162,20 @@ static InterpretResult run(VM vm) {
       case OP_FALSE:
         vm_push(vm, FALSE_VAL);
         continue;
+
+      case OP_GET_VAR:
+      {
+        uint8_t slot = READ_BYTE();
+        vm_push(vm, vm->stack[slot]);
+        continue;
+      }
+
+      case OP_SET_VAR:
+      {
+        uint8_t slot = READ_BYTE();
+        vm->stack[slot] = vm_peek(vm, 0);
+        continue;
+      }
 
       // TODO: allow for different integer widths for operands.
       case OP_BITWISE_AND:
