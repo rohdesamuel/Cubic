@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -184,13 +184,17 @@
     <ClInclude Include="utest.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="arrays.cub" />
     <None Include="fib.cub" />
     <None Include="global_variables.cub" />
+    <None Include="for_loops.cub" />
     <None Include="multiline_comments.cub" />
     <None Include="operators.cub" />
     <None Include="scope.cub" />
     <None Include="local_variables.cub" />
     <None Include="simple_type_inference.cub" />
+    <None Include="strings.cub" />
+    <None Include="while_loops.cub" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -414,6 +414,37 @@ static void assignment_stmt_code_gen(AstNode_* node) {
   emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
 }
 
+static void emit_loop(int loop_start, int line) {
+  emit_byte(OP_LOOP, line);
+
+  int offset = current_chunk()->count - loop_start + 2;
+  assertf(offset <= UINT16_MAX, "Loop body too large.");
+
+  emit_byte((offset >> 8) & 0xff, line);
+  emit_byte(offset & 0xff, line);
+}
+
+static void while_stmt_code_gen(AstNode_* node) {
+  AstWhileStmt_* stmt = (AstWhileStmt_*)node;
+
+  // if `condition_expr`
+  int loop_start = current_chunk()->count;
+  code_gen(stmt->condition_expr);
+
+  // while false then break...
+  int exit_jump = emit_jmp(OP_JMP_IF_FALSE, node->line); // jmp :exit_jmp
+
+  // if true then ...
+  emit_byte(OP_POP, node->line);
+  code_gen(stmt->block_stmt);
+ 
+  emit_loop(loop_start, node->line);
+
+  // :exit_jmp
+  patch_jmp(exit_jump);
+  emit_byte(OP_POP, node->line);
+}
+
 CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstProgram_)]        = {program_code_gen},
   [AST_CLS(AstBlock_)]          = {block_code_gen},
@@ -428,6 +459,7 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstVarExpr_)]        = {var_expr_code_gen},
   [AST_CLS(AstIdExpr_)]         = {id_expr_code_gen},
   [AST_CLS(AstAssignmentStmt_)] = {assignment_stmt_code_gen},
+  [AST_CLS(AstWhileStmt_)]      = {while_stmt_code_gen},
 };
 
 static CodeGenRule_* get_rule(int type) {

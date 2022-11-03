@@ -269,6 +269,27 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
       return NULL;
     }
 
+    case TK_WHILE:
+    {
+      advance(parser, scanner);
+      AstWhileStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstWhileStmt_);
+      stmt->condition_expr = Expr(parser, scanner, line);
+
+      if (!match(parser, scanner, TK_DO)) {
+        error_at_current(parser, "Expected 'do' at end of while expression.");
+        return NULL;
+      }
+
+      stmt->block_stmt = Block(parser, scanner, line);
+
+      if (!match(parser, scanner, TK_END)) {
+        error_at_current(parser, "Expected 'end' at end of while expression.");
+        return NULL;
+      }
+
+      return (AstNode_*)stmt;
+    }
+
     case TK_ASSERT:
     {
       advance(parser, scanner);

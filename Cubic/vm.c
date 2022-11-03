@@ -286,9 +286,9 @@ static InterpretResult run(VM vm) {
           "Operands to '>' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
-          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d > r.as.d)); break;
-          case VAL_INT: vm_push(vm, INT_VAL(l.as.i > r.as.i)); break;
-          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u > r.as.u)); break;
+          case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d > r.as.d)); break;
+          case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i > r.as.i)); break;
+          case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u > r.as.u)); break;
           default: assertf(false, "Unimplemented > for type: %d\n", l.type);
         }
         continue;
@@ -302,9 +302,9 @@ static InterpretResult run(VM vm) {
           "Operands to '>=' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
-          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d >= r.as.d)); break;
-          case VAL_INT: vm_push(vm, INT_VAL(l.as.i >= r.as.i)); break;
-          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u >= r.as.u)); break;
+          case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d >= r.as.d)); break;
+          case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i >= r.as.i)); break;
+          case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u >= r.as.u)); break;
           default: assertf(false, "Unimplemented >= for type: %d\n", l.type);
         }
         continue;
@@ -318,9 +318,9 @@ static InterpretResult run(VM vm) {
           "Operands to '<' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
-          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d < r.as.d)); break;
-          case VAL_INT: vm_push(vm, INT_VAL(l.as.i < r.as.i)); break;
-          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u < r.as.u)); break;
+          case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d < r.as.d)); break;
+          case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i < r.as.i)); break;
+          case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u < r.as.u)); break;
           default: assertf(false, "Unimplemented < for type: %d\n", l.type);
         }
         continue;
@@ -334,9 +334,9 @@ static InterpretResult run(VM vm) {
           "Operands to '<=' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
-          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d <= r.as.d)); break;
-          case VAL_INT: vm_push(vm, INT_VAL(l.as.i <= r.as.i)); break;
-          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u <= r.as.u)); break;
+          case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d <= r.as.d)); break;
+          case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i <= r.as.i)); break;
+          case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u <= r.as.u)); break;
           default: assertf(false, "Unimplemented <= for type: %d\n", l.type);
         }
         continue;
@@ -535,6 +535,13 @@ static InterpretResult run(VM vm) {
           vm->ip += offset;
         }
         continue;
+      }
+
+      case OP_LOOP:
+      {
+        uint16_t offset = READ_SHORT();
+        vm->ip -= offset;
+        break;
       }
 
       case OP_POP: vm_pop(vm); continue;

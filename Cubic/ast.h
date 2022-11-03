@@ -23,6 +23,7 @@ typedef struct AstNode_ {
     AST_CLS(AstVarExpr_),
     AST_CLS(AstIdExpr_),
     AST_CLS(AstAssignmentStmt_),
+    AST_CLS(AstWhileStmt_),
   } cls;
   int line;
 } AstNode_;
@@ -152,6 +153,13 @@ typedef struct AstIfStmt_ {
   AstList_ elif_stmts;
   AstNode_* else_stmt;
 } AstIfStmt_;
+
+// WhileStmt ::= 'while' Expr 'do' Block 'end'
+typedef struct AstWhileStmt_ {
+  struct AstNode_ base;
+  AstNode_* condition_expr;
+  AstNode_* block_stmt;
+} AstWhileStmt_;
 
 // AssertStmt ::= 'assert' Expr
 typedef struct AstAssertStmt_ {

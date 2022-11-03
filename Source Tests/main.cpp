@@ -70,6 +70,25 @@ UTEST_F(MyTestFixture, simple_type_inference) {
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, strings) {
+  auto output = run_file(exedir, "strings.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, arrays) {
+  auto output = run_file(exedir, "arrays.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, while_loops) {
+  auto output = run_file(exedir, "while_loops.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+
 int main(int argc, char** argv) {
   exedir = std::filesystem::path(argv[0]).parent_path();
   return utest_main(argc, argv);

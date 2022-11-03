@@ -1,0 +1,26 @@
+# Test string literals.
+assert 'hello' == 'hello'
+assert 'hello' != 'hi'
+assert 'hello' != ''
+assert '' == ''
+
+# Test string concatenations.
+assert 'hel' + 'lo' == 'hello'
+assert '' + 'hello' == 'hello'
+assert 'hello' + '' == 'hello'
+
+# Test string typed variables.
+let a: string = 'hi'
+let b: string = 'hi'
+let c: string = 'hello'
+let d: string = ''
+
+assert a == 'hi'
+assert a == b
+assert b != c
+assert d == ''
+assert a != ''
+
+# Test string operations.
+d = d + 'hello'
+assert d == 'hello'

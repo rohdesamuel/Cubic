@@ -1,0 +1,30 @@
+do
+  let accum : int = 0
+  let iter : int = 5
+
+  while iter > 0 do
+    accum = accum + iter
+    iter = iter - 1    
+  end
+  
+  assert accum == 15
+  assert iter == 0
+end
+
+do
+  let accum : int = 0
+  let x : int = 5 
+
+  while x > 0 do
+    let y : int = 3
+    while y > 0 do
+      accum = accum + 1
+      y = y - 1
+    end
+    assert y == 0
+    x = x - 1
+  end
+  
+  assert accum == 15
+  assert x == 0  
+end

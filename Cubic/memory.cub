@@ -199,7 +199,7 @@ end
 
 let l : list[int] = [1, 2, 3]
 
-fn sum(l : list[int]) -> int do
+fn sum(l : list[int]) -> int
   let accum := 0
   for i in l do
     accum += i
@@ -212,21 +212,21 @@ end
 sum(l)
 
 
-fn sum(l : list[int]*) -> int do
+fn sum(l : list[int]*) -> int
   ...
 end
 
 # OK, creates a new weak reference to `l`
 sum(l)
 
-fn sum(l : list[int]&) -> int do
+fn sum(l : list[int]&) -> int
   ...
 end
 
 # OK, creates a new shared reference to `l`
 sum(l)
 
-fn sum(l : list[int]!) -> int do
+fn sum(l : list[int]!) -> int
   ...
 end
 
@@ -262,4 +262,12 @@ do
 
   ref g := &f
   ptr i := &f
+end
+
+do
+  let x: int = 5
+  let y: int* = &x
+  let z: int* = new int (5)
+  let j := new int (5)
+  let w: list[int] = new list[int] 
 end

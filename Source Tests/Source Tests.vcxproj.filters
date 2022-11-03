@@ -63,5 +63,17 @@
     <None Include="fib.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="strings.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="arrays.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="for_loops.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="while_loops.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

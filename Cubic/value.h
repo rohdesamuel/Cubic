@@ -21,6 +21,12 @@ typedef enum {
   VAL_DOUBLE,
 } ValueType;
 
+typedef enum {
+  VAL_VAL,
+  VAL_PTR,
+  VAL_REF,
+} ValueKind;
+
 #define AS_BOOL(value)          ((value).as.b)
 #define AS_INT(value)           ((value).as.i)
 #define AS_INT8(value)          ((value).as.i8)
@@ -91,8 +97,9 @@ typedef struct Value_ {
     double d;
   } as;
 
-  ValueType type;
-  short size;
+  uint8_t type;
+  uint8_t kind;
+  uint16_t size;
 } Value_;
 
 typedef Value_* Value;
