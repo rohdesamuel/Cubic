@@ -14,6 +14,14 @@ Block* block = malloc(sizeof(Block) + size);
 block->size = size;
 block->memory = (char*)block + sizeof(Block);
 
+struct Block
+  size: int
+end
+
+let size := 4096
+let block := alloc(sizeof(Block) + size)
+block.size = size
+block.memory = (block as char*) + size
 
 ###################
 # USE CASE 2
@@ -32,6 +40,27 @@ Mesh* mesh = malloc(sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3) + si
 mesh->pos   = (char*)mesh + sizeof(Mesh);
 mesh->norms = (char*)mesh + sizeof(Mesh) + num_verts * sizeof(Vec3);
 mesh->uvs   = (char*)mesh + sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3));
+
+struct Mesh
+[
+    num_pos : int, 
+    num_norms : int,
+    num_uvs : int
+]
+  num_verts: int = num_pos + num_norms + num_uvs
+  pos: vec3[num_pos]
+  norms: vec3[num_norms]
+  uvs: vec3[num_uvs]
+end
+
+struct Mesh with [num_verts: int]
+  pos: vec3[num_verts]
+  norms: vec3[num_verts]
+  uvs: vec3[num_verts]
+end
+
+let num_verts := 100
+let mesh := new Mesh with [num_verts=num_verts]
 
 
 ###################
@@ -63,6 +92,15 @@ A a;
 a.arr = calloc(10, sizeof(int));
 
 free(A);  // leaks a.arr
+
+struct A
+  ref arr: int[]
+end
+
+do
+  let a: A
+  a.arr = new int[100]
+end
 
 Categories:
   - Reinterpreting bytes 
@@ -238,7 +276,7 @@ struct Bar
 end
 
 struct Foo
-  bar: Bar!
+  bar: Bar
 end
 
 

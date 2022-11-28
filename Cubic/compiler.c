@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "scanner.h"
 #include "parser.h"
+#include "analyzer.h"
 #include "ast.h"
 
 #include <assert.h>
@@ -52,22 +53,30 @@ bool compile(const char* source, Chunk_* chunk) {
   Parser_ parser;
   Scanner_ scanner;
   Compiler_ compiler;
+  Analyzer_ analyzer;
 
   compiling_chunk_ = chunk;
   
   scanner_init(&scanner, source);
-  parser_init(&parser);
+  parser_init(&parser);  
+  analyzer_init(&analyzer);
   compiler_init(&compiler);
 
-  Ast_ ast;
-  memset(&ast, 0, sizeof(Ast_));
+  AstNode_* root = parse(&parser, &scanner, analyzer.symbol_table, source);
 
-  AstNode_* root = parse(&parser, &scanner, source);
-  code_gen(root);
+  if (!parser.had_error) {
+    analyze(&analyzer, (AstProgram_*)root);
+  }
+
+  if (!parser.had_error && !analyzer.had_error) {
+    code_gen(root);
+  }  
   
   end_compiler(&parser);
+  analyzer_clear(&analyzer);
+  parser_clear(&parser);
   compiling_chunk_ = NULL;
-  return !parser.had_error;
+  return !parser.had_error && !analyzer.had_error;
 }
 
 static void end_compiler(Parser_* parser) {
@@ -78,9 +87,7 @@ static void end_compiler(Parser_* parser) {
   if (!parser->had_error) {
     chunk_disassemble(current_chunk(), "code");
   }
-#endif
-
-  parser_clear(parser);
+#endif  
 }
 
 
@@ -393,7 +400,6 @@ static int resolve_local(Compiler_* compiler, Token_* name) {
 static void id_expr_code_gen(AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
   int slot = resolve_local(current_compiler, &expr->name);
-  assertf(slot != -1, "Could not find variable %.*s", expr->name.length, expr->name.start);
 
   emit_bytes(OP_GET_VAR, (uint8_t)slot, node->line);
 }
@@ -412,6 +418,7 @@ static void assignment_stmt_code_gen(AstNode_* node) {
 
   code_gen(stmt->exprs.head->node);
   emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
+  emit_byte(OP_POP, node->line);
 }
 
 static void emit_loop(int loop_start, int line) {
@@ -461,6 +468,10 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstAssignmentStmt_)] = {assignment_stmt_code_gen},
   [AST_CLS(AstWhileStmt_)]      = {while_stmt_code_gen},
 };
+// Static assert to make sure that all node types are accounted for.
+STATIC_ASSERT(
+  sizeof(code_gen_rules) / sizeof(CodeGenRule_) == __AST_NODE_COUNT__,
+  CHECK_CODE_GEN_COUNT);
 
 static CodeGenRule_* get_rule(int type) {
   CodeGenRule_* ret = &code_gen_rules[type];

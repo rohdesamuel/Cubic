@@ -1,6 +1,13 @@
 do
-  let accum : int = 0
-  let iter : int = 5
+  let i := 100000
+  while i > 0 do
+    i = i - 1
+  end
+end
+
+do
+  let accum := 0
+  let iter := 5
 
   while iter > 0 do
     accum = accum + iter
@@ -12,11 +19,11 @@ do
 end
 
 do
-  let accum : int = 0
-  let x : int = 5 
+  let accum := 0
+  let x := 5 
 
   while x > 0 do
-    let y : int = 3
+    let y := 3
     while y > 0 do
       accum = accum + 1
       y = y - 1

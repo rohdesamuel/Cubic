@@ -173,7 +173,9 @@ static InterpretResult run(VM vm) {
       case OP_SET_VAR:
       {
         uint8_t slot = READ_BYTE();
-        vm->stack[slot] = vm_peek(vm, 0);
+        Value_ val = vm_peek(vm, 0);
+        vm->stack[slot].as = val.as;
+        vm->stack[slot].size = val.size;
         continue;
       }
 
@@ -182,9 +184,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '&' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(ISA_INTEGER(l), "Operands are not integers.");
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i & r.as.i)); break;
@@ -199,9 +198,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '|' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(ISA_INTEGER(l), "Operands are not integers.");
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i | r.as.i)); break;
@@ -216,9 +212,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '^' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(ISA_INTEGER(l), "Operands are not integers.");
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i ^ r.as.i)); break;
@@ -231,7 +224,6 @@ static InterpretResult run(VM vm) {
       case OP_BITWISE_NOT:
       {
         Value_ x = vm_pop(vm);
-        assertf(ISA_INTEGER(x), "Operand is not an integer.");
         x.as.u = ~x.as.u;
         vm_push(vm, x);
         continue;
@@ -240,7 +232,6 @@ static InterpretResult run(VM vm) {
       case OP_NOT:
       {
         Value_ x = vm_pop(vm);
-        assertf(IS_BOOL(x), "Operand is not a boolean.");
         x.as.b = !x.as.b;
         vm_push(vm, x);
         continue;
@@ -250,9 +241,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '<<' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(ISA_INTEGER(l), "Operands are not integers.");
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i << r.as.i)); break;
@@ -266,9 +254,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '>>' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(ISA_INTEGER(l), "Operands are not integers.");
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i >> r.as.i)); break;
@@ -279,11 +264,9 @@ static InterpretResult run(VM vm) {
       }
 
       case OP_GT: 
-      {
+      {        
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '>' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d > r.as.d)); break;
@@ -298,8 +281,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '>=' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d >= r.as.d)); break;
@@ -314,8 +295,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '<' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d < r.as.d)); break;
@@ -330,8 +309,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '<=' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d <= r.as.d)); break;
@@ -346,8 +323,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '==' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
         
         vm_push(vm, BOOL_VAL(l.as.u == r.as.u));
         continue;
@@ -357,8 +332,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '!=' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         vm_push(vm, BOOL_VAL(l.as.u != r.as.u));
         continue;
@@ -368,9 +341,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to 'and' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(IS_BOOL(l), "Operands are not boolean types.");
         vm_push(vm, BOOL_VAL(l.as.b && r.as.b));
         continue;
       }
@@ -379,9 +349,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to 'or' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(IS_BOOL(l), "Operands are not boolean types.");
         vm_push(vm, BOOL_VAL(l.as.b || r.as.b));
         continue;
       }
@@ -390,9 +357,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to 'xor' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(IS_BOOL(l), "Operands are not boolean types.");
         vm_push(vm, BOOL_VAL(l.as.b != r.as.b));
         continue;
       }
@@ -401,9 +365,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '%%' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
-        assertf(ISA_INTEGER(r), "Operands are not integer types.");
         if (r.as.i == 0) {
           return runtime_error(vm, "Divide-by-zero error");
         }
@@ -416,12 +377,10 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_ADD:
+      /*case OP_ADD:
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '+' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i + r.as.i)); break;
@@ -430,21 +389,38 @@ static InterpretResult run(VM vm) {
           default: return runtime_error(vm, "Unimplemented '+' for type: %d\n", l.type);
         }
         continue;
+      }*/
+
+      case OP_ADD:
+      {
+        Value_ r = vm_pop(vm);
+        Value_ l = vm_pop(vm);
+        Value_ res = UINT_VAL(l.as.u + r.as.u);
+        res.type = l.type;
+
+        /*switch (l.type) {
+          case VAL_INT: vm_push(vm, INT_VAL(l.as.i + r.as.i)); break;
+          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u + r.as.u)); break;
+          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d + r.as.d)); break;
+          default: return runtime_error(vm, "Unimplemented '+' for type: %d\n", l.type);
+        }*/
+        continue;
       }
 
       case OP_SUB:
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '-' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
+        Value_ res = UINT_VAL(l.as.u - r.as.u);
+        res.type = l.type;
 
+        /*
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i - r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u - r.as.u)); break;
           case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d - r.as.d)); break;
           default: return runtime_error(vm, "Unimplemented binary addition for type: %d\n", l.type);
-        }
+        }*/
         continue;
       }
 
@@ -453,8 +429,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '*' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i * r.as.i)); break;
@@ -471,8 +445,6 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        assertf(l.type == r.type,
-          "Operands to '/' do not have the same type: left[%d] and right[%d]\n", l.type, r.type);
 
         if (r.as.i == 0) {
           return runtime_error(vm, "Divide-by-zero error");
@@ -541,7 +513,7 @@ static InterpretResult run(VM vm) {
       {
         uint16_t offset = READ_SHORT();
         vm->ip -= offset;
-        break;
+        continue;
       }
 
       case OP_POP: vm_pop(vm); continue;

@@ -18,6 +18,6 @@ typedef struct Parser_ {
 
 void parser_init(Parser_* parser);
 void parser_clear(Parser_* parser);
-AstNode_* parse(Parser_* parser, Scanner_* scanner, const char* source);
+AstNode_* parse(Parser_* parser, Scanner_* scanner, struct SymbolTable_* symbol_table, const char* source);
 
 #endif  // PARSER__H

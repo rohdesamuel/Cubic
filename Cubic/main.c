@@ -201,7 +201,7 @@ int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
 
-  // const char* filename = "C:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\while_loops.cub";
+  // const char* filename = "C:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\conditionals.cub";
   // run_file(&vm, filename);
   
   if (argc == 1) {

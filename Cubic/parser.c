@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "memory.h"
+#include "symbol_table.h"
 
 #include <memory.h>
 #include <string.h>
@@ -25,7 +26,7 @@ typedef enum {
   PREC_PRIMARY      // 'nil', 'true', 'false', number, string, 
 } Precedence;
 
-typedef AstNode_* (*ParseFn)(Parser_*, Scanner_*, int);
+typedef AstNode_* (*ParseFn)(Parser_*, Scanner_*, SymbolTable_*);
 
 typedef struct ParseRule_ {
   ParseFn prefix;
@@ -33,15 +34,15 @@ typedef struct ParseRule_ {
   Precedence precedence;
 } ParseRule_;
 
-static AstNode_* Number(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* BinaryOp(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* grouping(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* Expr(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence);
-static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* Block(Parser_* parser, Scanner_* scanner, int line);
-static AstNode_* Var(Parser_* parser, Scanner_* scanner, int line);
+static AstNode_* Number(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* BinaryOp(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* grouping(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* Expr(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence, SymbolTable_* table);
+static AstNode_* Statement(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* Block(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
+static AstNode_* Var(Parser_* parser, Scanner_* scanner, SymbolTable_* table);
 
 static void advance(Parser_* parser, Scanner_* scanner);
 static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message);
@@ -54,7 +55,7 @@ static void error_at_current(Parser_* parser, const char* message);
 static void error(Parser_* parser, const char* message);
 static void error_at(Parser_* parser, Token_* token, const char* message);
 static bool block_follow(Parser_* parser, Scanner_* scanner, bool withuntil);
-static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* statements);
+static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* statements, SymbolTable_* table);
 
 void parser_init(Parser_* parser) {
   memset(parser, 0, sizeof(Parser_));
@@ -127,11 +128,11 @@ static bool block_follow(Parser_* parser, Scanner_* scanner, bool withuntil) {
   }
 }
 
-AstNode_* parse(Parser_* parser, Scanner_* scanner, const char* source) {
-  advance(parser, scanner);
-  AstProgram_* root = MAKE_AST_NODE(&parser->allocator, AstProgram_);
+AstNode_* parse(Parser_* parser, Scanner_* scanner, struct SymbolTable_* symbol_table, const char* source) {
+  advance(parser, scanner);  
+  AstProgram_* root = MAKE_AST_NODE(&parser->allocator, AstProgram_, symbol_table);
 
-  root->block = (AstBlock_*)Block(parser, scanner, parser->current.line);
+  root->block = (AstBlock_*)Block(parser, scanner, root->base.symbol_table);
 
   consume(parser, scanner, TK_EOF, "Expected end of file.");
   return (AstNode_*)root;
@@ -145,12 +146,41 @@ Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
   return ret;
 }
 
-static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* statements) {
+void synchronize(Parser_* parser, Scanner_* scanner) {
+  parser->panic_mode = false;
+
+  while (parser->current.type != TK_EOF) {
+    switch (parser->current.type) {
+      case TK_DO:
+      case TK_LET:
+      case TK_END:
+      case TK_WHILE:
+      case TK_ASSERT:
+      case TK_RETURN:
+      case TK_IF:
+      case TK_PRINT:
+      case TK_PASS:
+      case TK_SEMICOLON:
+      case TK_EOF:
+        return;
+      default:
+        ;
+    }
+
+    advance(parser, scanner);
+  }
+}
+
+static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* statements, SymbolTable_* table) {
   // TODO: how to handle the 'pass' keyword? Should it stop parsing statement lists?
   while (!block_follow(parser, scanner, true)) {
     
-    AstNode_* statement = Statement(parser, scanner, parser->current.line);
+    AstNode_* statement = Statement(parser, scanner, table);
     astlist_append(statements, statement, (MemoryAllocator_*)&parser->allocator);
+
+    if (parser->panic_mode) {
+      synchronize(parser, scanner);
+    }
 
     if (parser->previous.type == TK_RETURN) {
       return;
@@ -158,17 +188,18 @@ static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* stateme
   }
 }
 
-static AstNode_* Block(Parser_* parser, Scanner_* scanner, int line) {
-  AstBlock_* block = MAKE_AST_NODE(&parser->allocator, AstBlock_);
-  astlist_init(&block->statements);
+static AstNode_* Block(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstBlock_* block = MAKE_AST_NODE(&parser->allocator, AstBlock_, symboltable_create(table->allocator));
+  symboltable_link(block->base.symbol_table, table);
 
-  statement_list(parser, scanner, &block->statements);
+  astlist_init(&block->statements);
+  statement_list(parser, scanner, &block->statements, block->base.symbol_table);
 
   return (AstNode_*)block;
 }
 
-static AstNode_* BlockStatement(Parser_* parser, Scanner_* scanner, int line) {
-  AstNode_* block = Block(parser, scanner, line);
+static AstNode_* BlockStatement(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstNode_* block = Block(parser, scanner, table);
   consume(parser, scanner, TK_END, "Expected 'end' at the end of a block.");
   return block;
 }
@@ -179,61 +210,60 @@ static bool in_assign_first(TokenType type) {
     type == TK_LPAREN;
 }
 
-static void VarList(Parser_* parser, Scanner_* scanner, AstList_* vars) {
+static void VarList(Parser_* parser, Scanner_* scanner, AstList_* vars, SymbolTable_* table) {
   TokenType tk = parser->current.type;  
   do {
-    astlist_append(vars, Var(parser, scanner, parser->current.line), (MemoryAllocator_*)&parser->allocator);
+    astlist_append(vars, Var(parser, scanner, table), (MemoryAllocator_*)&parser->allocator);
   } while (match(parser, scanner, TK_COMMA));
 }
 
-static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs) {
+static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs, SymbolTable_* table) {
   TokenType tk = parser->current.type;
   do {
-    astlist_append(exprs, Expr(parser, scanner, parser->current.line), (MemoryAllocator_*)&parser->allocator);
+    astlist_append(exprs, Expr(parser, scanner, table), (MemoryAllocator_*)&parser->allocator);
   } while (match(parser, scanner, TK_COMMA));
 }
 
-static AstNode_* AssignmentStatement(Parser_* parser, Scanner_* scanner, int line) {
-  AstAssignmentStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstAssignmentStmt_);
+static AstNode_* AssignmentStatement(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstAssignmentStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstAssignmentStmt_, table);
   astlist_init(&stmt->vars);
   astlist_init(&stmt->exprs);
 
-  VarList(parser, scanner, &stmt->vars);
+  VarList(parser, scanner, &stmt->vars, table);
 
   consume(parser, scanner, TK_EQUAL, "Expected a '=' in an assignment statement.");
 
-  ExprList(parser, scanner, &stmt->exprs);
+  ExprList(parser, scanner, &stmt->exprs, table);
 
   return (AstNode_*)stmt;
 }
 
-static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
+static AstNode_* Statement(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
   TokenType tk = parser->current.type;
 
   if (in_assign_first(tk)) {
     advance(parser, scanner);
-    return AssignmentStatement(parser, scanner, line);
+    return AssignmentStatement(parser, scanner, table);
   }
 
   switch (tk) {
     case TK_DO:
     {
       advance(parser, scanner);
-      return BlockStatement(parser, scanner, line);
+      return BlockStatement(parser, scanner, table);
     }
 
     case TK_LET:
     {
       advance(parser, scanner);
-      AstVarDeclStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstVarDeclStmt_);
+      AstVarDeclStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstVarDeclStmt_, table);
       consume(parser, scanner, TK_ID, "Expected variable name.");
       stmt->name = parse_variable(parser, scanner, &parser->previous);
       
       consume(parser, scanner, TK_COLON, "Expected a ':' for a variable declaration.");
 
-      if (match(parser, scanner, TK_EQUAL)) {
-        stmt->type = VAL_UNKNOWN;
-        error(parser, "Type inference is unimplemented");
+      if (check(parser, TK_EQUAL)) {
+        stmt->type = VAL_UNKNOWN;        
       } else {
         switch (parser->current.type) {
           case TK_BOOL:   stmt->type = VAL_BOOL; break;
@@ -252,14 +282,17 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
         astlist_init(&stmt->exprs);
 
         for(;;) {
-          astlist_append(&stmt->exprs, Expr(parser, scanner, line), (MemoryAllocator_*)&parser->allocator);
+          astlist_append(&stmt->exprs, Expr(parser, scanner, table), (MemoryAllocator_*)&parser->allocator);
 
           if (!match(parser, scanner, TK_COMMA)) {
             break;
           }
         }
+      } else if (stmt->type == VAL_UNKNOWN) {
+        error_at_current(parser, "Expected an expression for a deduced type variable.");
       }
 
+      symboltable_addvar(table, &stmt->name, stmt->type, KIND_VAL);
       return (AstNode_*)stmt;
     }
 
@@ -272,20 +305,14 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
     case TK_WHILE:
     {
       advance(parser, scanner);
-      AstWhileStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstWhileStmt_);
-      stmt->condition_expr = Expr(parser, scanner, line);
+      AstWhileStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstWhileStmt_, table);
+      stmt->condition_expr = Expr(parser, scanner, table);
 
-      if (!match(parser, scanner, TK_DO)) {
-        error_at_current(parser, "Expected 'do' at end of while expression.");
-        return NULL;
-      }
+      consume(parser, scanner, TK_DO, "Expected 'do' at end of while expression.");
 
-      stmt->block_stmt = Block(parser, scanner, line);
+      stmt->block_stmt = Block(parser, scanner, table);
 
-      if (!match(parser, scanner, TK_END)) {
-        error_at_current(parser, "Expected 'end' at end of while expression.");
-        return NULL;
-      }
+      consume(parser, scanner, TK_END, "Expected 'end' at end of while expression.");
 
       return (AstNode_*)stmt;
     }
@@ -293,9 +320,9 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
     case TK_ASSERT:
     {
       advance(parser, scanner);
-      AstAssertStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstAssertStmt_);
+      AstAssertStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstAssertStmt_, table);
       stmt->base.line = parser->current.line;
-      stmt->expr = Expr(parser, scanner, parser->current.line);
+      stmt->expr = Expr(parser, scanner, table);
       return (AstNode_*)stmt;
     }
 
@@ -303,11 +330,11 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
     case TK_RETURN:
     {
       advance(parser, scanner);
-      AstReturnStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstReturnStmt_);
+      AstReturnStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstReturnStmt_, table);
       if (block_follow(parser, scanner, true) || parser->current.type == ';') {
         stmt->expr = NULL;
       } else {
-        stmt->expr = Expr(parser, scanner, parser->current.line);
+        stmt->expr = Expr(parser, scanner, table);
       }
       return (AstNode_*)stmt;
     }
@@ -315,12 +342,12 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
     case TK_IF:
     {
       advance(parser, scanner);
-      AstIfStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstIfStmt_);
+      AstIfStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstIfStmt_, table);
 
-      stmt->condition_expr = Expr(parser, scanner, line);
+      stmt->condition_expr = Expr(parser, scanner, table);
       consume(parser, scanner, TK_THEN, "Expected 'then' after condition.");
 
-      stmt->if_stmt = (AstNode_*)Block(parser, scanner, line);
+      stmt->if_stmt = (AstNode_*)Block(parser, scanner, table);
       astlist_init(&stmt->elif_stmts);
       astlist_init(&stmt->elif_exprs);
 
@@ -328,13 +355,13 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
         if (!match(parser, scanner, TK_ELIF)) {
           break;
         }
-        astlist_append(&stmt->elif_exprs, Expr(parser, scanner, line), (MemoryAllocator_*)&parser->allocator);
+        astlist_append(&stmt->elif_exprs, Expr(parser, scanner, table), (MemoryAllocator_*)&parser->allocator);
         consume(parser, scanner, TK_THEN, "Expected 'then' after condition.");
-        astlist_append(&stmt->elif_stmts, Block(parser, scanner, line), (MemoryAllocator_*)&parser->allocator);
+        astlist_append(&stmt->elif_stmts, Block(parser, scanner, table), (MemoryAllocator_*)&parser->allocator);
       }
 
       if (match(parser, scanner, TK_ELSE)) {
-        stmt->else_stmt = (AstNode_*)Block(parser, scanner, line);
+        stmt->else_stmt = (AstNode_*)Block(parser, scanner, table);
       }
 
       consume(parser, scanner, TK_END, "Expected 'end' after if-statement.");
@@ -345,8 +372,8 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
     case TK_PRINT:
     {
       advance(parser, scanner);
-      AstPrintStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstPrintStmt_);
-      stmt->expr = Expr(parser, scanner, parser->current.line);
+      AstPrintStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstPrintStmt_, table);
+      stmt->expr = Expr(parser, scanner, table);
       return (AstNode_*)stmt;
     }
 
@@ -359,7 +386,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, int line) {
       advance(parser, scanner);
       break;
   }
-  error(parser, "Syntax error: exepcted a statement");
+  error(parser, "Syntax error: expected a statement");
   return NULL;
 }
 
@@ -394,88 +421,88 @@ static bool check(Parser_* parser, TokenType type) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-static AstNode_* Expr(Parser_* parser, Scanner_* scanner, int line) {
-  return parse_precedence(parser, scanner, PREC_ASSIGNMENT);
+static AstNode_* Expr(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  return parse_precedence(parser, scanner, PREC_ASSIGNMENT, table);
 }
 
-static AstPrintStmt_* Print(Parser_* parser, Scanner_* scanner, int line) {
-  AstPrintStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstPrintStmt_);
-  stmt->expr = Expr(parser, scanner, line);
+static AstPrintStmt_* Print(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstPrintStmt_* stmt = MAKE_AST_NODE(&parser->allocator, AstPrintStmt_, table);
+  stmt->expr = Expr(parser, scanner, table);
 
   return stmt;
 }
 
-static AstNode_* Number(Parser_* parser, Scanner_* scanner, int line) {
+static AstNode_* Number(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
   double value = strtod(parser->previous.start, NULL);
-  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_);
+  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_, table);
   expr->base.type = VAL_DOUBLE;
   expr->value = DOUBLE_VAL(value);  
   return (AstNode_*)expr;
 }
 
-static AstNode_* Integer(Parser_* parser, Scanner_* scanner, int line) {
+static AstNode_* Integer(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
   int64_t value = strtoll(parser->previous.start, NULL, 10);  
-  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_);
+  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_, table);
   expr->base.type = VAL_INT;
   expr->value = INT_VAL(value);
   return (AstNode_*)expr;
 }
 
-static AstNode_* Nil(Parser_* parser, Scanner_* scanner, int line) {
-  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_);
+static AstNode_* Nil(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_, table);
   expr->base.type = VAL_NIL;
   expr->value = NIL_VAL;
   return (AstNode_*)expr;
 }
 
-static AstNode_* True(Parser_* parser, Scanner_* scanner, int line) {
-  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_);
+static AstNode_* True(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_, table);
   expr->base.type = VAL_BOOL;
   expr->value = TRUE_VAL;
   return (AstNode_*)expr;
 }
 
-static AstNode_* False(Parser_* parser, Scanner_* scanner, int line) {
-  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_);
+static AstNode_* False(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstPrimaryExp_* expr = MAKE_AST_NODE(&parser->allocator, AstPrimaryExp_, table);
   expr->base.type = VAL_BOOL;
   expr->value = FALSE_VAL;
   return (AstNode_*)expr;
 }
 
-static AstNode_* grouping(Parser_* parser, Scanner_* scanner, int line) {
-  AstNode_* expr = Expr(parser, scanner, line);
+static AstNode_* grouping(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstNode_* expr = Expr(parser, scanner, table);
   consume(parser, scanner, TK_RPAREN, "Expect ')' after expression.");
 
   return expr;
 }
 
-static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, int line) {
+static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
   TokenType operator_type = parser->previous.type;
 
-  AstUnaryExp_* unary = MAKE_AST_NODE(&parser->allocator, AstUnaryExp_);
+  AstUnaryExp_* unary = MAKE_AST_NODE(&parser->allocator, AstUnaryExp_, table);
   unary->op = operator_type;
-  unary->expr = parse_precedence(parser, scanner, PREC_UNARY);
+  unary->expr = parse_precedence(parser, scanner, PREC_UNARY, table);
   unary->base.type = VAL_UNKNOWN;
 
   return (AstNode_*)unary;
 }
 
-static AstNode_* BinaryOp(Parser_* parser, Scanner_* scanner, int line) {
+static AstNode_* BinaryOp(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
   TokenType operator_type = parser->previous.type;
   ParseRule_* rule = get_rule(operator_type);  
-  AstNode_* expr = parse_precedence(parser, scanner, (Precedence)(rule->precedence + 1));
+  AstNode_* expr = parse_precedence(parser, scanner, (Precedence)(rule->precedence + 1), table);
   return expr;
 }
 
-static AstNode_* Var(Parser_* parser, Scanner_* scanner, int line) {
-  AstVarExpr_* var_expr = MAKE_AST_NODE(&parser->allocator, AstVarExpr_);
-  AstIdExpr_* expr = MAKE_AST_NODE(&parser->allocator, AstIdExpr_);
+static AstNode_* Var(Parser_* parser, Scanner_* scanner, SymbolTable_* table) {
+  AstVarExpr_* var_expr = MAKE_AST_NODE(&parser->allocator, AstVarExpr_, table);
+  AstIdExpr_* expr = MAKE_AST_NODE(&parser->allocator, AstIdExpr_, table);
   var_expr->expr = (AstExpr_*)expr;
   expr->name = parse_variable(parser, scanner, &parser->previous);
   return (AstNode_*)var_expr;
 }
 
-static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence) {
+static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence, SymbolTable_* table) {
   advance(parser, scanner);
   ParseFn prefix_rule = get_rule(parser->previous.type)->prefix;
   if (!prefix_rule) {
@@ -483,15 +510,15 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
     return NULL;
   }
 
-  AstNode_* exp = prefix_rule(parser, scanner, parser->previous.line);
+  AstNode_* exp = prefix_rule(parser, scanner, table);
   while (precedence <= get_rule(parser->current.type)->precedence) {
     advance(parser, scanner);
     ParseFn infix_rule = get_rule(parser->previous.type)->infix;
-    AstBinaryExp_* new_exp = MAKE_AST_NODE(&parser->allocator, AstBinaryExp_);
+    AstBinaryExp_* new_exp = MAKE_AST_NODE(&parser->allocator, AstBinaryExp_, table);
     new_exp->base.type = VAL_UNKNOWN;
     new_exp->op = parser->previous.type;    
     new_exp->left = exp;
-    new_exp->right = infix_rule(parser, scanner, parser->previous.line);
+    new_exp->right = infix_rule(parser, scanner, table);
     exp = (AstNode_*)new_exp;
   }
 
@@ -577,6 +604,10 @@ ParseRule_ rules[] = {
   [TK_AWAIT]        = {NULL,     NULL,     PREC_NONE},
   [TK_YIELD]        = {NULL,     NULL,     PREC_NONE},
 };
+// Static assert to make sure that all token types are accounted for.
+STATIC_ASSERT(
+  sizeof(rules) / sizeof(ParseRule_) == __TK_COUNT__,
+  CHECK_TOKEN_COUNT);
 
 static ParseRule_* get_rule(TokenType type) {
   return &rules[type];

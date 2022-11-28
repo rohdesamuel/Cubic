@@ -1,5 +1,12 @@
 let a := 1
 assert a == 1
 
+let b := a
+assert a == b
+assert b == 1
+
 let c := 1.0
 assert c == 1.0
+
+let d := true
+assert d

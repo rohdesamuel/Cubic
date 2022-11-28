@@ -6,7 +6,7 @@
 #include "value.h"
 
 #define AST_CLS(name) AST_##name
-#define MAKE_AST_NODE(allocator, type) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type)))
+#define MAKE_AST_NODE(allocator, type, symbol_table) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (symbol_table)))
 
 typedef struct AstNode_ {
   enum {
@@ -24,9 +24,14 @@ typedef struct AstNode_ {
     AST_CLS(AstIdExpr_),
     AST_CLS(AstAssignmentStmt_),
     AST_CLS(AstWhileStmt_),
+    __AST_NODE_COUNT__,
   } cls;
   int line;
+  struct SymbolTable_* symbol_table;
 } AstNode_;
+
+#define AS_NODE(PTR) ((struct AstNode_*)(PTR))
+#define AS_EXPR(PTR) ((struct AstExpr_*)(PTR))
 
 typedef struct AstExpr_ {
   AstNode_ base;
@@ -171,6 +176,6 @@ typedef struct Ast_ {
   struct AstProgram_* program;
 } Ast_;
 
-AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size);
+AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct SymbolTable_* symbol_table);
 
 #endif  // AST__H

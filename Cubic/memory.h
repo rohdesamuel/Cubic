@@ -18,6 +18,26 @@ void* reallocate(void* pointer, size_t old_size, size_t new_size);
 #define alloc(allocator, size) ((struct MemoryAllocator_*)(allocator))->alloc((struct MemoryAllocator_*)(allocator), (size))
 #define dealloc(allocator, ptr) ((struct MemoryAllocator_*)(allocator))->dealloc((struct MemoryAllocator_*)(allocator), (ptr))
 
+typedef struct ListNode_ {
+  struct ListNode_* next;
+  void* data;
+} ListNode_;
+
+typedef struct List_ {
+  size_t val_size;
+  size_t node_size;
+  struct ListNode_* head;
+  struct ListNode_* tail;
+  struct MemoryAllocator_* allocator;
+} List_;
+
+#define list_of(LIST, TY, ALLOCATOR) (list_init(LIST, sizeof(TY), ALLOCATOR))
+#define list_val(NODE, TY) (*((TY*)(&(NODE)->data)))
+
+void list_init(struct List_* list, size_t val_size, struct MemoryAllocator_* allocator);
+void list_clear(List_* list);
+ListNode_* list_push(List_* list, void* val);
+
 typedef struct MemoryAllocator_ {
   // Allocate a block of memory with `size`.
   void* (*alloc)(struct MemoryAllocator_* base, size_t size);

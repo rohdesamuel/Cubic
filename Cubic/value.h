@@ -19,12 +19,14 @@ typedef enum {
   VAL_UINT64,
   VAL_FLOAT,
   VAL_DOUBLE,
+
+  __VALUE_TYPE_COUNT__,
 } ValueType;
 
 typedef enum {
-  VAL_VAL,
-  VAL_PTR,
-  VAL_REF,
+  KIND_VAL,
+  KIND_PTR,
+  KIND_REF,
 } ValueKind;
 
 #define AS_BOOL(value)          ((value).as.b)
@@ -44,38 +46,52 @@ typedef enum {
 
 #define IS_BOOL(value)         ((value).type == VAL_BOOL)
 #define IS_NIL(value)          ((value).type == VAL_NIL)
-#define ISA_NUMBER(value)       ((value).type >= VAL_INT && (value).type <= VAL_DOUBLE)
-#define ISA_INTEGER(value)       ((value).type >= VAL_INT && (value).type <= VAL_DOUBLE)
-#define ISA_INT(value)          ((value).type >= VAL_INT && (value).type <= VAL_UINT64)
-#define ISA_UINT(value)         ((value).type >= VAL_UINT && (value).type <= VAL_UINT64)
+#define ISA_NUMBER(value)      ((value).type >= VAL_INT && (value).type <= VAL_DOUBLE)
+#define ISA_INTEGER(value)     ((value).type >= VAL_INT && (value).type <= VAL_UINT64)
+#define ISA_INT(value)         ((value).type >= VAL_INT && (value).type <= VAL_INT64)
+#define ISA_UINT(value)        ((value).type >= VAL_UINT && (value).type <= VAL_UINT64)
 
 #define IS_INT(value)          ((value).type == VAL_INT)
 #define IS_INTX(value, width)  ((value).type == VAL_INT##width)
-#define IS_UINT(value)          ((value).type == VAL_UINT)
+#define IS_UINT(value)         ((value).type == VAL_UINT)
 #define IS_UINTX(value, width) ((value).type == VAL_UINT##width)
 #define IS_FLOAT(value)        ((value).type == VAL_FLOAT)
 #define IS_DOUBLE(value)       ((value).type == VAL_DOUBLE)
+#define IS_VAL(value)          ((value).kind == KIND_VAL)
+#define IS_PTR(value)          ((value).kind == KIND_PTR)
+#define IS_REF(value)          ((value).kind == KIND_REF)
 
-#define NIL_VAL                  ((Value_){{.i = 0}, VAL_NIL})
-#define BOOL_VAL(value)          ((Value_){{.b = value}, VAL_BOOL, 0})
+#define NIL_VAL                    ((Value_){{.i = 0}, VAL_NIL, KIND_VAL})
+#define BOOL_VAL(value)            ((Value_){{.b = value}, VAL_BOOL, KIND_VAL})
 #define TRUE_VAL BOOL_VAL(true)
 #define FALSE_VAL BOOL_VAL(false)
-#define INT_VAL(value)           ((Value_){{.i = value}, VAL_INT, 0})
-#define INT8_VAL(value)           ((Value_){{.i8 = value}, VAL_INT8, 0})
-#define INT16_VAL(value)           ((Value_){{.i16 = value}, VAL_INT16, 0})
-#define INT32_VAL(value)           ((Value_){{.i32 = value}, VAL_INT32, 0})
-#define INT64_VAL(value)           ((Value_){{.i64 = value}, VAL_INT64, 0})
+#define INT_VAL(value)          ((Value_){{.i = value},   VAL_INT,    KIND_VAL})
+#define INT8_VAL(value)         ((Value_){{.i8 = value},  VAL_INT8,   KIND_VAL})
+#define INT16_VAL(value)        ((Value_){{.i16 = value}, VAL_INT16,  KIND_VAL})
+#define INT32_VAL(value)        ((Value_){{.i32 = value}, VAL_INT32,  KIND_VAL})
+#define INT64_VAL(value)        ((Value_){{.i64 = value}, VAL_INT64,  KIND_VAL})
+#define UINT_VAL(value)         ((Value_){{.u = value},   VAL_UINT,   KIND_VAL})
+#define UINT8_VAL(value)        ((Value_){{.u8 = value},  VAL_UINT8,  KIND_VAL})
+#define UNT16_VAL(value)        ((Value_){{.u16 = value}, VAL_UINT16, KIND_VAL})
+#define UNT32_VAL(value)        ((Value_){{.u32 = value}, VAL_UINT32, KIND_VAL})
+#define UNT64_VAL(value)        ((Value_){{.u64 = value}, VAL_UINT64, KIND_VAL})
+#define FLOAT_VAL(value)        ((Value_){{.f = value},   VAL_FLOAT,  KIND_VAL})
+#define DOUBLE_VAL(value)       ((Value_){{.d = value},   VAL_DOUBLE, KIND_VAL})
 
-#define UINT_VAL(value)          ((Value_){{.u = value}, VAL_UINT, 0})
-#define UNT8_VAL(value)           ((Value_){{.u8 = value}, VAL_UINT8, 0})
-#define UNT16_VAL(value)           ((Value_){{.u16 = value}, VAL_UINT16, 0})
-#define UNT32_VAL(value)           ((Value_){{.u32 = value}, VAL_UINT32, 0})
-#define UNT64_VAL(value)           ((Value_){{.u64 = value}, VAL_UINT64, 0})
+#define MAKE_VAL(TYPE, VAL)  ((Value_){TYPE(VAL), KIND_VAL})
+#define INT_TY(value)          {.i = value},   VAL_INT
+#define INT8_TY(value)         {.i8 = value},  VAL_INT8
+#define INT16_TY(value)        {.i16 = value}, VAL_INT16
+#define INT32_TY(value)        {.i32 = value}, VAL_INT32
+#define INT64_TY(value)        {.i64 = value}, VAL_INT64
+#define UINT_TY(value)         {.u = value},   VAL_UINT
+#define UNT8_TY(value)         {.u8 = value},  VAL_UINT8
+#define UNT16_TY(value)        {.u16 = value}, VAL_UINT16
+#define UNT32_TY(value)        {.u32 = value}, VAL_UINT32
+#define UNT64_TY(value)        {.u64 = value}, VAL_UINT64
+#define FLOAT_TY(value)        {.f = value},   VAL_FLOAT
+#define DOUBLE_TY(value)       {.d = value},   VAL_DOUBLE
 
-#define INTX_VAL(value, width)   ((Value_){{.i = value}, VAL_INT##width, 0})
-#define UINTX_VAL(value, width)  ((Value_){{.u = value}, VAL_UINT##width, 0})
-#define FLOAT_VAL(value)  ((Value_){{.f = value}, VAL_FLOAT, 0})
-#define DOUBLE_VAL(value) ((Value_){{.d = value}, VAL_DOUBLE, 0})
 
 typedef struct Value_ {
   union {
@@ -95,6 +111,9 @@ typedef struct Value_ {
 
     float f;
     double d;
+
+    uintptr_t ref;
+    uintptr_t ptr;
   } as;
 
   uint8_t type;
@@ -115,5 +134,9 @@ void valuearray_write(ValueArray value_array, Value_ value);
 void valuearray_free(ValueArray value_array);
 
 void value_print(Value_ value);
+
+const char* valuetype_str(ValueType type);
+bool value_iscoercible(Value_ from, Value_ to);
+bool valuetype_iscoercible(ValueType from, ValueType to);
 
 #endif  // VALUE__H

@@ -1,7 +1,7 @@
 component Iterable
 
 
-function[T is Iterable] sum(nums: T) -> int do
+function sum(nums: T) with [T is Iterable] -> int do
   let accum := 0
   for x in nums do
     accum += x
@@ -9,6 +9,23 @@ function[T is Iterable] sum(nums: T) -> int do
 
   return accum
 end
+
+struct Mesh
+[
+    num_pos : int, 
+    num_norms : int,
+    num_uvs : int
+]
+  num_verts: int = num_pos + num_norms + num_uvs
+  pos: vec3[num_pos]
+  norms: vec3[num_norms]
+  uvs: vec3[num_uvs]
+end
+
+let mesh := new Mesh with [num_pos=1, num_norms=1, num_uvs=1]
+# let mesh := new Mesh with [1, 1, 1]
+
+assert mesh.num_verts == 3
 
 print(List is Iterable)  # true
 print(int is Iterable)   # false

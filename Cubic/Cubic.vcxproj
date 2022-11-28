@@ -163,6 +163,7 @@
     <None Include="variables.cub" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="analyzer.c" />
     <ClCompile Include="ast.c" />
     <ClCompile Include="chunk.c" />
     <ClCompile Include="compiler.c" />
@@ -173,10 +174,12 @@
     <ClCompile Include="memory.c" />
     <ClCompile Include="parser.c" />
     <ClCompile Include="scanner.c" />
+    <ClCompile Include="symbol_table.c" />
     <ClCompile Include="value.c" />
     <ClCompile Include="vm.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="analyzer.h" />
     <ClInclude Include="ast.h" />
     <ClInclude Include="chunk.h" />
     <ClInclude Include="common.h" />
@@ -187,6 +190,7 @@
     <ClInclude Include="memory.h" />
     <ClInclude Include="parser.h" />
     <ClInclude Include="scanner.h" />
+    <ClInclude Include="symbol_table.h" />
     <ClInclude Include="tokens.h" />
     <ClInclude Include="types.h" />
     <ClInclude Include="value.h" />

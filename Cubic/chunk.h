@@ -25,6 +25,9 @@ typedef enum {
   OP_SUB,
   OP_MUL,
   OP_DIV,
+  OP_IMUL,
+  OP_IDIV,
+
   OP_FADD, // Unimplemented.
   OP_FSUB, // Unimplemented.
   OP_FMUL, // Unimplemented.

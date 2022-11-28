@@ -52,6 +52,7 @@ typedef enum {
   // Async Tokens
   TK_ASYNC, TK_AWAIT, TK_YIELD,
 
+  __TK_COUNT__
 } TokenType;
 
 typedef struct Token_ {

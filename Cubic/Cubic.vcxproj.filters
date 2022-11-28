@@ -105,6 +105,12 @@
     <ClCompile Include="map.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="analyzer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="symbol_table.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.h">
@@ -147,6 +153,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="map.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="analyzer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="symbol_table.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,3 +1,4 @@
+#include <varargs.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -16,34 +17,6 @@ void* reallocate(void* pointer, size_t old_size, size_t new_size) {
 }
 
 #if 0
-MemoryAllocator default_alloc;
-
-struct MallocAllocator {
-  MemoryAllocator_ self;
-};
-
-void memory_initialize() {
-  MallocAllocator* alloc = new MallocAllocator;
-  alloc->self.destroy = [](MemoryAllocator_*) {};
-  alloc->self.alloc = [](MemoryAllocator_*, size_t size) { return malloc(size); };
-  alloc->self.dealloc = [](MemoryAllocator_*, void* ptr) { free(ptr); };
-  alloc->self.flush = nullptr;
-  alloc->self.clear = nullptr;
-
-  _memallocator_register("default", (MemoryAllocator_*)alloc);
-  default_alloc = (MemoryAllocator_*)alloc;
-}
-
-void memory_flush_all(int64_t frame) {
-  for (auto m : flushables) {
-    m->flush(m, frame);
-  }
-}
-
-MemoryAllocator _memallocator_default() {
-  return default_alloc;
-}
-
 struct MemoryPoolAllocator {
   // https://github.com/Isty001/mem-pool
   MemoryAllocator_ self;
@@ -149,6 +122,50 @@ MemoryAllocator _memallocator_stack(size_t max_size) {
   return (MemoryAllocator)(new MemoryStackAllocator(max_size));
 }
 #endif
+
+void list_init(struct List_* list, size_t val_size, struct MemoryAllocator_* allocator) {
+  memset(list, 0, sizeof(List_));
+  list->val_size = val_size;
+  list->node_size = val_size <= sizeof(void*) ? 0 : val_size + sizeof(struct ListNode_);
+  list->allocator = allocator;
+}
+
+void list_clear(List_* list) {
+  struct ListNode_* cur = list->head;
+  while (cur) {
+    struct ListNode_* next = cur->next;
+    if (list->allocator) {
+      dealloc(list->allocator, cur);
+    } else {
+      free(cur);
+    }
+    cur = next;
+  }
+  list->head = NULL;
+  list->tail = NULL;
+}
+
+ListNode_* list_push(List_* list, void* val) {
+  struct ListNode_* n;
+  if (list->allocator) {
+    n = alloc(list->allocator, list->node_size);
+  } else {
+    n = malloc(list->node_size);
+  }  
+  n->next = NULL;
+
+  if (val) {
+    memcpy(&n->data, val, list->val_size);
+  } else {
+    n->data = NULL;
+  }  
+
+  if (!list->head) list->head = n;
+  if (list->tail) list->tail->next = n;
+
+  list->tail = n;
+  return n;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 static void* pageallocator_alloc(MemoryAllocator_* base, size_t size);
