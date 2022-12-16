@@ -83,7 +83,7 @@ static int constant_instruction(const char* name, Chunk chunk, int offset) {
 }
 
 static int constant_long_instruction(const char* name, Chunk chunk, int offset) {
-  int constant =chunk->code[offset + 1]
+  int constant = chunk->code[offset + 1]
     | (int)(chunk->code[offset + 2]) << 8
     | (int)(chunk->code[offset + 3]) << 16;
 

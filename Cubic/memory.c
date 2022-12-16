@@ -126,7 +126,7 @@ MemoryAllocator _memallocator_stack(size_t max_size) {
 void list_init(struct List_* list, size_t val_size, struct MemoryAllocator_* allocator) {
   memset(list, 0, sizeof(List_));
   list->val_size = val_size;
-  list->node_size = val_size <= sizeof(void*) ? 0 : val_size + sizeof(struct ListNode_);
+  list->node_size = val_size + sizeof(struct ListNode_);
   list->allocator = allocator;
 }
 
@@ -143,6 +143,7 @@ void list_clear(List_* list) {
   }
   list->head = NULL;
   list->tail = NULL;
+  list->count = 0;
 }
 
 ListNode_* list_push(List_* list, void* val) {
@@ -164,6 +165,7 @@ ListNode_* list_push(List_* list, void* val) {
   if (list->tail) list->tail->next = n;
 
   list->tail = n;
+  ++list->count;
   return n;
 }
 

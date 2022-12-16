@@ -3,6 +3,7 @@
 #include "common.h"
 #include "debug.h"
 #include "compiler.h"
+#include "symbol.h"
 
 #include <string.h>
 #include <stdarg.h>
@@ -32,6 +33,7 @@ InterpretResult vm_interpret(VM vm, const char* source) {
 
   vm->chunk = &chunk;
   vm->ip = vm->chunk->code;
+  vm->frame_count = 1;
 
   InterpretResult result = run(vm);
 
@@ -57,61 +59,23 @@ Value_ vm_peek(VM_* vm, int distance) {
   return vm->stack_top[-1 - distance];
 }
 
-inline InterpretResult add(VM_* vm) {
-  Value_ a = vm_peek(vm, 0);
-  Value_ b = vm_peek(vm, 1);
-
-  if (a.type != b.type || !ISA_INT(a)) {
-    runtime_error(vm, "Operands must be integers");
-    return INTERPRET_RUNTIME_ERROR;
-  }
-
-  vm_popx(vm, 2);
-  vm_push(vm, INT_VAL(a.as.i + b.as.i));
-
-  return INTERPRET_OK;
-}
-
-#define INTEGER_OP(TYPE, OP) do {\
-Value_ a = vm_peek(vm, 0);\
-Value_ b = vm_peek(vm, 1);\
-if (a.type != b.type || !ISA_##TYPE(a)) {\
-  runtime_error(vm, "Operands must be integers");\
-  return INTERPRET_RUNTIME_ERROR;\
-}\
-vm_popx(vm, 2);\
-vm_push(vm, TYPE##_VAL(a.as.u OP b.as.u));\
-return INTERPRET_OK;\
-} while(0)
-
-
-inline InterpretResult addf(VM_* vm) {
-  Value_ a = vm_peek(vm, 0);
-  Value_ b = vm_peek(vm, 1);
-
-  INTEGER_OP(INT, +);
-
-  if (a.type != b.type || !ISA_NUMBER(a)) {
-    runtime_error(vm, "Operands must be numbers");
-    return INTERPRET_RUNTIME_ERROR;
-  }
-
-  vm_popx(vm, 2);
-  switch (a.type) {
-    case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(a.as.d + b.as.d)); break;
-    case VAL_FLOAT:  vm_push(vm, FLOAT_VAL(a.as.f + b.as.f)); break;
-  }
-
-  return INTERPRET_OK;
-}
-
 static bool is_falsey(Value_ value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
 static InterpretResult run(VM vm) {
-#define READ_BYTE() (*vm->ip++)
-#define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+#define FRAME_MAX 256
+  CallFrame_* frame = &vm->frames[0];
+  frame->ip = vm->ip;
+  frame->chunk = vm->chunk;
+  frame->slots = vm->stack;
+
+#define READ_BYTE() (*frame->ip++)
+#define READ_SHORT() \
+    (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
+#define READ_LONG() \
+    (frame->ip += 4, (uint32_t)((frame->ip[-4] << 24) | (frame->ip[-3] << 16) | (frame->ip[-2] << 8) | frame->ip[-1]))
+#define READ_CONSTANT() (frame->chunk->constants.values[READ_BYTE()])
 #define BINARY_OP(op) \
     do { \
       double b = vm_pop(vm); \
@@ -125,9 +89,6 @@ static InterpretResult run(VM vm) {
       double a = vm_pop(vm); \
       vm_push(vm, a op b); \
     } while (false)
-
-#define READ_SHORT() \
-    (vm->ip += 2, (uint16_t)((vm->ip[-2] << 8) | vm->ip[-1]))
 
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -163,19 +124,75 @@ static InterpretResult run(VM vm) {
         vm_push(vm, FALSE_VAL);
         continue;
 
+      case OP_PROLOGUE:
+      {
+        uint16_t size = READ_SHORT();
+        frame->size = size;
+        vm->stack_top += frame->size;
+        continue;
+      }
+
+      case OP_EPILOGUE:
+      {
+        vm->stack_top -= frame->size;
+        continue;
+      }
+
+#if 0
+      case OP_BEGIN_SCOPE:
+      {
+        continue;
+      }
+
+      case OP_END_SCOPE:
+      {
+        --frame_count;
+        continue;
+      }
+#endif
+
+      case OP_CAST:
+      {
+        Value_ expr_val = vm_pop(vm);
+        Type_ from_type = expr_val.type;
+        Type_ to_type = type_fromint(READ_LONG());
+
+        switch (to_type.ty) {
+          case VAL_FLOAT:
+          {
+            switch (from_type.ty) {
+              case VAL_INT: expr_val.as.f = (float)expr_val.as.i32; break;
+              case VAL_UINT: expr_val.as.f = (float)expr_val.as.u32; break;
+            }
+            break;
+          }
+
+          case VAL_DOUBLE:
+          {
+            switch (from_type.ty) {
+              case VAL_INT: expr_val.as.d = (double)expr_val.as.i; break;
+              case VAL_UINT: expr_val.as.d = (double)expr_val.as.u; break;
+            }
+            break;
+          }
+        }
+
+        expr_val.type = to_type;
+        vm_push(vm, expr_val);
+        continue;
+      }
+
       case OP_GET_VAR:
       {
         uint8_t slot = READ_BYTE();
-        vm_push(vm, vm->stack[slot]);
+        vm_push(vm, frame->slots[slot]);
         continue;
       }
 
       case OP_SET_VAR:
       {
         uint8_t slot = READ_BYTE();
-        Value_ val = vm_peek(vm, 0);
-        vm->stack[slot].as = val.as;
-        vm->stack[slot].size = val.size;
+        frame->slots[slot] = vm_peek(vm, 0);
         continue;
       }
 
@@ -185,10 +202,10 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i & r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u & r.as.u)); break;
-          default: assertf(false, "Unimplemented '&' for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented '&' for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -199,10 +216,10 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i | r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u | r.as.u)); break;
-          default: assertf(false, "Unimplemented '|' for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented '|' for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -213,10 +230,10 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i ^ r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u ^ r.as.u)); break;
-          default: assertf(false, "Unimplemented '^ for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented '^ for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -242,10 +259,10 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i << r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u << r.as.u)); break;
-          default: assertf(false, "Unimplemented << for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented << for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -255,10 +272,10 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i >> r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u >> r.as.u)); break;
-          default: assertf(false, "Unimplemented >> for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented >> for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -268,11 +285,11 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d > r.as.d)); break;
           case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i > r.as.i)); break;
           case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u > r.as.u)); break;
-          default: assertf(false, "Unimplemented > for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented > for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -282,11 +299,11 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d >= r.as.d)); break;
           case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i >= r.as.i)); break;
           case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u >= r.as.u)); break;
-          default: assertf(false, "Unimplemented >= for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented >= for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -296,11 +313,11 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d < r.as.d)); break;
           case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i < r.as.i)); break;
           case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u < r.as.u)); break;
-          default: assertf(false, "Unimplemented < for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented < for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -310,11 +327,11 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d <= r.as.d)); break;
           case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i <= r.as.i)); break;
           case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u <= r.as.u)); break;
-          default: assertf(false, "Unimplemented <= for type: %d\n", l.type);
+          default: assertf(false, "Unimplemented <= for type: %d\n", l.type.ty);
         }
         continue;
       }
@@ -369,10 +386,24 @@ static InterpretResult run(VM vm) {
           return runtime_error(vm, "Divide-by-zero error");
         }
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i % r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u % r.as.u)); break;
           default: return runtime_error(vm, "Unimplemented '%%' for type: %d\n", l.type);
+        }
+        continue;
+      }
+
+      case OP_ADD:
+      {
+        Value_ r = vm_pop(vm);
+        Value_ l = vm_pop(vm);
+
+        switch (l.type.ty) {
+          case VAL_INT: vm_push(vm, INT_VAL(l.as.i + r.as.i)); break;
+          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u + r.as.u)); break;
+          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d + r.as.d)); break;
+          default: return runtime_error(vm, "Unimplemented '+' for type: %d\n", l.type);
         }
         continue;
       }
@@ -381,6 +412,8 @@ static InterpretResult run(VM vm) {
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
+        Value_ res = UINT_VAL(l.as.u + r.as.u);
+        //res.type = l.type;
 
         switch (l.type) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i + r.as.i)); break;
@@ -391,36 +424,19 @@ static InterpretResult run(VM vm) {
         continue;
       }*/
 
-      case OP_ADD:
-      {
-        Value_ r = vm_pop(vm);
-        Value_ l = vm_pop(vm);
-        Value_ res = UINT_VAL(l.as.u + r.as.u);
-        res.type = l.type;
-
-        /*switch (l.type) {
-          case VAL_INT: vm_push(vm, INT_VAL(l.as.i + r.as.i)); break;
-          case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u + r.as.u)); break;
-          case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d + r.as.d)); break;
-          default: return runtime_error(vm, "Unimplemented '+' for type: %d\n", l.type);
-        }*/
-        continue;
-      }
-
       case OP_SUB:
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        Value_ res = UINT_VAL(l.as.u - r.as.u);
-        res.type = l.type;
+        //Value_ res = UINT_VAL(l.as.u - r.as.u);
+        //res.type = l.type;
 
-        /*
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i - r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u - r.as.u)); break;
           case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d - r.as.d)); break;
           default: return runtime_error(vm, "Unimplemented binary addition for type: %d\n", l.type);
-        }*/
+        }
         continue;
       }
 
@@ -430,7 +446,7 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i * r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u * r.as.u)); break;
           case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d * r.as.d)); break;
@@ -450,7 +466,7 @@ static InterpretResult run(VM vm) {
           return runtime_error(vm, "Divide-by-zero error");
         }
 
-        switch (l.type) {
+        switch (l.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i / r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u / r.as.u)); break;
           case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d / r.as.d)); break;
@@ -462,7 +478,7 @@ static InterpretResult run(VM vm) {
       case OP_NEGATE:
       {
         Value_ val = vm_pop(vm);
-        switch (val.type) {
+        switch (val.type.ty) {
           case VAL_INT: vm_push(vm, INT_VAL(-val.as.i)); break;
           case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(-val.as.d)); break;
           default: return runtime_error(vm, "Unimplemented unary negation for type: %d", val.type);
@@ -496,7 +512,7 @@ static InterpretResult run(VM vm) {
       case OP_JMP:
       {
         uint16_t offset = READ_SHORT();
-        vm->ip += offset;
+        frame->ip += offset;
         continue;
       }
 
@@ -504,7 +520,7 @@ static InterpretResult run(VM vm) {
       {
         uint16_t offset = READ_SHORT();
         if (is_falsey(vm_peek(vm, 0))) {
-          vm->ip += offset;
+          frame->ip += offset;
         }
         continue;
       }
@@ -512,7 +528,7 @@ static InterpretResult run(VM vm) {
       case OP_LOOP:
       {
         uint16_t offset = READ_SHORT();
-        vm->ip -= offset;
+        frame->ip -= offset;
         continue;
       }
 
@@ -537,7 +553,7 @@ static InterpretResult runtime_error(VM_* vm, const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction = vm->ip - vm->chunk->code - 1;
+  size_t instruction = vm->frames[vm->frame_count-1].ip - vm->chunk->code - 1;
   int line = vm->chunk->lines[instruction];
   fprintf(stderr, "[line %d] in script\n", line);
   reset_stack(vm);

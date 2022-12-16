@@ -88,6 +88,12 @@ UTEST_F(MyTestFixture, while_loops) {
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, functions) {
+  auto output = run_file(exedir, "functions.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
 
 int main(int argc, char** argv) {
   exedir = std::filesystem::path(argv[0]).parent_path();

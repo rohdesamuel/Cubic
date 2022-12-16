@@ -2,32 +2,7 @@
 #define VALUE__H
 
 #include "common.h"
-
-typedef enum {
-  VAL_UNKNOWN = -1,
-  VAL_NIL,
-  VAL_BOOL,
-  VAL_INT,
-  VAL_INT8,
-  VAL_INT16,
-  VAL_INT32,
-  VAL_INT64,
-  VAL_UINT,
-  VAL_UINT8,
-  VAL_UINT16,
-  VAL_UINT32,
-  VAL_UINT64,
-  VAL_FLOAT,
-  VAL_DOUBLE,
-
-  __VALUE_TYPE_COUNT__,
-} ValueType;
-
-typedef enum {
-  KIND_VAL,
-  KIND_PTR,
-  KIND_REF,
-} ValueKind;
+#include "type.h"
 
 #define AS_BOOL(value)          ((value).as.b)
 #define AS_INT(value)           ((value).as.i)
@@ -40,26 +15,28 @@ typedef enum {
 #define AS_UINT16(value)        ((value).as.u16)
 #define AS_UINT32(value)        ((value).as.u32)
 #define AS_UINT64(value)        ((value).as.u64)
+#define AS_OBJ(value)           ((value).as.obj)
 
 #define AS_FLOAT(value)        ((value).as.f)
 #define AS_DOUBLE(value)       ((value).as.d)
 
-#define IS_BOOL(value)         ((value).type == VAL_BOOL)
-#define IS_NIL(value)          ((value).type == VAL_NIL)
-#define ISA_NUMBER(value)      ((value).type >= VAL_INT && (value).type <= VAL_DOUBLE)
-#define ISA_INTEGER(value)     ((value).type >= VAL_INT && (value).type <= VAL_UINT64)
-#define ISA_INT(value)         ((value).type >= VAL_INT && (value).type <= VAL_INT64)
-#define ISA_UINT(value)        ((value).type >= VAL_UINT && (value).type <= VAL_UINT64)
+#define IS_BOOL(value)         ((value).type.ty == VAL_BOOL)
+#define IS_NIL(value)          ((value).type.ty == VAL_NIL)
+#define ISA_NUMBER(value)      ((value).type.ty >= VAL_INT && (value).type <= VAL_DOUBLE)
+#define ISA_INTEGER(value)     ((value).type.ty >= VAL_INT && (value).type <= VAL_UINT64)
+#define ISA_INT(value)         ((value).type.ty >= VAL_INT && (value).type <= VAL_INT64)
+#define ISA_UINT(value)        ((value).type.ty >= VAL_UINT && (value).type <= VAL_UINT64)
 
-#define IS_INT(value)          ((value).type == VAL_INT)
-#define IS_INTX(value, width)  ((value).type == VAL_INT##width)
-#define IS_UINT(value)         ((value).type == VAL_UINT)
-#define IS_UINTX(value, width) ((value).type == VAL_UINT##width)
-#define IS_FLOAT(value)        ((value).type == VAL_FLOAT)
-#define IS_DOUBLE(value)       ((value).type == VAL_DOUBLE)
-#define IS_VAL(value)          ((value).kind == KIND_VAL)
-#define IS_PTR(value)          ((value).kind == KIND_PTR)
-#define IS_REF(value)          ((value).kind == KIND_REF)
+#define IS_INT(value)          ((value).type.ty == VAL_INT)
+#define IS_INTX(value, width)  ((value).type.ty == VAL_INT##width)
+#define IS_UINT(value)         ((value).type.ty == VAL_UINT)
+#define IS_UINTX(value, width) ((value).type.ty == VAL_UINT##width)
+#define IS_FLOAT(value)        ((value).type.ty == VAL_FLOAT)
+#define IS_DOUBLE(value)       ((value).type.ty == VAL_DOUBLE)
+#define IS_OBJ(value)          ((value).type.ty == VAL_OBJ)
+#define IS_VAL(value)          ((value).type.kind == KIND_VAL)
+#define IS_PTR(value)          ((value).type.kind == KIND_PTR)
+#define IS_REF(value)          ((value).type.kind == KIND_REF)
 
 #define NIL_VAL                    ((Value_){{.i = 0}, VAL_NIL, KIND_VAL})
 #define BOOL_VAL(value)            ((Value_){{.b = value}, VAL_BOOL, KIND_VAL})
@@ -77,21 +54,7 @@ typedef enum {
 #define UNT64_VAL(value)        ((Value_){{.u64 = value}, VAL_UINT64, KIND_VAL})
 #define FLOAT_VAL(value)        ((Value_){{.f = value},   VAL_FLOAT,  KIND_VAL})
 #define DOUBLE_VAL(value)       ((Value_){{.d = value},   VAL_DOUBLE, KIND_VAL})
-
-#define MAKE_VAL(TYPE, VAL)  ((Value_){TYPE(VAL), KIND_VAL})
-#define INT_TY(value)          {.i = value},   VAL_INT
-#define INT8_TY(value)         {.i8 = value},  VAL_INT8
-#define INT16_TY(value)        {.i16 = value}, VAL_INT16
-#define INT32_TY(value)        {.i32 = value}, VAL_INT32
-#define INT64_TY(value)        {.i64 = value}, VAL_INT64
-#define UINT_TY(value)         {.u = value},   VAL_UINT
-#define UNT8_TY(value)         {.u8 = value},  VAL_UINT8
-#define UNT16_TY(value)        {.u16 = value}, VAL_UINT16
-#define UNT32_TY(value)        {.u32 = value}, VAL_UINT32
-#define UNT64_TY(value)        {.u64 = value}, VAL_UINT64
-#define FLOAT_TY(value)        {.f = value},   VAL_FLOAT
-#define DOUBLE_TY(value)       {.d = value},   VAL_DOUBLE
-
+#define OBJ_VAL(object)         ((Value_){{.obj = (struct Obj_*)object, VAL_OBJ, KIND_VAL}})
 
 typedef struct Value_ {
   union {
@@ -114,10 +77,11 @@ typedef struct Value_ {
 
     uintptr_t ref;
     uintptr_t ptr;
+
+    struct Obj_* obj;
   } as;
 
-  uint8_t type;
-  uint8_t kind;
+  struct Type_ type;
   uint16_t size;
 } Value_;
 
@@ -135,8 +99,9 @@ void valuearray_free(ValueArray value_array);
 
 void value_print(Value_ value);
 
-const char* valuetype_str(ValueType type);
+const char* valuetype_str(Type_ type);
+const char* value_typestr(Value_* value);
+
 bool value_iscoercible(Value_ from, Value_ to);
-bool valuetype_iscoercible(ValueType from, ValueType to);
 
 #endif  // VALUE__H

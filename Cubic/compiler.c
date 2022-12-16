@@ -6,6 +6,7 @@
 #include "parser.h"
 #include "analyzer.h"
 #include "ast.h"
+#include "symbol_table.h"
 
 #include <assert.h>
 #include <string.h>
@@ -62,7 +63,7 @@ bool compile(const char* source, Chunk_* chunk) {
   analyzer_init(&analyzer);
   compiler_init(&compiler);
 
-  AstNode_* root = parse(&parser, &scanner, analyzer.symbol_table, source);
+  AstNode_* root = parse(&parser, &scanner, analyzer.scope, source);
 
   if (!parser.had_error) {
     analyze(&analyzer, (AstProgram_*)root);
@@ -112,6 +113,18 @@ static void emit_byte(uint8_t byte, int line) {
 static void emit_bytes(uint8_t byte1, uint8_t byte2, int line) {
   emit_byte(byte1, line);
   emit_byte(byte2, line);
+}
+
+static void emit_short(uint16_t s, int line) {
+  emit_byte((s & 0xFF00) >> 8, line);
+  emit_byte(s & 0x00FF, line);
+}
+
+static void emit_long(uint32_t s, int line) {
+  emit_byte((s & 0xFF000000) >> 24, line);
+  emit_byte((s & 0x00FF0000) >> 16, line);
+  emit_byte((s & 0x0000FF00) >> 8, line);
+  emit_byte(s  & 0x000000FF, line);
 }
 
 static int emit_jmp(uint8_t byte, int line) {
@@ -173,15 +186,15 @@ static void binary_code_gen(AstNode_* node) {
 static void primary_code_gen(AstNode_* node) {
   AstPrimaryExp_* exp = (AstPrimaryExp_*)node;
   if (IS_NIL(exp->value)) {
-    emit_byte(OP_NIL, exp->base.base.line);
+    emit_byte(OP_NIL, node->line);
   } else if (IS_BOOL(exp->value)) {
     if (exp->value.as.b) {
-      emit_byte(OP_TRUE, exp->base.base.line);
+      emit_byte(OP_TRUE, node->line);
     } else {
-      emit_byte(OP_FALSE, exp->base.base.line);
+      emit_byte(OP_FALSE, node->line);
     }
   } else {
-    emit_constant(exp->value, exp->base.base.line);
+    emit_constant(exp->value, node->line);
   }
 }
 
@@ -192,31 +205,48 @@ static void print_code_gen(AstNode_* node) {
 }
 
 static void program_code_gen(AstNode_* node) {
+  Frame_* frame = node->scope->frame;
+
   AstProgram_* program = (AstProgram_*)node;
+  emit_byte(OP_PROLOGUE, node->line);
+  emit_short((uint16_t)program->base.scope->frame->max_stack_offset, node->line);
   code_gen((AstNode_*)program->block);
+  emit_byte(OP_EPILOGUE, node->line);
 }
 
-static void begin_scope() {
-  ++current_compiler->scope_depth;
+static void begin_scope(AstBlock_* block) {
+#if 0
+  List_* vars = &block->base.symbol_table->vars;
+
+  emit_short((uint16_t)block->base.scope->frame->var_count, block->base.line);
+  emit_byte(OP_BEGIN_SCOPE, block->base.line);
+  for (ListNode_* n = vars->head; n != NULL; n = n->next) {
+    Symbol_* s = list_val(n, Symbol_*);
+    emit_bytes(OP_DECLARE_VAR, (uint8_t)s->type, block->base.line);
+  }
+#endif
 }
 
-static void end_scope() {
-  --current_compiler->scope_depth;
-  while (current_compiler->locals_count > 0 &&
-    current_compiler->locals[current_compiler->locals_count - 1].depth >
-    current_compiler->scope_depth) {
-    emit_byte(OP_POP, -1);
-    current_compiler->locals_count--;
-  }  
+static void end_scope(AstBlock_* block) {
+  /*
+  Scope_* scope = block->base.scope;
+  Frame_* frame = scope->frame;
+  List_* vars = &block->base.scope->vars;
+
+  for (ListNode_* n = vars->head; n != NULL; n = n->next) {
+    emit_byte(OP_DESTROY_VAR, block->base.line);
+  }
+  emit_byte(OP_END_SCOPE, block->base.line);
+  */
 }
 
 static void block_code_gen(AstNode_* node) {
   AstBlock_* block = (AstBlock_*)node;
-  begin_scope();
+  begin_scope(block);
   for (AstListNode_* n = block->statements.head; n != NULL; n = n->next) {
     code_gen(n->node);
   }
-  end_scope();
+  end_scope(block);
 }
 
 static void return_code_gen(AstNode_* node) {
@@ -356,6 +386,14 @@ static bool identifiers_equal(Token_* a, Token_* b) {
 }
 
 static int declare_variable(AstVarDeclStmt_* stmt) {
+  VarSymbol_* var = scope_var(stmt->base.scope, &stmt->name);
+  assertf(var, "Could not find var %.*s", stmt->name.length, stmt->name.start);  
+
+  if (!var) return -1;
+
+  return var->offset;
+
+#if 0
   for (int i = current_compiler->locals_count - 1; i >= 0; i--) {
     Local* local = &current_compiler->locals[i];
     if (local->depth != -1 && local->depth < current_compiler->scope_depth) {
@@ -368,6 +406,7 @@ static int declare_variable(AstVarDeclStmt_* stmt) {
   }
 
   return add_local(&stmt->name);
+#endif
 }
 
 static void var_decl_code_gen(AstNode_* node) {
@@ -375,10 +414,12 @@ static void var_decl_code_gen(AstNode_* node) {
   int slot = declare_variable(stmt);
 
   // TODO: allow for multiple expressions.
-  for (AstListNode_* n = stmt->exprs.head; n != NULL; n = n->next) {
-    code_gen(n->node);
-    emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
+  code_gen((AstNode_*)stmt->expr);
+  if (type_iscoercible(stmt->expr->type, stmt->type)) {
+    emit_byte(OP_CAST, node->line);
+    emit_long(type_toint(stmt->type), node->line);
   }
+  emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
 }
 
 static void var_expr_code_gen(AstNode_* node) {
@@ -386,39 +427,34 @@ static void var_expr_code_gen(AstNode_* node) {
   code_gen((AstNode_*)expr->expr);
 }
 
-static int resolve_local(Compiler_* compiler, Token_* name) {
-  for (int i = compiler->locals_count - 1; i >= 0; i--) {
-    Local* local = &compiler->locals[i];
-    if (identifiers_equal(name, &local->name)) {
-      return i;
-    }
-  }
+static int resolve_local(Scope_* scope, Token_* name) {
+  VarSymbol_* s = scope_var(scope, name);
+  if (!s) return -1;
 
-  return -1;
+  return s->offset;
 }
 
 static void id_expr_code_gen(AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
-  int slot = resolve_local(current_compiler, &expr->name);
+  int slot = resolve_local(node->scope, &expr->name);
 
   emit_bytes(OP_GET_VAR, (uint8_t)slot, node->line);
 }
 
-static void assignment_stmt_code_gen(AstNode_* node) {
-  AstAssignmentStmt_* stmt = (AstAssignmentStmt_*)node;
+static void assignment_expr_code_gen(AstNode_* node) {
+  AstAssignmentExpr_* expr = (AstAssignmentExpr_*)node;
 
   // TODO: allow for assigning to more than simple variables
   // TODO: allow for assigning to multiple variables.
-  AstVarExpr_* var = (AstVarExpr_*)stmt->vars.head->node;
+  AstVarExpr_* var = (AstVarExpr_*)expr->left;
   assertf(var->expr->base.cls == AST_CLS(AstIdExpr_),
     "Only assigning to variables is supported at this time.");
   
-  AstIdExpr_* expr = (AstIdExpr_*)var->expr;
-  int slot = resolve_local(current_compiler, &expr->name);
+  AstIdExpr_* id_expr = (AstIdExpr_*)var->expr;
+  int slot = resolve_local(node->scope, &id_expr->name);
 
-  code_gen(stmt->exprs.head->node);
+  code_gen(expr->right);
   emit_bytes(OP_SET_VAR, (uint8_t)slot, node->line);
-  emit_byte(OP_POP, node->line);
 }
 
 static void emit_loop(int loop_start, int line) {
@@ -452,6 +488,28 @@ static void while_stmt_code_gen(AstNode_* node) {
   emit_byte(OP_POP, node->line);
 }
 
+void expression_statement_code_gen(AstNode_* node) {
+  AstExpressionStmt_* stmt = (AstExpressionStmt_*)node;
+  code_gen(stmt->expr);
+  emit_byte(OP_POP, node->line);
+}
+
+void function_def_code_gen(AstNode_* node) {
+  AstFunctionDef_* def = (AstFunctionDef_*)node;
+  code_gen((AstNode_*)def->body);
+}
+
+void function_body_code_gen(AstNode_* node) {
+  AstFunctionBody_* body = (AstFunctionBody_*)node;
+  code_gen(body->stmt);
+
+  for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
+    code_gen(n->node);
+  }
+}
+
+void noop_code_gen(AstNode_* node) {}
+
 CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstProgram_)]        = {program_code_gen},
   [AST_CLS(AstBlock_)]          = {block_code_gen},
@@ -465,8 +523,15 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstVarDeclStmt_)]    = {var_decl_code_gen},
   [AST_CLS(AstVarExpr_)]        = {var_expr_code_gen},
   [AST_CLS(AstIdExpr_)]         = {id_expr_code_gen},
-  [AST_CLS(AstAssignmentStmt_)] = {assignment_stmt_code_gen},
+  [AST_CLS(AstAssignmentExpr_)] = {assignment_expr_code_gen},
   [AST_CLS(AstWhileStmt_)]      = {while_stmt_code_gen},
+  [AST_CLS(AstFunctionDef_)]    = {function_def_code_gen},
+  [AST_CLS(AstFunctionBody_)]   = {function_body_code_gen},
+  [AST_CLS(AstFunctionParam_)]  = {NULL},
+  [AST_CLS(AstFunctionCall_)]   = {NULL},
+  [AST_CLS(AstFunctionArgs_)]   = {NULL},
+  [AST_CLS(AstExpressionStmt_)] = {expression_statement_code_gen},
+  [AST_CLS(AstNoopStmt_)]       = {noop_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(
@@ -475,6 +540,6 @@ STATIC_ASSERT(
 
 static CodeGenRule_* get_rule(int type) {
   CodeGenRule_* ret = &code_gen_rules[type];
-  assertf(ret->code_gen, "Could not find rule for AST class: %d", type);
+  assertf(ret->code_gen, "Could not find code gen rule for AST class: %d", type);
   return ret;
 }

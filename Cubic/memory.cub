@@ -47,7 +47,7 @@ struct Mesh
     num_norms : int,
     num_uvs : int
 ]
-  num_verts: int = num_pos + num_norms + num_uvs
+  num_verts: int = num_pos
   pos: vec3[num_pos]
   norms: vec3[num_norms]
   uvs: vec3[num_uvs]
@@ -100,13 +100,87 @@ end
 do
   let a: A
   a.arr = new int[100]
+
+  # `a.arr` is automatically freed here
 end
 
-Categories:
-  - Reinterpreting bytes 
-  - Colocating arrays
-  - Memory Ownership (out of scope then free)
+###################
+# USE CASE 5
+#
+# Allocating objects on the heap
+###################
 
+struct A {
+  ...
+};
+
+A* a = new A;
+
+struct A
+  ...
+end
+
+do
+  # Needs to be manually destroyed
+  ptr a: A = new A
+  
+  # Deletes a
+  del a
+
+  # Refernce counted
+  ref b: A = new A
+
+  # Decrements b's ref counter
+  del b
+
+  # Exclusive ownership to pointer
+  # exc c: A = new A
+  # Delete c
+  # del c
+
+  # Stack allocated
+  let d: A = A()
+end
+
+###################
+# USE CASE 6
+#
+# Allocating objects from an allocator
+###################
+
+struct A {
+  ...
+};
+
+A* a = new A;
+
+struct A
+  ...
+end
+
+do
+  let b := PageAllocator()
+
+  let a := new A from b;
+end
+
+###################
+# USE CASE 7
+#
+# Allocating strings
+###################
+
+char* a = new A;
+
+struct A
+  ...
+end
+
+do
+  let b := PageAllocator()
+
+  let a := new A from b;
+end
 ##################/
 
 struct Vec3
@@ -205,12 +279,14 @@ Equivalent(
   )
 
 # Creates a Vec3 on the stack.
-let pos_on_stack: Vec3 = (1, 2, 3)
+let pos_on_stack := Vec3(1, 2, 3)
 
 # Creates a Vec3 on the heap.
-let pos_on_heap* := (1, 2, 3)
+let pos_on_heap := new Vec3(1, 2, 3)
+ref ref_pos     := new Vec3(1, 2, 3)
 
-ref pos_from_ref := pos_on_heap
+ref pos_from_ref := &pos_on_heap
+ptr pos_from_ptr := &pos_on_heap
 
 
 function del_vec(v: Vec3&) do

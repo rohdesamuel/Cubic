@@ -1,18 +1,22 @@
-function simple_print(x: string) do
+function simple_print(x: string)
   print(x)
+end
+
+function with_refs(ref x: string) -> ptr string
+  x = x + 'a'
 end
 
 function closure(x: string) -> () -> string do
   return function() -> string x
 end
 
-function variadic(args: ...) do
+function variadic(args: ...)
   for arg in args do
     print(arg)
   end
 end
 
-function typed_variadic(args: ...int) do
+function typed_variadic(args: ...int)
   let result := 0
   for arg in args
     result += arg
@@ -20,22 +24,22 @@ function typed_variadic(args: ...int) do
   return result
 end
 
-function other_coroutine() do
+function other_coroutine()
   yield 3
 end
 
-function coroutine() do
+function coroutine()
   yield 1
   yield 2
   yield other_coroutine
 end
 
-function loadfile() do
+function loadfile()
   let f := open("some/file")
   return f.read()
 end
 
-function some_filecoroutine() do
+function some_filecoroutine()
   let file_contents := async loadfile()
 
   # Suspends this coroutine until file_contents is filled.

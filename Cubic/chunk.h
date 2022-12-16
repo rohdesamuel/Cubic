@@ -33,6 +33,8 @@ typedef enum {
   OP_FMUL, // Unimplemented.
   OP_FDIV, // Unimplemented.
 
+  OP_CAST,
+
   OP_MOD, 
   OP_BITWISE_AND,
   OP_BITWISE_OR,
@@ -54,11 +56,18 @@ typedef enum {
   OP_JMP_IF_FALSE,
   OP_LOOP,
 
+  OP_PROLOGUE,
+  OP_EPILOGUE,
+  OP_BEGIN_SCOPE,
+  OP_END_SCOPE,
+
   OP_GET_VAR,
   OP_SET_VAR,
 
   OP_PRINT,
   OP_ASSERT,
+
+  __OP_CODE_COUNT__
 } OpCode;
 
 typedef struct Chunk_ {

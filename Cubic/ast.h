@@ -6,8 +6,10 @@
 #include "value.h"
 
 #define AST_CLS(name) AST_##name
-#define MAKE_AST_NODE(allocator, type, symbol_table) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (symbol_table)))
+#define MAKE_AST_NODE(allocator, type, scope) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (scope)))
+#define MAKE_AST_NOOP(allocator) (make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL)))
 
+// TODO: implement types as UnionTypes.
 typedef struct AstNode_ {
   enum {
     AST_CLS(AstProgram_),
@@ -22,21 +24,33 @@ typedef struct AstNode_ {
     AST_CLS(AstVarDeclStmt_),
     AST_CLS(AstVarExpr_),
     AST_CLS(AstIdExpr_),
-    AST_CLS(AstAssignmentStmt_),
+    AST_CLS(AstAssignmentExpr_),
     AST_CLS(AstWhileStmt_),
+    AST_CLS(AstFunctionDef_),
+    AST_CLS(AstFunctionBody_),
+    AST_CLS(AstFunctionParam_),
+    AST_CLS(AstFunctionCall_),
+    AST_CLS(AstFunctionArgs_),
+    AST_CLS(AstExpressionStmt_),
+    AST_CLS(AstNoopStmt_),
+
     __AST_NODE_COUNT__,
   } cls;
   int line;
-  struct SymbolTable_* symbol_table;
+  struct Scope_* scope;
 } AstNode_;
 
 #define AS_NODE(PTR) ((struct AstNode_*)(PTR))
 #define AS_EXPR(PTR) ((struct AstExpr_*)(PTR))
 
+typedef struct AstNoopStmt_ {
+  AstNode_ base;
+} AstNoopStmt_;
+
 typedef struct AstExpr_ {
   AstNode_ base;
 
-  ValueType type;
+  struct Type_ type;
 } AstExpr_;
 
 typedef struct AstListNode_ {
@@ -44,7 +58,8 @@ typedef struct AstListNode_ {
   struct AstListNode_* next;
 } AstListNode_;
 
-typedef struct AstList_ {  
+typedef struct AstList_ {
+  struct MemoryAllocator_* allocator;
   AstListNode_* head;
   AstListNode_* tail;
 } AstList_;
@@ -72,19 +87,27 @@ typedef struct AstPrintStmt_ {
 // VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 typedef struct AstVarDeclStmt_ {
   AstNode_ base;
-  Token_ name;
-  ValueType type;
 
-  AstList_ exprs;
+  // Owned by Parser allocator.
+  Token_ name;
+  struct Type_ type;
+
+  AstExpr_* expr;
 } AstVarDeclStmt_;
 
-// AssignmentStmt ::= VarList '=' ExprList
-typedef struct AstAssignmentStmt_ {
+// ExpressionStmt ::= AssignmentExpr | PrefixExpr
+typedef struct AstExpressionStmt_ {
   AstNode_ base;
+  AstNode_* expr;
+} AstExpressionStmt_;
 
-  AstList_ vars;
-  AstList_ exprs;
-} AstAssignmentStmt_;
+// AssignmentExpr ::= VarList '=' ExprList
+typedef struct AstAssignmentExpr_ {
+  AstExpr_ base;
+
+  AstNode_* left;
+  AstNode_* right;
+} AstAssignmentExpr_;
 
 // Expr ::= UnaryOp Expr
 typedef struct AstUnaryExp_ {
@@ -172,10 +195,48 @@ typedef struct AstAssertStmt_ {
   AstNode_* expr;
 } AstAssertStmt_;
 
+// FunctionDef ::= 'function' [Id] FunctionBody 'end'
+typedef struct AstFunctionDef_ {
+  struct AstNode_ base;
+  Token_ name;
+  struct AstFunctionBody_* body;
+} AstFunctionDef_;
+
+// FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement
+typedef struct AstFunctionBody_ {
+  struct AstNode_ base;
+  AstList_ function_params;
+  struct Type_ return_type;
+  AstNode_* stmt;
+} AstFunctionBody_;
+
+// FunctionParam ::= (Id [':' UnionType]) ['=' Expr]
+typedef struct AstFunctionParam_ {
+  struct AstNode_ base;
+  Token_ name;
+  struct Type_ type;
+  AstNode_* opt_expr;
+
+} AstFunctionParam_;
+
+// FunctionCall ::= PrefixExpr FunctionArgs
+// FunctionArgs :: = '('[ExprList] ')'
+typedef struct AstFunctionCall_ {
+  struct AstExpr_ base;
+  AstNode_* prefix;
+  AstNode_* args;
+} AstFunctionCall_;
+
+// FunctionArgs ::= '(' [ExprList] ')'
+typedef struct AstFunctionArgs_ {
+  struct AstNode_* base;
+  AstList_ args;
+} AstFunctionArgs_;
+
 typedef struct Ast_ {
   struct AstProgram_* program;
 } Ast_;
 
-AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct SymbolTable_* symbol_table);
+AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct Scope_* symbol_table);
 
 #endif  // AST__H

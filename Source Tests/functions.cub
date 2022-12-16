@@ -1,0 +1,59 @@
+function can_run()
+  print(1)
+end
+can_run()
+
+/#
+function returns_true() -> bool
+  return true
+end
+
+assert returns_true()
+
+function identity(a : int) -> int
+  return a
+end
+
+assert identity(1) == 1
+
+function toggle(a : bool) -> bool
+  return not a
+end
+
+assert toggle(true) == false
+assert toggle(toggle(true)) = true
+
+function add_one(a : int) -> int
+  let b := a + 1
+  return b
+end
+
+do
+  let a := 0
+  a = add_one(a)
+  assert a == 1
+end
+
+function multiple_args(a : int, b : bool, c : double)
+  print(a)
+  print(b)
+  print(c)
+end
+
+multiple_args(1, true, 2.0)
+
+
+function recur(num : int) -> int
+  if num <= 1 then
+    return num
+  end
+
+  return num + recur(num - 1)
+end
+
+assert recur(0) == 0
+assert recur(1) == 1
+assert recur(2) == 3
+assert recur(3) == 6
+assert recur(4) == 10
+#/

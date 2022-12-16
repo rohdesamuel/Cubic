@@ -8,6 +8,20 @@
 #include <filesystem>
 #include <optional>
 
+namespace
+{
+
+void replace_all(std::string& str, const std::string& to_find, const std::string& to_replace) {
+  const std::string s = "\r\n";
+  const std::string t = "\n";
+  std::string::size_type n = 0;
+  while ((n = str.find(to_find, n)) != std::string::npos) {
+    str.replace(n, to_find.size(), to_replace);
+    n += to_replace.size();
+  }
+}
+
+}  // namespace
 
 std::string ReadFromPipe(HANDLE stdout_rd)
 
@@ -100,6 +114,9 @@ std::optional<CommandOutput> run_cubic(const wchar_t* filename) {
   // child process has ended.
   CloseHandle(g_hChildStd_OUT_Wr);
   CloseHandle(g_hChildStd_OUT_Rd);
+
+  replace_all(output, "\r\n", "\n");
+  replace_all(output, "\r", "\n");
 
   return CommandOutput{
     .std_out = output,

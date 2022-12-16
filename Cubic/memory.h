@@ -29,10 +29,16 @@ typedef struct List_ {
   struct ListNode_* head;
   struct ListNode_* tail;
   struct MemoryAllocator_* allocator;
+
+  int count;
 } List_;
 
+
+#define ListOf_(TY) List_
+
 #define list_of(LIST, TY, ALLOCATOR) (list_init(LIST, sizeof(TY), ALLOCATOR))
-#define list_val(NODE, TY) (*((TY*)(&(NODE)->data)))
+#define list_ptr(NODE, TY) ((TY*)(&(NODE)->data))
+#define list_val(NODE, TY) (*list_ptr(NODE, TY))
 
 void list_init(struct List_* list, size_t val_size, struct MemoryAllocator_* allocator);
 void list_clear(List_* list);

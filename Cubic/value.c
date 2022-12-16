@@ -1,4 +1,6 @@
 #include "value.h"
+#include "object.h"
+#include "symbol.h"
 
 #include "memory.h"
 #include <memory.h>
@@ -28,7 +30,7 @@ const char* kTrue = "true";
 const char* kFalse = "false";
 
 void value_print(Value_ value) {
-  switch (value.type) {
+  switch (value.type.ty) {
     case VAL_NIL:    printf("nil"); break;
     case VAL_BOOL:   printf("%s", AS_BOOL(value) ? kTrue : kFalse); break;
     case VAL_INT:    printf("%lld", AS_INT(value)); break;
@@ -43,11 +45,23 @@ void value_print(Value_ value) {
     case VAL_UINT64: printf("%llu", AS_UINT64(value)); break;
     case VAL_FLOAT:  printf("%f", AS_FLOAT(value)); break;
     case VAL_DOUBLE: printf("%f", AS_DOUBLE(value)); break;
+    case VAL_OBJ:
+      switch (OBJ_TYPE(value)) {
+        case OBJ_TYPE_STRING:
+        {
+          ObjString_* str = AS_STRING(value);
+          printf("%.*s", str->length, str->chars);
+          break;
+        }
+        default:
+          printf("obj");
+          break;
+      }
   }
 }
 
-const char* valuetype_str(ValueType type) {
-  switch (type) {
+const char* valuetype_str(Type_ ty) {
+  switch (ty.ty) {
     case VAL_NIL:    return "nil";
     case VAL_BOOL:   return "bool";
     case VAL_INT:    return "int";
@@ -62,60 +76,63 @@ const char* valuetype_str(ValueType type) {
     case VAL_UINT64: return "uint64";
     case VAL_FLOAT:  return "float";
     case VAL_DOUBLE: return "double";
+    case VAL_OBJ:
+      switch (ty.obj) {
+        case OBJ_TYPE_STRING:
+          return "obj[string]";
+        default:
+          return "obj";
+      }
   }
   return "unknown";
 }
 
-bool value_iscoercible(Value_ from, Value_ to) {
-  return
-
-    // 64-bit conversion
-    ((IS_UINT(to) || IS_UINTX(to, 64) || IS_INT(to) || IS_INTX(to, 64)) && ISA_INTEGER(to)) ||
-    
-    // 8-bit conversion
-    ((IS_UINTX(to, 8) || IS_INTX(to, 8)) && (IS_UINTX(from, 8) || IS_INTX(from, 8))) ||
-    
-    // 16-bit conversion
-    ((IS_UINTX(to, 16) || IS_INTX(to, 16)) && (IS_UINTX(from, 8) || IS_INTX(from, 8) ||
-      IS_UINTX(from, 16) || IS_INTX(from, 16))) ||
-
-    // 32-bit conversion
-    ((IS_UINTX(to, 32) || IS_INTX(to, 32)) && (IS_UINTX(from, 8) || IS_INTX(from, 8) ||
-      IS_UINTX(from, 16) || IS_INTX(from, 16) ||
-      IS_UINTX(from, 32) || IS_INTX(from, 32))) ||
-
-    // Double conversion
-    (IS_DOUBLE(to) && ISA_NUMBER(from)) ||
-    
-    // Float conversion
-    (IS_FLOAT(to) && (IS_FLOAT(from) ||
-                      from.type >= VAL_INT8 && from.type <= VAL_INT32 ||
-                      from.type >= VAL_UINT8 && from.type <= VAL_UINT32));
+const char* value_typestr(Value_* value) {
+  return valuetype_str(value->type);
 }
 
-bool valuetype_iscoercible(ValueType from, ValueType to) {
-  return
+bool value_iscoercible(Value_ from, Value_ to) {
+  return type_iscoercible(from.type, to.type);
+}
+
+bool type_iscoercible(Type_ from, Type_ to) {
+  return type_equal(from, to) ||
     // 64-bit conversion
-    ((to == VAL_UINT || to == VAL_UINT64 || to == VAL_INT || to == VAL_INT64) &&
-      (from >= VAL_INT && from <= VAL_UINT64)) ||
+    ((to.ty == VAL_UINT || to.ty == VAL_UINT64 || to.ty == VAL_INT || to.ty == VAL_INT64) &&
+      (from.ty >= VAL_INT && from.ty <= VAL_UINT64)) ||
 
     // 8-bit conversion
-    ((to == VAL_UINT8 || to == VAL_INT8) && (from == VAL_UINT8 || from == VAL_INT8)) ||
+    ((to.ty == VAL_UINT8 || to.ty == VAL_INT8) && (from.ty == VAL_UINT8 || from.ty == VAL_INT8)) ||
 
     // 16-bit conversion
-    ((to == VAL_UINT16 || to == VAL_INT16) && (from == VAL_UINT8 || from == VAL_INT8 ||
-      from == VAL_UINT16 || from == VAL_INT16)) ||
+    ((to.ty == VAL_UINT16 || to.ty == VAL_INT16) && (from.ty == VAL_UINT8 || from.ty == VAL_INT8 ||
+      from.ty == VAL_UINT16 || from.ty == VAL_INT16)) ||
 
     // 32-bit conversion
-    ((to == VAL_UINT32 || to == VAL_INT32) && (from == VAL_UINT8 || from == VAL_INT8 ||
-      from == VAL_UINT16 || from == VAL_INT16 ||
-      from == VAL_UINT32 || from == VAL_INT32)) ||
+    ((to.ty == VAL_UINT32 || to.ty == VAL_INT32) && (from.ty == VAL_UINT8 || from.ty == VAL_INT8 ||
+      from.ty == VAL_UINT16 || from.ty == VAL_INT16 ||
+      from.ty == VAL_UINT32 || from.ty == VAL_INT32)) ||
 
     // Double conversion
-    (to == VAL_DOUBLE && (from >= VAL_INT && from <= VAL_DOUBLE)) ||
+    (to.ty == VAL_DOUBLE && (from.ty >= VAL_INT && from.ty <= VAL_DOUBLE)) ||
 
     // Float conversion
-    (to == VAL_FLOAT && (from == VAL_FLOAT ||
-      from >= VAL_INT8 && from <= VAL_INT32 ||
-      from >= VAL_UINT8 && from <= VAL_UINT32));
+    (to.ty == VAL_FLOAT && (from.ty == VAL_FLOAT ||
+      from.ty >= VAL_INT8 && from.ty <= VAL_INT32 ||
+      from.ty >= VAL_UINT8 && from.ty <= VAL_UINT32));
+}
+
+uint32_t type_toint(Type_ type) {
+  uint32_t t = type.ty & 0xFF;
+  uint32_t k = type.kind & 0xFF;
+  uint32_t o = type.obj & 0xFF;
+  return (t << 16) | (k << 8) | o;
+}
+
+Type_ type_fromint(uint32_t n) {
+  return (Type_) {
+    .ty = ((n & 0x00FF0000) >> 16),
+    .kind = ((n & 0x0000FF00) >> 8),
+    .obj = ((n & 0x000000FF))
+  };
 }

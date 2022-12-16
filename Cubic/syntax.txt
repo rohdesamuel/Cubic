@@ -5,10 +5,9 @@ Block ::= {Statement} [ReturnStmt]
 // Statements
 ///////////////////////////////////////////////////////////////////////////////
 
-Statement ::= ';'
-    | AssignmentStmt
+Statement ::= ';'    
     | DeclarationStmt
-    | FunctionCall
+    | FunctionDef
     | BlockStmt
     | IfStmt 
     | ForStmt
@@ -18,8 +17,8 @@ Statement ::= ';'
     | MatchStmt
     | YieldStmt
     | AssertStmt
+    | ExpressionStmt
 
-AssignmentStmt ::= VarList '=' ExprList
 DeclarationStmt ::= VarDecl | StructDecl
 BlockStmt ::= 'do' Block 'end'
 IfStmt ::= 'if' Expr 'then' Block {'elif' Expr 'then' Block} ['else' Block] 'end'
@@ -30,6 +29,7 @@ YieldStmt ::= 'yield' Expr
 PassStmt ::= 'pass'
 ReturnStmt ::= 'return' [Expr {',' Expr}]
 AssertStmt ::= 'assert' Expr
+ExpressionStmt ::= AssignmentExpr | PrefixExpr
 
 // TODO: Consider adding syntax for having nested `MatchStatement`s.
 // TODO: Add more matching patterns for lists, maps, etc.
@@ -44,7 +44,7 @@ FunctionArgs ::= '(' [ExprList] ')'
 FunctionDef ::= 'function' [Id] FunctionBody 'end'
 FunctionParam ::= (Id | UnionType | Id ':' UnionType) ['=' Expr]
 FunctionParamList ::= FunctionParam {',' FunctionParam}
-FunctionBody ::= '(' [FunctionParamList] ')' ['->' UnionType] Statement
+FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement
 
 ///////////////////////////////////////////////////////////////////////////////
 // Declarations
@@ -100,7 +100,7 @@ SetValue ::= '{' [ExprList] '}'
 
 // TODO: This will incorrectly match `FunctionDef`s in `MatchStatement`s
 Var ::= Id | PrefixExpr '[' Expr ']' | PrefixExpr '.' Id
-PrefixExpr ::= Var | FunctionCall | '(' Expr ')'
+PrefixExpr ::= '(' Expr ')' | Var | FunctionCall
 Expr ::= Primary
     | ArrayValue
     | MapValue
@@ -112,6 +112,9 @@ Expr ::= Primary
     | UnaryOp Expr
     | 'await' Expr
     | 'async' Expr
+    | AssignmentExpr
+
+AssignmentExpr ::= VarList '=' ExprList
 
 Primary ::= 'nil'
     | 'false'

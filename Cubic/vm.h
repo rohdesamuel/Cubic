@@ -6,11 +6,23 @@
 #include "chunk.h"
 #include "value.h"
 
+#define FRAMES_MAX 256
 #define STACK_MAX 256
+
+typedef struct CallFrame_ {
+  Chunk chunk;
+  uint8_t* ip;
+  Value_* slots;
+
+  size_t size;
+} CallFrame_;
 
 typedef struct VM_ {
   Chunk chunk;
   uint8_t* ip;
+
+  CallFrame_ frames[FRAMES_MAX];
+  int frame_count;
 
   // TODO: change this to dynamically grow.
   Value_ stack[STACK_MAX];

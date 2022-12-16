@@ -8,7 +8,8 @@ typedef struct Analyzer_ {
   struct Ast_* ast;
 
   struct PageAllocator_ allocator;
-  struct SymbolTable_* symbol_table;
+  struct Scope_* scope;
+  struct Frame_* frame;
 
   bool had_error;
   bool panic_mode;

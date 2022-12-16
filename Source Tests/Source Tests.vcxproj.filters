@@ -75,5 +75,8 @@
     <None Include="while_loops.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="functions.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

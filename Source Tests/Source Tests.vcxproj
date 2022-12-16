@@ -186,6 +186,7 @@
   <ItemGroup>
     <None Include="arrays.cub" />
     <None Include="fib.cub" />
+    <None Include="functions.cub" />
     <None Include="global_variables.cub" />
     <None Include="for_loops.cub" />
     <None Include="multiline_comments.cub" />
