@@ -385,3 +385,85 @@ do
   let j := new int (5)
   let w: list[int] = new list[int] 
 end
+
+
+##############
+
+struct Foo
+  a : int
+end
+
+let foo_stack := Foo()
+let foo_heap  := new Foo()
+
+*foo_heap = foo_stack
+
+let a := Foo()
+let b := Foo()
+
+# Simple byte-by-byte copy from b to a
+a = b
+
+# Move b to a?
+a <- b
+
+struct Bar
+  a : ref
+end
+
+let a := Bar()
+let b := Bar()
+
+# TODO: what is the reference count of a.a and b.a?
+a = b
+
+
+########
+
+let a := ( ( ('a') + ('b') ) + ('c') )
+           ^
+           Temp value created here
+
+# Step 1
+KIND_VAL := KIND_STATIC['a'] + KIND_STATIC['b'] + KIND_STATIC['c']
+
+# Step 2
+KIND_VAL := KIND_TMP['ab'] + KIND_STATIC['c']
+
+# Step 3
+KIND_VAL := KIND_TMP['abc']
+
+########
+
+print('a' + 'b')
+
+STATIC 'a'
+STATIC 'b'
+
+
+# Step 1
+print(KIND_STATIC['a'] + KIND_STATIC['b'])
+
+# Step 2
+print(KIND_TMP['ab'])
+
+########
+
+
+
+
+let b := a + 'd'
+         ^
+         No temp value created here
+
+let c := 'e' + b
+         ^
+         Temp value created here
+
+########
+let a := Val() + Val() + Val()
+         ^
+         Temp value created here
+
+let b := a + Val()
+         ^ 

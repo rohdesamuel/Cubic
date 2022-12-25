@@ -63,6 +63,9 @@ typedef enum {
 
   OP_GET_VAR,
   OP_SET_VAR,
+  OP_COPY_VAR,
+
+  OP_DESTROY_VAR,  // TODO: turn this into a function call. But maybe a VM operation is faster?
 
   OP_PRINT,
   OP_ASSERT,

@@ -4,6 +4,7 @@
 #include "debug.h"
 #include "compiler.h"
 #include "symbol.h"
+#include "object.h"
 
 #include <string.h>
 #include <stdarg.h>
@@ -61,6 +62,16 @@ Value_ vm_peek(VM_* vm, int distance) {
 
 static bool is_falsey(Value_ value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+static ObjString_* concatenate(ObjString_* l, ObjString_* r) {
+  int length = l->length + r->length;
+  char* chars = malloc(length + 1);
+  memcpy(chars, l->chars, l->length);
+  memcpy(chars + l->length, r->chars, r->length);
+  chars[length] = '\0';
+
+  return objstring_create(chars, length);
 }
 
 static InterpretResult run(VM vm) {
@@ -134,11 +145,26 @@ static InterpretResult run(VM vm) {
 
       case OP_EPILOGUE:
       {
+        /*for (int i = 0; i < frame->size; ++i) {
+          Value_* v = &frame->slots[i];
+          if (IS_OBJ(*v) && v->type.kind == KIND_VAL) {
+            obj_destroy(v->as.obj);
+          }
+        }*/
         vm->stack_top -= frame->size;
         continue;
       }
 
-#if 0
+      case OP_DESTROY_VAR:
+      {
+        int var_index = READ_BYTE();
+        Value_* v = &frame->slots[var_index];
+        if (IS_OBJ(*v) && v->type.kind == KIND_VAL) {
+          obj_destroy(v->as.obj);
+        }
+        continue;
+      }
+
       case OP_BEGIN_SCOPE:
       {
         continue;
@@ -146,10 +172,8 @@ static InterpretResult run(VM vm) {
 
       case OP_END_SCOPE:
       {
-        --frame_count;
         continue;
       }
-#endif
 
       case OP_CAST:
       {
@@ -192,7 +216,13 @@ static InterpretResult run(VM vm) {
       case OP_SET_VAR:
       {
         uint8_t slot = READ_BYTE();
-        frame->slots[slot] = vm_peek(vm, 0);
+        Value_ val = vm_peek(vm, 0);
+
+        if (val.type.ty == VAL_OBJ) {          
+          frame->slots[slot] = val;
+        } else {
+          frame->slots[slot] = val;
+        }        
         continue;
       }
 
@@ -280,8 +310,8 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_GT: 
-      {        
+      case OP_GT:
+      {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
@@ -294,7 +324,7 @@ static InterpretResult run(VM vm) {
         continue;
       }
       
-      case OP_GTE: 
+      case OP_GTE:
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
@@ -336,12 +366,12 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_EQ:
+      case OP_EQ:        
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
-        
-        vm_push(vm, BOOL_VAL(l.as.u == r.as.u));
+
+        vm_push(vm, BOOL_VAL(value_equal(&l, &r)));
         continue;
       }
 
@@ -350,7 +380,7 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        vm_push(vm, BOOL_VAL(l.as.u != r.as.u));
+        vm_push(vm, BOOL_VAL(!value_equal(&l, &r)));
         continue;
       }
 
@@ -403,7 +433,16 @@ static InterpretResult run(VM vm) {
           case VAL_INT: vm_push(vm, INT_VAL(l.as.i + r.as.i)); break;
           case VAL_UINT: vm_push(vm, UINT_VAL(l.as.u + r.as.u)); break;
           case VAL_DOUBLE: vm_push(vm, DOUBLE_VAL(l.as.d + r.as.d)); break;
-          default: return runtime_error(vm, "Unimplemented '+' for type: %d\n", l.type);
+          case VAL_OBJ:
+          {
+            switch (l.type.obj) {
+              case OBJ_TYPE_STRING:
+                vm_push(vm, OBJ_VAL(concatenate(AS_STRING(l), AS_STRING(r))));
+                break;
+            }
+            break;
+          }
+          default: return runtime_error(vm, "Unimplemented '+' for type: %d\n", l.type.ty);
         }
         continue;
       }

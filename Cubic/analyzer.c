@@ -24,7 +24,7 @@ static void do_analysis(AstNode_* node) {
 
 void analyzer_init(Analyzer_* analyzer) {
   memset(analyzer, 0, sizeof(Analyzer_));
-  pageallocator_init(&analyzer->allocator, 1 << 14);
+  pageallocator_init(&analyzer->allocator, (size_t)1 << 14);
 
   analyzer->frame = frame_root((MemoryAllocator_*)&analyzer->allocator);
   analyzer->scope = analyzer->frame->scope; //scope_create(analyzer->frame, NULL, (MemoryAllocator_*)&analyzer->allocator);
@@ -58,6 +58,18 @@ void block_analysis(AstNode_* node) {
   }
 }
 
+void stmt_analysis(AstNode_* node) {
+  AstStmt_* stmt = (AstStmt_*)node;
+  do_analysis(stmt->stmt);
+  do_analysis(stmt->cleanup);
+}
+
+void expr_analysis(AstNode_* node) {
+  AstExpr_* expr = (AstExpr_*)node;
+  do_analysis(expr->expr);
+  expr->type = AS_EXPR(expr->expr)->type;
+}
+
 void print_analysis(AstNode_* n) {
   AstPrintStmt_* stmt = (AstPrintStmt_*)n;
   do_analysis((AstNode_*)stmt->expr);
@@ -87,7 +99,7 @@ void unary_analysis(AstNode_* n) {
       if (!ISA_TY_NUMBER(exp->base.type)) {
         error(analyzer_, n, "expression does not have a number type.");
       }
-      break;    
+      break;
   }
 }
 
@@ -107,7 +119,7 @@ void binary_analysis(AstNode_* n) {
     return;
   }
 
-  if (!type_equal(AS_EXPR(exp->left)->type, AS_EXPR(exp->right)->type)) {
+  if (!type_equiv(AS_EXPR(exp->left)->type, AS_EXPR(exp->right)->type)) {
     error(analyzer_, n, "left and right expressions are not the same type.");
     return;
   }
@@ -144,8 +156,8 @@ void binary_analysis(AstNode_* n) {
     case TK_STAR:
     case TK_SLASH:
       exp->base.type = AS_EXPR(exp->left)->type;
-      if (!ISA_TY_NUMBER(exp->base.type)) {
-        error(analyzer_, n, "expected the expression type to be a number.");
+      if (!ISA_TY_NUMBER(exp->base.type) && !IS_TY_STRING(exp->base.type)) {
+        error(analyzer_, n, "expected the expression type to be a number or a string.");
       }
       break;
 
@@ -172,11 +184,13 @@ void binary_analysis(AstNode_* n) {
       error(analyzer_, n, "right-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
   }
+
+  exp->base.type.kind = KIND_TMP;
 }
 
 void primary_analysis(AstNode_* n) {
   AstPrimaryExp_* primary = (AstPrimaryExp_*)n;
-  primary->base.type = primary->value.type;
+  primary->base.type = primary->value.type;  
 }
 
 void return_analysis(AstNode_* n) {
@@ -231,13 +245,19 @@ void var_decl_analysis(AstNode_* n) {
 
   if (IS_TY_UNKNOWN(stmt->type)) {
     assertf(stmt->expr, "type deduced variable must have an expression");        
-    stmt->type = AS_EXPR(stmt->expr)->type;    
+    stmt->type = AS_EXPR(stmt->expr)->type;
+  }
+
+  // The type will be KIND_TMP if created from a PRIMARY_EXP. Only change the kind for
+  // non-pointer/reference types.
+  if (stmt->type.kind == KIND_UNKNOWN || stmt->type.kind == KIND_TMP) {
+    stmt->type.kind = KIND_VAL;
   }
 
   // TODO: implement tuples (and others) for variable declarations.
-  VarSymbol_* var = scope_var(n->scope, &stmt->name);
+  VarSymbol_* var = scope_var(n->scope, &stmt->name);  
   var->type = stmt->type;
-
+  
   if (stmt->expr && !type_iscoercible(AS_EXPR(stmt->expr)->type, stmt->type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
@@ -305,8 +325,8 @@ void expression_statement_analysis(AstNode_* n) {
 
 void function_def_analysis(AstNode_* n) {
   AstFunctionDef_* def = (AstFunctionDef_*)n;
-  FunctionSymbol_* s = scope_fn(n->scope, &def->name);
-  s->return_type = def->body->return_type;
+  FunctionSymbol_* fn = scope_fn(n->scope, &def->name);
+  fn->return_type = def->body->return_type;
 
   do_analysis((AstNode_*)def->body);  
 }
@@ -361,9 +381,21 @@ void function_args_analysis(AstNode_* n) {
 
 void noop_analysis(AstNode_* n) {}
 
+void clean_up_temps_analysis(AstNode_* n) {
+
+}
+
+void ast_tmp_decl_analysis(AstNode_* n) {
+  AstTmpDecl_* decl = (AstTmpDecl_*)n;
+  do_analysis((AstNode_*)decl->expr);
+  decl->base.type = decl->expr->type;
+}
+
 AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstProgram_)]        = {program_analysis},
   [AST_CLS(AstBlock_)]          = {block_analysis},
+  [AST_CLS(AstStmt_)]           = {stmt_analysis},
+  [AST_CLS(AstExpr_)]           = {expr_analysis},
   [AST_CLS(AstPrintStmt_)]      = {print_analysis},
   [AST_CLS(AstUnaryExp_)]       = {unary_analysis},
   [AST_CLS(AstBinaryExp_)]      = {binary_analysis},
@@ -383,6 +415,8 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstFunctionArgs_)]   = {function_args_analysis},
   [AST_CLS(AstExpressionStmt_)] = {expression_statement_analysis},
   [AST_CLS(AstNoopStmt_)]       = {noop_analysis},
+  [AST_CLS(AstCleanUpTemps_)]   = {clean_up_temps_analysis},
+  [AST_CLS(AstTmpDecl_)]        = {ast_tmp_decl_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.

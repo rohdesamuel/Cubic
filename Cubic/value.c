@@ -95,8 +95,27 @@ bool value_iscoercible(Value_ from, Value_ to) {
   return type_iscoercible(from.type, to.type);
 }
 
+bool value_equal(Value_* l, Value_* r) {
+  switch (l->type.ty) {
+    case VAL_OBJ:
+    {
+      ObjString_* l_string = AS_STRING(*l);
+      ObjString_* r_string = AS_STRING(*r);
+      return l_string == r_string ||
+        (l_string->length == r_string->length && memcmp(l_string->chars, r_string->chars, l_string->length) == 0);
+    }
+
+    default:
+      return l->as.u == r->as.u;
+  }
+}
+
+void value_set(Value_* l, Value_* r) {
+
+}
+
 bool type_iscoercible(Type_ from, Type_ to) {
-  return type_equal(from, to) ||
+  return type_equiv(from, to) ||
     // 64-bit conversion
     ((to.ty == VAL_UINT || to.ty == VAL_UINT64 || to.ty == VAL_INT || to.ty == VAL_INT64) &&
       (from.ty >= VAL_INT && from.ty <= VAL_UINT64)) ||

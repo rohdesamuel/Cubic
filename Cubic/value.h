@@ -54,7 +54,7 @@
 #define UNT64_VAL(value)        ((Value_){{.u64 = value}, VAL_UINT64, KIND_VAL})
 #define FLOAT_VAL(value)        ((Value_){{.f = value},   VAL_FLOAT,  KIND_VAL})
 #define DOUBLE_VAL(value)       ((Value_){{.d = value},   VAL_DOUBLE, KIND_VAL})
-#define OBJ_VAL(object)         ((Value_){{.obj = (struct Obj_*)object, VAL_OBJ, KIND_VAL}})
+#define OBJ_VAL(object)         obj_val((Obj_*)object)
 
 typedef struct Value_ {
   union {
@@ -98,6 +98,8 @@ void valuearray_write(ValueArray value_array, Value_ value);
 void valuearray_free(ValueArray value_array);
 
 void value_print(Value_ value);
+bool value_equal(Value_* l, Value_* r);
+void value_set(Value_* l, Value_* r);
 
 const char* valuetype_str(Type_ type);
 const char* value_typestr(Value_* value);

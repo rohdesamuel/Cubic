@@ -42,7 +42,7 @@ typedef struct List_ {
 
 void list_init(struct List_* list, size_t val_size, struct MemoryAllocator_* allocator);
 void list_clear(List_* list);
-ListNode_* list_push(List_* list, void* val);
+ListNode_* list_push(List_* list, void* pval);
 
 typedef struct MemoryAllocator_ {
   // Allocate a block of memory with `size`.

@@ -18,6 +18,7 @@
 #define DOUBLE_TY        ((Type_){VAL_DOUBLE,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
 #define OBJ_TY(OBJ_TYPE) ((Type_){VAL_OBJ,     KIND_UNKNOWN, OBJ_TYPE})
 #define STRING_TY        OBJ_TY(OBJ_TYPE_STRING)
+#define FUNCTION_TY      OBJ_TY(OBJ_TYPE_FUNCTION)
 
 #define ISA_TY_NUMBER(TYPE)      (type_isanumber(TYPE))
 #define ISA_TY_INTEGER(TYPE)     (type_isainteger(TYPE))
@@ -39,7 +40,8 @@
 #define IS_TY_FLOAT(TYPE) ((TYPE).ty == VAL_FLOAT)
 #define IS_TY_DOUBLE(TYPE) ((TYPE).ty == VAL_DOUBLE)
 #define IS_TY_OBJ(TYPE, OBJ_TYPE) (type_isobj(TYPE, OBJ_TYPE))
-#define IS_TY_STRING(TYPE) ISTY_OBJ(TYPE, OBJ_TYPE_STRING)
+#define IS_TY_STRING(TYPE) IS_TY_OBJ(TYPE, OBJ_TYPE_STRING)
+#define IS_TY_FUNCTION(TYPE) IS_TY_OBJ(TYPE, OBJ_TYPE_FUNCTION)
 
 typedef enum {
   VAL_UNKNOWN = -1,
@@ -64,9 +66,21 @@ typedef enum {
 
 typedef enum {
   KIND_UNKNOWN,
+
+  // A named variable that is stored on stack.
   KIND_VAL,
+
+  // A named variable that is stored on stack or heap, no ownership.
   KIND_PTR,
+
+  // A named variable is stored on heap, reference counted.
   KIND_REF,
+
+  // An intermediate result and used once (rvalue).
+  KIND_TMP,
+
+  // Type is a static constant and can be cached for multiple uses.
+  KIND_STATIC,
 } ValueKind;
 
 typedef struct Type_ {
@@ -79,8 +93,16 @@ bool type_iscoercible(Type_ from, Type_ to);
 uint32_t type_toint(Type_ type);
 Type_ type_fromint(uint32_t n);
 
+// Returns true if both types are equal on all fields.
 inline bool type_equal(Type_ from, Type_ to) {
   return from.ty == to.ty && from.kind == to.kind && from.obj == to.obj;
+}
+
+// Returns true if value and object types are the same.
+inline bool type_equiv(Type_ from, Type_ to) {
+  return from.ty == to.ty && from.obj == to.obj &&
+    ((from.kind && to.kind) ||
+      (from.kind == KIND_VAL && to.kind == KIND_TMP));
 }
 
 inline bool type_isobj(Type_ type, enum ObjType obj_type) {

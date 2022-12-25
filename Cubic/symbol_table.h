@@ -19,7 +19,7 @@ typedef struct Scope_ {
 
   ListOf_(Scope_*) children;
 
-  int offset;
+  int stack_size;
 } Scope_;
 
 typedef struct Frame_ {
@@ -30,8 +30,15 @@ typedef struct Frame_ {
   // This scope doesn't have a parent to disallow implicit closures.
   struct Scope_* scope;
 
+  ListOf_(Symbol_*) tmps;
+
   int var_count;
-  int max_stack_offset;
+  int tmp_count;
+  int stack_size;
+
+  int max_var_count;
+  int max_tmp_count;
+  int max_stack_size;
 } Frame_;
 
 typedef struct SymbolTable_ {
@@ -50,6 +57,10 @@ Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator);
 void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
+void frame_enterscope(Frame_* frame, Scope_* scope);
+void frame_leavescope(Frame_* frame, Scope_* scope);
+void frame_movetemps(Frame_* frame, List_* list);
 
 Scope_* scope_create(Frame_* frame, SymbolTable_* table, struct MemoryAllocator_* allocator);
 Scope_* scope_createfrom(Scope_* scope);
@@ -63,13 +74,16 @@ void scope_add(Scope_* scope, Symbol_* symbol);
 Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type);
 Symbol_* scope_addfn(Scope_* scope, Token_* name);
 Symbol_* scope_addclosure(Scope_* table, Token_* name, Scope_* parent);
-Symbol_* scope_find(Scope_* table, Token_* name);
 
+Symbol_* scope_find(Scope_* table, Token_* name);
 VarSymbol_* scope_var(Scope_* table, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* table, Token_* name);
 StructSymbol_* scope_struct(Scope_* table, Token_* name);
 
 Symbol_* symbol_closure(Symbol_* fn_symbol, Symbol_* upvalue, struct MemoryAllocator_* allocator);
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
+
+int symbolvar_index(Symbol_* var);
+int symboltmp_index(Symbol_* tmp);
 
 #endif  // SYMBOL_TABLE__H

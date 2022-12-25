@@ -6,8 +6,11 @@ static int constant_instruction(const char* name, Chunk chunk, int offset);
 static int constant_long_instruction(const char* name, Chunk chunk, int offset);
 static int simple_instruction(const char* name, Chunk chunk, int offset);
 static int byte_instruction(const char* name, Chunk chunk, int offset);
+static int short_instruction(const char* name, Chunk chunk, int offset);
+static int long_instruction(const char* name, Chunk chunk, int offset);
 static int jump_instruction(const char* name, Chunk chunk, int offset);
 static int loop_instruction(const char* name, Chunk chunk, int offset);
+static int cast_instruction(const char* name, Chunk chunk, int offset);
 
 void chunk_disassemble(Chunk chunk, const char* name) {
   //printf("== %s ==\n", name);
@@ -65,8 +68,16 @@ int disassemble_instruction(Chunk chunk, int offset) {
     DEBUG_INSTRUCTION(OP_LOOP, loop_instruction);
     DEBUG_INSTRUCTION(OP_GET_VAR, byte_instruction);
     DEBUG_INSTRUCTION(OP_SET_VAR, byte_instruction);
+    DEBUG_INSTRUCTION(OP_DESTROY_VAR, byte_instruction);
     DEBUG_INSTRUCTION(OP_PRINT, simple_instruction);
     DEBUG_INSTRUCTION(OP_ASSERT, simple_instruction);
+
+    DEBUG_INSTRUCTION(OP_CAST, cast_instruction);
+
+    DEBUG_INSTRUCTION(OP_PROLOGUE, short_instruction);
+    DEBUG_INSTRUCTION(OP_EPILOGUE, simple_instruction);
+    DEBUG_INSTRUCTION(OP_BEGIN_SCOPE, simple_instruction);
+    DEBUG_INSTRUCTION(OP_END_SCOPE, simple_instruction);
 
     default:
       printf("Unknown opcode %d\n", instruction);
@@ -104,6 +115,24 @@ static int byte_instruction(const char* name, Chunk chunk, int offset) {
   return offset + 2; // [debug]
 }
 
+static int short_instruction(const char* name, Chunk chunk, int offset) {
+  uint16_t arg = chunk->code[offset + 1] << 8
+    | (uint16_t)(chunk->code[offset + 2]);
+
+  printf("%-16s %4d\n", name, arg);
+  return offset + 3; // [debug]
+}
+
+static int long_instruction(const char* name, Chunk chunk, int offset) {
+  uint32_t arg = chunk->code[offset + 1]  << 24
+    | (uint32_t)(chunk->code[offset + 2]) << 16
+    | (uint32_t)(chunk->code[offset + 3]) << 8
+    | (uint32_t)(chunk->code[offset + 4]);
+
+  printf("%-16s %4d\n", name, arg);
+  return offset + 5; // [debug]
+}
+
 static int jump_instruction(const char* name, Chunk chunk, int offset) {
   uint16_t jump = (uint16_t)(chunk->code[offset + 1] << 8);
   jump |= chunk->code[offset + 2];
@@ -118,4 +147,17 @@ static int loop_instruction(const char* name, Chunk chunk, int offset) {
   printf("%-16s %4d -> %d\n", name, offset,
     offset + 3 - jump);
   return offset + 3;
+}
+
+static int cast_instruction(const char* name, Chunk chunk, int offset) {
+  uint32_t arg = chunk->code[offset + 1] << 24
+    | (uint32_t)(chunk->code[offset + 2]) << 16
+    | (uint32_t)(chunk->code[offset + 3]) << 8
+    | (uint32_t)(chunk->code[offset + 4]);
+
+  Type_ t = type_fromint(arg);
+
+  printf("%-16s %4d %d %d\n", name, t.ty, t.kind, t.obj);
+
+  return offset + 5;
 }

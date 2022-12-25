@@ -5,13 +5,7 @@
 #include <string.h>
 
 Frame_* frame_root(struct MemoryAllocator_* allocator) {
-  Frame_* ret = alloc(allocator, sizeof(Frame_));
-  memset(ret, 0, sizeof(Frame_));
-
-  ret->allocator = allocator;
-  ret->scope = scope_create(ret, NULL, allocator);
-  ret->fn_symbol = NULL;
-  return ret;
+  return frame_create(NULL, allocator);
 }
 
 Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator) {
@@ -21,6 +15,7 @@ Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator) {
   ret->allocator = allocator;
   ret->scope = scope_create(ret, NULL, allocator);
   ret->fn_symbol = fn_symbol;
+  list_of(&ret->tmps, Symbol_*, allocator);
   return ret;
 }
 
@@ -41,8 +36,54 @@ Symbol_* frame_addparam(Frame_* frame, Token_* name) {
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope) {
   Symbol_* s = scope_addvar(scope, name, UNKNOWN_TY);
   frame->var_count += 1;
-  frame->max_stack_offset = max(frame->max_stack_offset, scope->offset + scope->table->vars.count);
+  frame->stack_size += 1;// max(frame->stack_size, scope->offset + scope->table->vars.count);  
   return s;
+}
+
+Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
+  MemoryAllocator_* allocator = frame->allocator;
+
+  int tmp_index = frame->tmp_count++;
+
+  Symbol_* ret = alloc(allocator, sizeof(Symbol_));
+  *ret = (Symbol_){
+    .type = SYMBOL_TYPE_TMP,
+    .tmp = {
+      .tmp_index = tmp_index,
+    },
+    .name = {0},
+    .parent = scope
+  };
+
+  list_push(&frame->tmps, &ret);
+  
+  return ret;
+}
+
+void frame_enterscope(Frame_* frame, Scope_* scope) {
+}
+
+void frame_leavescope(Frame_* frame, Scope_* scope) {
+  frame->max_stack_size = max(frame->max_stack_size, frame->stack_size);
+  frame->max_var_count = max(frame->max_var_count, frame->var_count);  
+
+  frame->stack_size -= scope->stack_size;
+  frame->var_count -= scope->table->vars.count;
+}
+
+static void frame_cleartemps(Frame_* frame) {
+  frame->max_tmp_count = max(frame->max_tmp_count, frame->tmp_count);
+  //frame->tmp_count = 0;
+  list_clear(&frame->tmps);
+}
+
+void frame_movetemps(Frame_* frame, List_* list) {
+  for (ListNode_* n = frame->tmps.head; n != NULL; n = n->next) {
+    Symbol_* s = list_val(n, Symbol_*);
+    list_push(list, &s);
+  }
+
+  frame_cleartemps(frame);
 }
 
 Scope_* scope_create(Frame_* frame, SymbolTable_* table, struct MemoryAllocator_* allocator) {
@@ -65,8 +106,7 @@ Scope_* scope_create(Frame_* frame, SymbolTable_* table, struct MemoryAllocator_
 Scope_* scope_createfrom(Scope_* scope) {
   Scope_* ret = scope_create(scope->frame, scope->table, scope->allocator);
   ret->parent = scope;
-  ret->offset = scope->offset + scope->table->vars.count;
-
+  
   list_push(&scope->children, &ret);
 
   return ret;
@@ -136,12 +176,15 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
     return NULL;
   }
 
+  int scope_index = scope->stack_size++;
+  int frame_index = scope->frame->var_count;
+
   Symbol_ s = (Symbol_){
     .type = SYMBOL_TYPE_VAR,
     .var = (VarSymbol_) {
       .type = type,
-      .offset = scope->offset + table->vars.count,
-      .index = table->vars.count,
+      .scope_index = scope_index,
+      .frame_index = frame_index,
     },
     .name = *name,
     .parent = scope,
@@ -153,6 +196,7 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
   list_push(&table->vars, &symbol_addr);
   list_push(&table->symbol_list_, &symbol_addr);
   hashmap_set(table->symbols_, name->start, name->length, (uintptr_t)symbol_addr);
+
   return (Symbol_*)symbol_addr;
 }
 
@@ -236,4 +280,12 @@ Symbol_* symbol_closure(Symbol_* fn_symbol, Symbol_* upvalue, struct MemoryAlloc
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue) {
   list_push(&closure->closures, upvalue);
+}
+
+int symbolvar_index(Symbol_* var) {
+  return var->var.frame_index;
+}
+
+int symboltmp_index(Symbol_* tmp) {
+  return tmp->tmp.tmp_index + tmp->parent->frame->max_var_count;
 }

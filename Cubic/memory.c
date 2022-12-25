@@ -146,7 +146,7 @@ void list_clear(List_* list) {
   list->count = 0;
 }
 
-ListNode_* list_push(List_* list, void* val) {
+ListNode_* list_push(List_* list, void* pval) {
   struct ListNode_* n;
   if (list->allocator) {
     n = alloc(list->allocator, list->node_size);
@@ -155,8 +155,8 @@ ListNode_* list_push(List_* list, void* val) {
   }  
   n->next = NULL;
 
-  if (val) {
-    memcpy(&n->data, val, list->val_size);
+  if (pval) {
+    memcpy(&n->data, pval, list->val_size);
   } else {
     n->data = NULL;
   }  

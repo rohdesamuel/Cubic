@@ -8,12 +8,16 @@
 #define AST_CLS(name) AST_##name
 #define MAKE_AST_NODE(allocator, type, scope) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (scope)))
 #define MAKE_AST_NOOP(allocator) (make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL)))
+#define MAKE_AST_STMT(allocator, type, scope) MAKE_AST_NODE(allocator, type, scope)
+#define MAKE_AST_EXPR(allocator, type, scope) MAKE_AST_NODE(allocator, type, scope)
 
 // TODO: implement types as UnionTypes.
 typedef struct AstNode_ {
   enum {
     AST_CLS(AstProgram_),
     AST_CLS(AstBlock_),
+    AST_CLS(AstStmt_),
+    AST_CLS(AstExpr_),
     AST_CLS(AstPrintStmt_),
     AST_CLS(AstUnaryExp_),
     AST_CLS(AstBinaryExp_),
@@ -33,6 +37,8 @@ typedef struct AstNode_ {
     AST_CLS(AstFunctionArgs_),
     AST_CLS(AstExpressionStmt_),
     AST_CLS(AstNoopStmt_),
+    AST_CLS(AstCleanUpTemps_),
+    AST_CLS(AstTmpDecl_),
 
     __AST_NODE_COUNT__,
   } cls;
@@ -43,15 +49,34 @@ typedef struct AstNode_ {
 #define AS_NODE(PTR) ((struct AstNode_*)(PTR))
 #define AS_EXPR(PTR) ((struct AstExpr_*)(PTR))
 
-typedef struct AstNoopStmt_ {
+typedef struct AstStmt_ {
   AstNode_ base;
-} AstNoopStmt_;
+  AstNode_* cleanup;
+  AstNode_* stmt;
+} AstStmt_;
 
 typedef struct AstExpr_ {
   AstNode_ base;
-
+  AstNode_* expr;
   struct Type_ type;
 } AstExpr_;
+
+typedef struct AstCleanUpTemps_ {
+  AstNode_ base;
+
+  ListOf_(Symbol_*) tmps;
+} AstCleanUpTemps_;
+
+typedef struct AstTmpDecl_ {
+  struct AstExpr_ base;
+  struct Symbol_* tmp;
+
+  struct AstExpr_* expr;
+} AstTmpDecl_;
+
+typedef struct AstNoopStmt_ {
+  AstNode_ base;
+} AstNoopStmt_;
 
 typedef struct AstListNode_ {
   AstNode_* node;

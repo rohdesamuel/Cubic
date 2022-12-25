@@ -13,6 +13,7 @@ typedef enum {
   SYMBOL_TYPE_VAR,
   SYMBOL_TYPE_FN,
   SYMBOL_TYPE_CLOSURE,
+  SYMBOL_TYPE_TMP,
 } SymbolType_;
 
 typedef struct StructSymbol_ {
@@ -22,11 +23,11 @@ typedef struct StructSymbol_ {
 typedef struct VarSymbol_ {
   Type_ type;
 
-  // Stack offset into parent frame's stack.
-  int offset;
+  // Incrementing index from 0 in the frame stack.
+  int frame_index;
 
-  // Incrementing index from 0 in local scope.
-  int index;
+  // Incrementing index from 0 in local scope.  
+  int scope_index;
 } VarSymbol_;
 
 typedef struct FunctionSymbol_ {
@@ -39,6 +40,11 @@ typedef struct ClosureSymbol_ {
   ListOf_(Symbol_*) closures;
 } ClosureSymbol_;
 
+typedef struct TmpSymbol_ {
+  // Incrementing index from 0 in local scope.  
+  int tmp_index;
+} TmpSymbol_;
+
 typedef struct Symbol_ {
   SymbolType_ type;
   union {
@@ -46,6 +52,7 @@ typedef struct Symbol_ {
     VarSymbol_ var;
     FunctionSymbol_ fn;
     ClosureSymbol_ closure;
+    TmpSymbol_ tmp;
   };
 
   Token_ name;
