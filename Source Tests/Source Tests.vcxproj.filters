@@ -78,5 +78,14 @@
     <None Include="functions.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="precedence.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="lambdas.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="closures.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

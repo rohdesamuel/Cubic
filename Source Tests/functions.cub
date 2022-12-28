@@ -1,16 +1,13 @@
-function can_run()
-  print(1)
-end
-can_run()
-
-/#
 function returns_true() -> bool
   return true
 end
 
 assert returns_true()
 
+# assert (function() -> int return 1 end)() == (function() -> int return 1 end)()
+
 function identity(a : int) -> int
+  assert a == 1
   return a
 end
 
@@ -21,7 +18,7 @@ function toggle(a : bool) -> bool
 end
 
 assert toggle(true) == false
-assert toggle(toggle(true)) = true
+assert toggle(toggle(true)) == true
 
 function add_one(a : int) -> int
   let b := a + 1
@@ -35,13 +32,12 @@ do
 end
 
 function multiple_args(a : int, b : bool, c : double)
-  print(a)
-  print(b)
-  print(c)
+  assert a == 1
+  assert b
+  assert c == 2.0
 end
 
 multiple_args(1, true, 2.0)
-
 
 function recur(num : int) -> int
   if num <= 1 then
@@ -56,4 +52,11 @@ assert recur(1) == 1
 assert recur(2) == 3
 assert recur(3) == 6
 assert recur(4) == 10
-#/
+
+do
+  let i := 10
+  while i > 0 do
+    assert identity(1) == 1
+    i = i - 1
+  end
+end

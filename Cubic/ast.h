@@ -222,8 +222,9 @@ typedef struct AstAssertStmt_ {
 
 // FunctionDef ::= 'function' [Id] FunctionBody 'end'
 typedef struct AstFunctionDef_ {
-  struct AstNode_ base;
-  Token_ name;
+  struct AstExpr_ base;
+  struct Symbol_* fn_symbol;
+
   struct AstFunctionBody_* body;
 } AstFunctionDef_;
 
@@ -248,8 +249,9 @@ typedef struct AstFunctionParam_ {
 // FunctionArgs :: = '('[ExprList] ')'
 typedef struct AstFunctionCall_ {
   struct AstExpr_ base;
-  AstNode_* prefix;
+  AstExpr_* prefix;
   AstNode_* args;
+  struct Symbol_* fn_sym;
 } AstFunctionCall_;
 
 // FunctionArgs ::= '(' [ExprList] ')'

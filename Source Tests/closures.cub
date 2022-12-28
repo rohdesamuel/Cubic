@@ -1,0 +1,7 @@
+let closed := 1
+function add_closed(x : int) -> int
+  return closed + x
+end
+
+assert add_closed(10) == 11
+assert add_closed(closed) == 2

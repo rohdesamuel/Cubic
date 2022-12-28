@@ -25,7 +25,7 @@ typedef enum {
   PREC_FACTOR,      // * / // %
   PREC_UNARY,       // * & not - ~
   PREC_CALL,        // . () []
-  PREC_PRIMARY      // 'nil', 'true', 'false', number, string, 
+  PREC_PRIMARY,     // 'nil', 'true', 'false', number, string, 
 } Precedence;
 
 typedef AstNode_* (*ParseFn)(Parser_*, Scanner_*, Scope_*);
@@ -46,6 +46,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* Block(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* Var(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope);
 
 static void advance(Parser_* parser, Scanner_* scanner);
 static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message);
@@ -129,7 +130,6 @@ static bool block_follow(Parser_* parser, Scanner_* scanner, bool withuntil) {
     case TK_END:
     case TK_EOF:
     case TK_CASE:
-    case TK_RETURN:
       return true;
 
     case TK_UNTIL:
@@ -331,26 +331,18 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
   AstFunctionDef_* def = MAKE_AST_NODE(allocator, AstFunctionDef_, scope);
 
   // TODO: implement lambdas
+  Token_ name;
   if (match(parser, scanner, TK_ID)) {    
-    def->name = parse_variable(parser, scanner, &parser->previous);
+    name = parse_variable(parser, scanner, &parser->previous);
   } else {
-    def->name = (Token_) { 0 };
+    name = (Token_) { 0 };
   }
 
-  Symbol_* fn_symbol = scope_addfn(scope, &def->name);
+  Symbol_* fn_symbol = scope_addfn(scope, &name);
   Frame_* fn_frame = frame_create(fn_symbol, allocator);
-  Scope_* fn_scope = fn_frame->scope;//scope_create(fn_frame, scope->table, (MemoryAllocator_*)&parser->allocator);
+  Scope_* fn_scope = fn_frame->scope;
 
-  Symbol_* closure_symbol = (Symbol_*)alloc(allocator, sizeof(Symbol_));
-  *closure_symbol = (Symbol_){
-    .type = SYMBOL_TYPE_CLOSURE,
-    .closure = {
-      .fn = fn_symbol,
-    }
-  };
-
-  scope_addfn(fn_scope, &def->name);
-
+  def->fn_symbol = fn_symbol;
   def->body = (AstFunctionBody_*)FunctionBody(parser, scanner, fn_scope);
 
   return (AstNode_*)def;
@@ -370,6 +362,17 @@ static AstNode_* clean_up_temps(Parser_* parser, Scanner_* scanner, Scope_* scop
   frame_movetemps(scope->frame, &ret->tmps);
 
   return (AstNode_*)ret;
+}
+
+static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstReturnStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstReturnStmt_, scope);
+  if (block_follow(parser, scanner, true) || parser->current.type == ';') {
+    stmt->expr = MAKE_AST_NOOP(&parser->allocator);
+  } else {
+    stmt->expr = Expr(parser, scanner, scope);
+  }
+
+  return (AstNode_*)stmt;
 }
 
 static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
@@ -425,12 +428,12 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       break;
     }
 
-    case TK_FUNCTION:
-    {
-      advance(parser, scanner);
-      ret->stmt = FunctionDef(parser, scanner, scope);
-      break;
-    }
+    //case TK_FUNCTION:
+    //{
+    //  advance(parser, scanner);
+    //  ret->stmt = FunctionDef(parser, scanner, scope);
+    //  break;
+    //}
 
     case TK_WHILE:
     {
@@ -462,13 +465,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
     case TK_RETURN:
     {
       advance(parser, scanner);
-      AstReturnStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstReturnStmt_, scope);
-      if (block_follow(parser, scanner, true) || parser->current.type == ';') {
-        stmt->expr = MAKE_AST_NOOP(&parser->allocator);
-      } else {
-        stmt->expr = Expr(parser, scanner, scope);
-      }
-      ret->stmt = (AstNode_*)stmt;
+      ret->stmt = ReturnStatement(parser, scanner, scope);
       break;
     }
 
@@ -680,12 +677,15 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
 
   AstNode_* exp = prefix_rule(parser, scanner, scope);
   while (precedence <= get_rule(parser->current.type)->precedence) {
+    ParseFn infix_rule = get_rule(parser->current.type)->infix;
+    if (!infix_rule) {
+      break;
+    }
     advance(parser, scanner);
-    ParseFn infix_rule = get_rule(parser->previous.type)->infix;
 
     if (parser->previous.type == TK_LPAREN) {
       AstFunctionCall_* new_exp = MAKE_AST_EXPR(&parser->allocator, AstFunctionCall_, scope);
-      new_exp->prefix = (AstNode_*)exp;
+      new_exp->prefix = (AstExpr_*)exp;
       new_exp->args = infix_rule(parser, scanner, scope);
       exp = (AstNode_*)new_exp;
     } else if (parser->previous.type == TK_EQUAL) {

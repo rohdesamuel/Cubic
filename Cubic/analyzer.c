@@ -119,7 +119,7 @@ void binary_analysis(AstNode_* n) {
     return;
   }
 
-  if (!type_equiv(AS_EXPR(exp->left)->type, AS_EXPR(exp->right)->type)) {
+  if (AS_EXPR(exp->left)->type.ty != AS_EXPR(exp->right)->type.ty) {
     error(analyzer_, n, "left and right expressions are not the same type.");
     return;
   }
@@ -198,7 +198,7 @@ void return_analysis(AstNode_* n) {
   Frame_* frame = stmt->base.scope->frame;
 
   do_analysis(stmt->expr);
-  if (!type_equal(AS_EXPR(stmt->expr)->type, frame->fn_symbol->fn.return_type)) {
+  if (!type_equiv(AS_EXPR(stmt->expr)->type, frame->fn_symbol->fn.return_type)) {
     error(analyzer_, n, "Return statement type does not match function type.");
   }
 }
@@ -261,10 +261,6 @@ void var_decl_analysis(AstNode_* n) {
   if (stmt->expr && !type_iscoercible(AS_EXPR(stmt->expr)->type, stmt->type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
-
-  //Symbol_* s = symboltable_addvar(scope->table, &stmt->name, scope, stmt->type, KIND_VAL);
-  //scope->frame->var_count += 1;
-  //scope->frame->max_stack_offset = max(scope->frame->max_stack_offset, scope->offset + scope->table->vars.count);
 }
 
 void var_expr_analysis(AstNode_* n) {
@@ -275,15 +271,29 @@ void var_expr_analysis(AstNode_* n) {
 
 void id_expr_analysis(AstNode_* n) {
   AstIdExpr_* expr = (AstIdExpr_*)n;
-  Symbol_* var = scope_find(n->scope, &expr->name);
-  if (var) {
-    switch (var->type) {
+  Symbol_* sym = scope_find(n->scope, &expr->name);
+  if (sym) {
+    switch (sym->type) {
       case SYMBOL_TYPE_STRUCT: break;
-      case SYMBOL_TYPE_FN: expr->base.type = var->fn.return_type; break;
-      case SYMBOL_TYPE_VAR: expr->base.type = var->var.type; break;
+      case SYMBOL_TYPE_FN:
+        expr->base.type = sym->fn.return_type;
+        expr->base.type.sym = sym;
+        break;
+      case SYMBOL_TYPE_VAR:
+        expr->base.type = sym->var.type;
+        expr->base.type.sym = sym;
+        break;
+
+      case SYMBOL_TYPE_CLOSURE:
+        expr->base.type = sym->closure.fn->fn.return_type;
+        expr->base.type.sym = sym;
+        break;
+      default:
+        error(analyzer_, n, "Unhandled symbol type: %d", sym->type);
+        break;
     }
   } else {
-    error(analyzer_, n, "Could not find variable %.*s", expr->name.length, expr->name.start);
+    error(analyzer_, n, "Could not find variable '%.*s'", expr->name.length, expr->name.start);
     expr->base.type = UNKNOWN_TY;    
   }
 }
@@ -324,11 +334,22 @@ void expression_statement_analysis(AstNode_* n) {
 }
 
 void function_def_analysis(AstNode_* n) {
-  AstFunctionDef_* def = (AstFunctionDef_*)n;
-  FunctionSymbol_* fn = scope_fn(n->scope, &def->name);
+  AstFunctionDef_* def = (AstFunctionDef_*)n;  
+
+  FunctionSymbol_* fn = &def->fn_symbol->fn;
   fn->return_type = def->body->return_type;
 
-  do_analysis((AstNode_*)def->body);  
+  ObjFunction_* obj_fn = objfn_create(def->fn_symbol);
+  fn->obj_fn = obj_fn;
+
+  def->base.type = (Type_) {
+    .ty = SYMBOL_TYPE_FN,
+    .kind = KIND_STATIC,
+    .obj = OBJ_TYPE_FUNCTION,
+    .sym = def->fn_symbol
+  };
+
+  do_analysis((AstNode_*)def->body);
 }
 
 void function_body_analysis(AstNode_* n) {
@@ -360,23 +381,44 @@ void function_param_analysis(AstNode_* n) {
     }
   }
 
-  List_* params = &n->scope->frame->fn_symbol->fn.params;
-  for (ListNode_* n = params->head; n != NULL; n = n->next) {
-    Symbol_* s = list_val(n, Symbol_*);
-    s->var.type = param->type;
-  }  
+  Symbol_* s = scope_find(n->scope, &param->name);// &n->scope->frame->fn_symbol->fn.params;
+  if (!s) {
+    error(analyzer_, n, "Could not find parameter %.*s", param->name.length, param->name.start);
+    return;
+  }
+
+  if (s->type != SYMBOL_TYPE_VAR) {
+    error(analyzer_, n, "Parameter type is unimplemented.");
+    return;
+  }
+
+  s->var.type = param->type;
 }
 
 void function_call_analysis(AstNode_* n) {
   AstFunctionCall_* call = (AstFunctionCall_*)n;
-  do_analysis(call->prefix);
+  do_analysis((AstNode_*)call->prefix);
   do_analysis(call->args);
 
   call->base.type = AS_EXPR(call->prefix)->type;
+
+  Symbol_* sym = call->base.type.sym;
+  FunctionSymbol_* fn_sym = symbol_ascallable(sym);
+  if (!fn_sym) {
+    error(analyzer_, n, "Trying to call variable that is not callable.");
+    return;
+  }
+
+  if (fn_sym->params.count > UINT8_MAX) {
+    error(analyzer_, n, "Parameter count exceeded maximum of 255.");
+  }
 }
 
-void function_args_analysis(AstNode_* n) {
-  AstFunctionArgs_* args = (AstFunctionArgs_*)n;
+void function_args_analysis(AstNode_* node) {
+  AstFunctionArgs_* args = (AstFunctionArgs_*)node;
+  for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
+    do_analysis(n->node);
+  }
 }
 
 void noop_analysis(AstNode_* n) {}

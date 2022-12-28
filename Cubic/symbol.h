@@ -33,11 +33,15 @@ typedef struct VarSymbol_ {
 typedef struct FunctionSymbol_ {
   ListOf_(Symbol_*) params;
   Type_ return_type;
+  
+  struct ObjFunction_* obj_fn;  
 } FunctionSymbol_;
 
 typedef struct ClosureSymbol_ {
   struct Symbol_* fn;
-  ListOf_(Symbol_*) closures;
+  ListOf_(Symbol_*) closures;  
+
+  int frame_index;
 } ClosureSymbol_;
 
 typedef struct TmpSymbol_ {
@@ -58,5 +62,7 @@ typedef struct Symbol_ {
   Token_ name;
   struct Scope_* parent;
 } Symbol_;
+
+FunctionSymbol_* symbol_ascallable(Symbol_* sym);
 
 #endif  // SYMBOL__H

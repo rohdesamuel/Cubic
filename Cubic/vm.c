@@ -102,6 +102,8 @@ static InterpretResult run(VM vm) {
     } while (false)
 
   for (;;) {
+
+//#define DEBUG_TRACE_EXECUTION
 #ifdef DEBUG_TRACE_EXECUTION
     printf("\n==== Execution Trace ====");
     printf("          ");
@@ -111,7 +113,7 @@ static InterpretResult run(VM vm) {
       printf(" ]");
     }
     printf("\n");
-    disassemble_instruction(vm->chunk, (int)(vm->ip - vm->chunk->code));
+    disassemble_instruction(frame->chunk, (int)(frame->ip - frame->chunk->code));
 #endif  // DEBUG_TRACE_EXECUTION
 
     uint8_t instruction;
@@ -366,7 +368,7 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_EQ:        
+      case OP_EQ:
       {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
@@ -525,10 +527,32 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_CALL:
+      {
+        uint8_t num_params = READ_BYTE();
+        Value_ obj_val = vm_peek(vm, num_params);
+
+        ObjFunction_* obj_fn = AS_FUNCTION(obj_val);
+
+        frame = &vm->frames[vm->frame_count++];
+        frame->chunk = obj_fn->chunk;
+        frame->ip = obj_fn->chunk->code;
+        frame->slots = vm->stack_top - num_params - 1;
+        continue;
+      }
+
       case OP_RETURN:
       {
-        vm_pop(vm);
-        return INTERPRET_OK;
+        Value_ result = vm_pop(vm);        
+        if (--vm->frame_count == 0) {
+          vm_pop(vm);
+          return INTERPRET_OK;
+        }
+
+        vm->stack_top = frame->slots;
+        vm_push(vm, result);
+        frame = &vm->frames[vm->frame_count - 1];
+        continue;
       }
 
       case OP_PRINT:

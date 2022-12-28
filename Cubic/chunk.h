@@ -55,6 +55,7 @@ typedef enum {
   OP_JMP,
   OP_JMP_IF_FALSE,
   OP_LOOP,
+  OP_CALL,
 
   OP_PROLOGUE,
   OP_EPILOGUE,
@@ -76,6 +77,7 @@ typedef enum {
 typedef struct Chunk_ {
   int count;
   int capacity;
+
   uint8_t* code;
 
   ValueArray_ constants;

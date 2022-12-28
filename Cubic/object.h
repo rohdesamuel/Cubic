@@ -9,6 +9,7 @@
 #define OBJ_TYPE(value)    (AS_OBJ(value)->type)
 #define AS_STRING(value)   ((struct ObjString_*)AS_OBJ(value))
 #define AS_CSTRING(value)  (((struct ObjString_*)AS_OBJ(value))->chars)
+#define AS_FUNCTION(value) ((struct ObjFunction_*)AS_OBJ(value))
 #define IS_STRING(value)   obj_istype(value, OBJ_STRING)
 #define IS_FUNCTION(value) obj_istype(value, OBJ_FUNCTTION)
 
@@ -31,6 +32,10 @@ typedef struct ObjString_ {
 
 typedef struct ObjFunction_ {
   Obj_ base;
+
+  int constant_index;
+  struct Chunk_* chunk;
+
 } ObjFunction_;
 
 Obj_* obj_copy(Obj_* obj);
@@ -55,5 +60,6 @@ static inline Value_ obj_val(struct Obj_* obj) {
 
 ObjString_* objstring_create(char* chars, int length);
 ObjString_* objstring_from(const char* chars, int length);
+ObjFunction_* objfn_create(struct Symbol_* fn_sym);
 
 #endif  // OBJECT__H

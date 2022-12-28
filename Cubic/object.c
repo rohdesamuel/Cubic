@@ -58,3 +58,9 @@ ObjString_* objstring_from(const char* chars, int length) {
   heap_chars[length] = '\0';
   return objstring_create(heap_chars, length);
 }
+
+ObjFunction_* objfn_create(struct Symbol_* fn_sym) {
+  ObjFunction_* ret = malloc(sizeof(ObjFunction_));
+  *ret = (ObjFunction_){0};
+  return ret;
+}

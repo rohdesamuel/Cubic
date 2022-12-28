@@ -25,6 +25,7 @@ typedef struct Scope_ {
 typedef struct Frame_ {
   struct MemoryAllocator_* allocator;
   Symbol_* fn_symbol;
+  Symbol_* fn_closure;
 
   // The root scope of the function frame including parameters.
   // This scope doesn't have a parent to disallow implicit closures.
@@ -61,6 +62,8 @@ Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
 void frame_enterscope(Frame_* frame, Scope_* scope);
 void frame_leavescope(Frame_* frame, Scope_* scope);
 void frame_movetemps(Frame_* frame, List_* list);
+void frame_closevar(Frame_* frame, Symbol_* sym);
+Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn);
 
 Scope_* scope_create(Frame_* frame, SymbolTable_* table, struct MemoryAllocator_* allocator);
 Scope_* scope_createfrom(Scope_* scope);
@@ -70,17 +73,16 @@ SymbolTable_* symboltable_create(struct MemoryAllocator_* allocator);
 SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
-void scope_add(Scope_* scope, Symbol_* symbol);
+Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
 Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type);
 Symbol_* scope_addfn(Scope_* scope, Token_* name);
-Symbol_* scope_addclosure(Scope_* table, Token_* name, Scope_* parent);
 
 Symbol_* scope_find(Scope_* table, Token_* name);
 VarSymbol_* scope_var(Scope_* table, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* table, Token_* name);
 StructSymbol_* scope_struct(Scope_* table, Token_* name);
 
-Symbol_* symbol_closure(Symbol_* fn_symbol, Symbol_* upvalue, struct MemoryAllocator_* allocator);
+
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
 
 int symbolvar_index(Symbol_* var);

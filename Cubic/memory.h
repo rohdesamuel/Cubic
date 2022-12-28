@@ -15,8 +15,9 @@
 
 void* reallocate(void* pointer, size_t old_size, size_t new_size);
 
-#define alloc(allocator, size) ((struct MemoryAllocator_*)(allocator))->alloc((struct MemoryAllocator_*)(allocator), (size))
-#define dealloc(allocator, ptr) ((struct MemoryAllocator_*)(allocator))->dealloc((struct MemoryAllocator_*)(allocator), (ptr))
+#define alloc_ty(allocator, ty) ((struct MemoryAllocator_*)(allocator))->allocate((struct MemoryAllocator_*)(allocator), (sizeof(ty)))
+#define alloc(allocator, size)  ((struct MemoryAllocator_*)(allocator))->allocate((struct MemoryAllocator_*)(allocator), (size))
+#define dealloc(allocator, ptr) ((struct MemoryAllocator_*)(allocator))->deallocate((struct MemoryAllocator_*)(allocator), (ptr))
 
 typedef struct ListNode_ {
   struct ListNode_* next;
@@ -46,10 +47,10 @@ ListNode_* list_push(List_* list, void* pval);
 
 typedef struct MemoryAllocator_ {
   // Allocate a block of memory with `size`.
-  void* (*alloc)(struct MemoryAllocator_* base, size_t size);
+  void* (*allocate)(struct MemoryAllocator_* base, size_t size);
 
   // Deallocate a block of memory.
-  void (*dealloc)(struct MemoryAllocator_* base, void* ptr);
+  void (*deallocate)(struct MemoryAllocator_* base, void* ptr);
 
   // Invalidates all currently allocated memory without deleting the buffer.
   void (*clear)(struct MemoryAllocator_* base);
@@ -91,9 +92,9 @@ MemoryAllocator memallocator_default();
 //              a new slab.
 // 
 // Behavior:
-//   - alloc(size): Allocates a block of memory of size `size`. Returns nullptr
+//   - allocate(size): Allocates a block of memory of size `size`. Returns nullptr
 //                  if host is OOM.
-//   - dealloc(ptr): deallocates the given pointer.
+//   - deallocate(ptr): deallocates the given pointer.
 //   - flush(frame): noop
 //   - clear(): noop
 // MemoryAllocator memallocator_pool();
@@ -105,9 +106,9 @@ MemoryAllocator memallocator_default();
 //              is `alloc`ed. Memory cannot be deallocated. 
 // 
 // Behavior:
-//   - alloc(size): Allocates a block of memory of size `size`. Returns nullptr
+//   - allocate(size): Allocates a block of memory of size `size`. Returns nullptr
 //                  if size + total allocated is greater than max size.
-//   - dealloc(ptr): noop
+//   - deallocate(ptr): noop
 //   - flush(frame): noop
 //   - clear(): resets offset to zero.
 void linearallocator_init(LinearAllocator_* allocator, size_t max_size);
@@ -120,8 +121,8 @@ void linearallocator_deinit(LinearAllocator_* allocator);
 //              size is greater than the page size.
 // 
 // Behavior:
-//   - alloc(size): Allocates a block of memory of size `size`.
-//   - dealloc(ptr): noop
+//   - allocate(size): Allocates a block of memory of size `size`.
+//   - deallocate(ptr): noop
 //   - flush(frame): noop
 //   - clear(): Deallocates all memory.
 void pageallocator_init(PageAllocator_* allocator, size_t page_size);
@@ -135,10 +136,10 @@ void pageallocator_deinit(PageAllocator_* allocator);
 //              of allocation.
 // 
 // Behavior:
-//   - alloc(size): Allocates a block of memory of size `size` on top of the
+//   - allocate(size): Allocates a block of memory of size `size` on top of the
 //                  stack. Returns nullptr if size + total allocated is
 //                  greater than max size.
-//   - dealloc(ptr): Deallocates the given pointer. Assumes that the pointer
+//   - deallocate(ptr): Deallocates the given pointer. Assumes that the pointer
 //                   is at the top of the stack. The stack becomes corrupted if
 //                   trying to deallocate a pointer not at the top.
 //   - flush(frame): noop
@@ -153,9 +154,9 @@ void pageallocator_deinit(PageAllocator_* allocator);
 //              `object_size`.
 // 
 // Behavior:
-//   - alloc(unused): Returns an object if available. Returns nullptr if the
+//   - allocate(unused): Returns an object if available. Returns nullptr if the
 //                    pool has allocated all objects already.
-//   - dealloc(ptr): Returns the object to the pool.
+//   - deallocate(ptr): Returns the object to the pool.
 //   - flush(frame): noop
 //   - clear(): Returns all allocated objects to the pool. Any reference to an
 //              allocated object becomes invalid.

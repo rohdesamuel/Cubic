@@ -44,7 +44,7 @@ FunctionArgs ::= '(' [ExprList] ')'
 FunctionDef ::= 'function' [Id] FunctionBody 'end'
 FunctionParam ::= (Id | UnionType | Id ':' UnionType) ['=' Expr]
 FunctionParamList ::= FunctionParam {',' FunctionParam}
-FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement
+FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 
 ///////////////////////////////////////////////////////////////////////////////
 // Declarations

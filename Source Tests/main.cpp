@@ -94,6 +94,23 @@ UTEST_F(MyTestFixture, functions) {
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, precedence) {
+  auto output = run_file(exedir, "precedence.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, lambdas) {
+  auto output = run_file(exedir, "lambdas.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, closures) {
+  auto output = run_file(exedir, "closures.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
 
 int main(int argc, char** argv) {
   exedir = std::filesystem::path(argv[0]).parent_path();

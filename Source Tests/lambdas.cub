@@ -1,0 +1,9 @@
+let a := function () -> int return 1 end
+assert a() == 1
+
+let ident := function (a : int) -> int return a end
+assert ident(1) == 1
+assert 1 == ident(1)
+assert ident(10) == ident(10)
+
+assert (function() -> int return 1 end)() == (function() -> int return 1 end)()

@@ -4,8 +4,29 @@
 
 #include <string.h>
 
-Frame_* frame_root(struct MemoryAllocator_* allocator) {
-  return frame_create(NULL, allocator);
+static Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn);
+static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
+
+Frame_* frame_root(struct MemoryAllocator_* allocator) {  
+  Token_ entry_name = {
+    .type = TK_ID,
+    .start = "main",
+    .length = 4,
+    .line = 0,
+  };
+
+  Symbol_* entry_fn = alloc_ty(allocator, Token_);
+  *entry_fn = (Symbol_){
+    .type = SYMBOL_TYPE_FN,
+    .fn = (FunctionSymbol_) {
+      .return_type = VAL_UNKNOWN,
+      .params = {0}
+    },
+    .name = entry_name,
+    .parent = NULL,
+  };
+
+  return frame_create(entry_fn, allocator);
 }
 
 Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator) {
@@ -15,6 +36,8 @@ Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator) {
   ret->allocator = allocator;
   ret->scope = scope_create(ret, NULL, allocator);
   ret->fn_symbol = fn_symbol;
+  ret->fn_closure = frame_addclosure(ret, &fn_symbol->name, fn_symbol);
+
   list_of(&ret->tmps, Symbol_*, allocator);
   return ret;
 }
@@ -28,6 +51,8 @@ Symbol_* frame_addparam(Frame_* frame, Token_* name) {
   Scope_* scope = frame->scope;
   SymbolTable_* table = scope->table;  
   Symbol_* s = scope_addvar(scope, name, UNKNOWN_TY);
+  frame->var_count += 1;
+  frame->stack_size += 1;
   list_push(&frame->fn_symbol->fn.params, &s);
 
   return s;
@@ -84,6 +109,18 @@ void frame_movetemps(Frame_* frame, List_* list) {
   }
 
   frame_cleartemps(frame);
+}
+
+static Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn) {
+  Symbol_* ret = scope_addclosure(frame->scope, name, fn);
+  frame->var_count += 1;
+  frame->stack_size += 1;
+
+  return ret;
+}
+
+void frame_closevar(Frame_* frame, Symbol_* sym) {
+  
 }
 
 Scope_* scope_create(Frame_* frame, SymbolTable_* table, struct MemoryAllocator_* allocator) {
@@ -155,27 +192,25 @@ void symboltable_destroy(SymbolTable_** symbol_table) {
   *symbol_table = NULL;
 }
 
-void scope_add(Scope_* scope, Symbol_* symbol) {
+Symbol_* scope_add(Scope_* scope, Symbol_* symbol) {
   Symbol_* existing;
   SymbolTable_* table = scope->table;
   Token_* name = &symbol->name;
   if (hashmap_get(table->symbols_, name->start, name->length, (uintptr_t*)&existing)) {
-    return;
-  }
-
-  list_push(&table->vars, &symbol);
-  list_push(&table->symbol_list_, &symbol);
-  hashmap_set(table->symbols_, name->start, name->length, (uintptr_t)symbol);
-}
-
-Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
-  Symbol_* existing;
-  SymbolTable_* table = scope->table;
-
-  if (hashmap_get(table->symbols_, name->start, name->length, (uintptr_t*)&existing)) {
     return NULL;
   }
 
+  ListNode_* n = list_push(&table->symbol_list_, symbol);
+  void* symbol_addr = &n->data;
+
+  list_push(&table->vars, &symbol_addr);
+  list_push(&table->symbol_list_, &symbol_addr);
+  hashmap_set(table->symbols_, name->start, name->length, (uintptr_t)symbol_addr);
+
+  return (Symbol_*)symbol_addr;
+}
+
+Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
   int scope_index = scope->stack_size++;
   int frame_index = scope->frame->var_count;
 
@@ -190,24 +225,10 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
     .parent = scope,
   };
 
-  ListNode_* n = list_push(&table->symbol_list_, &s);
-  void* symbol_addr = &n->data;
-
-  list_push(&table->vars, &symbol_addr);
-  list_push(&table->symbol_list_, &symbol_addr);
-  hashmap_set(table->symbols_, name->start, name->length, (uintptr_t)symbol_addr);
-
-  return (Symbol_*)symbol_addr;
+  return scope_add(scope, &s);
 }
 
 Symbol_* scope_addfn(Scope_* scope, Token_* name) {
-  Symbol_* existing;
-  SymbolTable_* table = scope->table;
-
-  if (hashmap_get(table->symbols_, name->start, name->length, (uintptr_t*)&existing)) {
-    return NULL;
-  }
-
   Symbol_ s = (Symbol_){
     .type = SYMBOL_TYPE_FN,
     .fn = (FunctionSymbol_) {
@@ -217,16 +238,27 @@ Symbol_* scope_addfn(Scope_* scope, Token_* name) {
     .name = *name,
     .parent = scope,
   };
-
   list_of(&s.fn.params, Symbol_*, scope->allocator);
+  return scope_add(scope, &s);
+}
 
-  ListNode_* n = list_push(&table->symbol_list_, &s);
-  void* symbol_addr = &n->data;
+static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
+  scope->stack_size++;
 
-  list_push(&table->vars, &symbol_addr);
-  list_push(&table->symbol_list_, &symbol_addr);
-  hashmap_set(table->symbols_, name->start, name->length, (uintptr_t)symbol_addr);
-  return (Symbol_*)symbol_addr;
+  Symbol_ s = {
+    .type = SYMBOL_TYPE_CLOSURE,
+    .closure = {
+      .fn = fn,
+      .closures = {0},
+      .frame_index = 0
+    },
+    .name = *name,
+    .parent = scope,
+  };
+
+  list_of(&s.closure.closures, Symbol_*, scope->allocator);
+
+  return scope_add(scope, &s);
 }
 
 Symbol_* scope_find(Scope_* scope, Token_* name) {
@@ -258,24 +290,6 @@ FunctionSymbol_* scope_fn(Scope_* scope, Token_* name) {
   }
 
   return &ret->fn;
-}
-
-Symbol_* symbol_closure(Symbol_* fn_symbol, Symbol_* upvalue, struct MemoryAllocator_* allocator) {
-  Symbol_* ret = (Symbol_*)alloc(allocator, sizeof(Symbol_));
-  memset(ret, 0, sizeof(Symbol_));
-
-  *ret = (Symbol_){
-    .type = SYMBOL_TYPE_CLOSURE,
-    .closure = {
-      .fn = fn_symbol,
-      .closures = {0}
-    }
-  };
-
-  list_of(&ret->closure.closures, Symbol_*, allocator);
-  list_push(&ret->closure.closures, upvalue);
-
-  return ret;
 }
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue) {

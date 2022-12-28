@@ -185,12 +185,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="arrays.cub" />
+    <None Include="closures.cub" />
     <None Include="fib.cub" />
     <None Include="functions.cub" />
     <None Include="global_variables.cub" />
     <None Include="for_loops.cub" />
+    <None Include="lambdas.cub" />
     <None Include="multiline_comments.cub" />
     <None Include="operators.cub" />
+    <None Include="precedence.cub" />
     <None Include="scope.cub" />
     <None Include="local_variables.cub" />
     <None Include="simple_type_inference.cub" />

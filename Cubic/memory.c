@@ -178,8 +178,8 @@ static struct __PageAllocator_Page* pageallocator_newpage(size_t page_size);
 void pageallocator_init(PageAllocator_* allocator, size_t page_size) {
   memset(allocator, 0, sizeof(PageAllocator_));
   allocator->page_size = page_size;
-  allocator->base.alloc = pageallocator_alloc;
-  allocator->base.dealloc = pageallocator_dealloc;
+  allocator->base.allocate = pageallocator_alloc;
+  allocator->base.deallocate = pageallocator_dealloc;
   allocator->base.clear = pageallocator_clear;
 
   allocator->head = pageallocator_newpage(page_size);
@@ -277,8 +277,8 @@ void linearallocator_init(LinearAllocator_* allocator, size_t max_size) {
   allocator->offset = 0;
   allocator->max_size = max_size;
 
-  allocator->base.alloc = stackallocator_alloc;
-  allocator->base.dealloc = stackallocator_dealloc;
+  allocator->base.allocate = stackallocator_alloc;
+  allocator->base.deallocate = stackallocator_dealloc;
   allocator->base.clear = stackallocator_clear;
 }
 

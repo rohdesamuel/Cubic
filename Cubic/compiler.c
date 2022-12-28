@@ -1,6 +1,7 @@
 #include "compiler.h"
 
 #include "common.h"
+#include "object.h"
 #include "debug.h"
 #include "scanner.h"
 #include "parser.h"
@@ -232,7 +233,16 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
 
   for (ListNode_* n = vars->head; n != NULL; n = n->next) {
     Symbol_* var = list_val(n, Symbol_*);
-    emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
+    switch (var->type) {
+      case SYMBOL_TYPE_VAR:
+        emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
+        break;
+      case SYMBOL_TYPE_FN:  // TODO: how to handle this?
+        break;
+      default:
+        assertf(false, "Unknown variable type to destroy %d", var->type);
+        break;
+    }
   }
   emit_byte(chunk, OP_END_SCOPE, block->base.line);
 }
@@ -378,7 +388,7 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
 
   // TODO: allow for multiple expressions.
   code_gen(chunk, (AstNode_*)stmt->expr);
-  if (type_iscoercible(stmt->expr->type, stmt->type)) {
+  if (stmt->expr->type.ty != stmt->type.ty && type_iscoercible(stmt->expr->type, stmt->type)) {
     emit_byte(chunk, OP_CAST, node->line);
     emit_long(chunk, type_toint(stmt->type), node->line);
   }
@@ -392,9 +402,19 @@ static void var_expr_code_gen(Chunk_* chunk, AstNode_* node) {
 
 static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
-  int slot = resolve_local(node->scope, &expr->name);
+  Symbol_* sym = scope_find(node->scope, &expr->name);
 
-  emit_bytes(chunk, OP_GET_VAR, (uint8_t)slot, node->line);
+  switch (sym->type) {
+    case SYMBOL_TYPE_VAR:
+      emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
+      break;
+    case SYMBOL_TYPE_FN:
+      emit_bytes(chunk, OP_CONSTANT, sym->fn.obj_fn->constant_index, node->line);
+      break;
+    case SYMBOL_TYPE_CLOSURE:
+      emit_bytes(chunk, OP_GET_VAR, (uint8_t)(sym->closure.frame_index), node->line);
+      break;
+  }
 }
 
 static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
@@ -453,7 +473,18 @@ void expression_statement_code_gen(Chunk_* chunk, AstNode_* node) {
 
 void function_def_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionDef_* def = (AstFunctionDef_*)node;
-  code_gen(chunk, (AstNode_*)def->body);
+  FunctionSymbol_* fn = &def->fn_symbol->fn;
+  ObjFunction_* obj_fn = fn->obj_fn;
+  obj_fn->constant_index = make_constant(chunk, OBJ_VAL(obj_fn));
+
+  Chunk_* fn_chunk = malloc(sizeof(Chunk_));
+  obj_fn->chunk = fn_chunk;
+  
+  chunk_init(fn_chunk);
+
+  code_gen(fn_chunk, (AstNode_*)def->body);
+
+  emit_bytes(chunk, OP_CONSTANT, obj_fn->constant_index, node->line);
 }
 
 void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
@@ -461,6 +492,37 @@ void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
   code_gen(chunk, body->stmt);
 
   for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
+    code_gen(chunk, n->node);
+  }
+
+  if (IS_TY_NIL(body->return_type)) {
+    emit_constant(chunk, NIL_VAL, node->line);
+    emit_byte(chunk, OP_RETURN, node->line);
+  }
+}
+
+void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstFunctionCall_* call = (AstFunctionCall_*)node;
+  AstExpr_* prefix = call->prefix;
+  Symbol_* sym = prefix->type.sym;
+
+  FunctionSymbol_* fn_sym = symbol_ascallable(sym);
+  assertf(fn_sym, "Unknown symbol type.");
+
+  // Push function object to call.
+  code_gen(chunk, (AstNode_*)prefix);
+
+  // Push arguments.
+  code_gen(chunk, call->args);
+
+  // Do the call.
+  emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);
+}
+
+void function_args_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstFunctionArgs_* args = (AstFunctionArgs_*)node;
+  
+  for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     code_gen(chunk, n->node);
   }
 }
@@ -506,9 +568,9 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstWhileStmt_)]      = {while_stmt_code_gen},
   [AST_CLS(AstFunctionDef_)]    = {function_def_code_gen},
   [AST_CLS(AstFunctionBody_)]   = {function_body_code_gen},
-  [AST_CLS(AstFunctionParam_)]  = {NULL},
-  [AST_CLS(AstFunctionCall_)]   = {NULL},
-  [AST_CLS(AstFunctionArgs_)]   = {NULL},
+  [AST_CLS(AstFunctionParam_)]  = {noop_code_gen},
+  [AST_CLS(AstFunctionCall_)]   = {function_call_code_gen},
+  [AST_CLS(AstFunctionArgs_)]   = {function_args_code_gen},
   [AST_CLS(AstExpressionStmt_)] = {expression_statement_code_gen},
   [AST_CLS(AstNoopStmt_)]       = {noop_code_gen},
   [AST_CLS(AstCleanUpTemps_)]   = {clean_up_temps_code_gen},
