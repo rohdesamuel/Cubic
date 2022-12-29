@@ -81,8 +81,7 @@ typedef struct Value_ {
     struct Obj_* obj;
   } as;
 
-  struct Type_ type;
-  uint16_t size;
+  Type_ type;
 } Value_;
 
 typedef Value_* Value;
@@ -105,5 +104,9 @@ const char* valuetype_str(Type_ type);
 const char* value_typestr(Value_* value);
 
 bool value_iscoercible(Value_ from, Value_ to);
+
+#define VALUE_VAL_TYPE(type) ((type & 0x00FF0000) >> 16)
+#define VALUE_VAL_KIND(type) ((type & 0x0000FF00) >> 8)
+#define VALUE_OBJ_TYPE(type)  (type & 0x000000FF)
 
 #endif  // VALUE__H

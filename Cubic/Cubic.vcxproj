@@ -172,6 +172,7 @@
     <ClCompile Include="main.c" />
     <ClCompile Include="map.c" />
     <ClCompile Include="memory.c" />
+    <ClCompile Include="native_fns.c" />
     <ClCompile Include="object.c" />
     <ClCompile Include="parser.c" />
     <ClCompile Include="scanner.c" />
@@ -190,6 +191,7 @@
     <ClInclude Include="lexer.h" />
     <ClInclude Include="map.h" />
     <ClInclude Include="memory.h" />
+    <ClInclude Include="native_fns.h" />
     <ClInclude Include="object.h" />
     <ClInclude Include="parser.h" />
     <ClInclude Include="scanner.h" />
@@ -197,7 +199,6 @@
     <ClInclude Include="symbol_table.h" />
     <ClInclude Include="tokens.h" />
     <ClInclude Include="type.h" />
-    <ClInclude Include="types.h" />
     <ClInclude Include="type_checker.h" />
     <ClInclude Include="value.h" />
     <ClInclude Include="vm.h" />

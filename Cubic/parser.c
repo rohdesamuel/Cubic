@@ -91,6 +91,8 @@ static void astlist_clear(AstList_* list) {
     dealloc(allocator, cur);
     cur = next;
   }
+
+  list->count = 0;
 }
 
 static void astlist_destroy(AstList_** list) {
@@ -117,6 +119,7 @@ static void astlist_append(AstList_* list, AstNode_* node) {
   }
 
   list->tail = n;
+  ++list->count;
 }
 
 // Returns true if the current token is in the follow set of a block.
@@ -686,7 +689,7 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
     if (parser->previous.type == TK_LPAREN) {
       AstFunctionCall_* new_exp = MAKE_AST_EXPR(&parser->allocator, AstFunctionCall_, scope);
       new_exp->prefix = (AstExpr_*)exp;
-      new_exp->args = infix_rule(parser, scanner, scope);
+      new_exp->args = (AstFunctionArgs_*)infix_rule(parser, scanner, scope);
       exp = (AstNode_*)new_exp;
     } else if (parser->previous.type == TK_EQUAL) {
       AstAssignmentExpr_* new_exp = MAKE_AST_EXPR(&parser->allocator, AstAssignmentExpr_, scope);

@@ -599,7 +599,7 @@ void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   code_gen(chunk, (AstNode_*)prefix);
 
   // Push arguments.
-  code_gen(chunk, call->args);
+  code_gen(chunk, (AstNode_*)call->args);
 
   // Do the call.
   emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);

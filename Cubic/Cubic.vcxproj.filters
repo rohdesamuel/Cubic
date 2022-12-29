@@ -117,15 +117,15 @@
     <ClCompile Include="symbol.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="native_fns.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="scanner.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="types.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="tokens.h">
@@ -177,6 +177,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="type.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="native_fns.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

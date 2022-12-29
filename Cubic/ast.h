@@ -87,6 +87,7 @@ typedef struct AstList_ {
   struct MemoryAllocator_* allocator;
   AstListNode_* head;
   AstListNode_* tail;
+  int count;
 } AstList_;
 
 // Program ::= Block
@@ -250,7 +251,7 @@ typedef struct AstFunctionParam_ {
 typedef struct AstFunctionCall_ {
   struct AstExpr_ base;
   AstExpr_* prefix;
-  AstNode_* args;
+  struct AstFunctionArgs_* args;
   struct Symbol_* fn_sym;
 } AstFunctionCall_;
 

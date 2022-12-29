@@ -12,7 +12,6 @@
 
 static InterpretResult run(VM vm);
 static void reset_stack(VM vm);
-static InterpretResult runtime_error(VM_* vm, const char* format, ...);
 
 void vm_init(VM_* vm) {
   memset(vm, 0, sizeof(VM_));
@@ -355,7 +354,7 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
         if (r.as.i == 0) {
-          return runtime_error(vm, "Divide-by-zero error");
+          return vm_runtime_error(vm, "Divide-by-zero error");
         }
 
         vm_push(vm, UINT_VAL(l.as.u % r.as.u));
@@ -367,7 +366,7 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
         if (r.as.i == 0) {
-          return runtime_error(vm, "Divide-by-zero error");
+          return vm_runtime_error(vm, "Divide-by-zero error");
         }
 
         vm_push(vm, INT_VAL(l.as.i % r.as.i));
@@ -453,7 +452,7 @@ static InterpretResult run(VM vm) {
         Value_ l = vm_pop(vm);
 
         if (r.as.i == 0) {
-          return runtime_error(vm, "Divide-by-zero error");
+          return vm_runtime_error(vm, "Divide-by-zero error");
         }
 
         vm_push(vm, UINT_VAL(l.as.u / r.as.u));
@@ -466,7 +465,7 @@ static InterpretResult run(VM vm) {
         Value_ l = vm_pop(vm);
 
         if (r.as.i == 0) {
-          return runtime_error(vm, "Divide-by-zero error");
+          return vm_runtime_error(vm, "Divide-by-zero error");
         }
 
         vm_push(vm, INT_VAL(l.as.i / r.as.i));
@@ -479,7 +478,7 @@ static InterpretResult run(VM vm) {
         Value_ l = vm_pop(vm);
 
         if (r.as.i == 0) {
-          return runtime_error(vm, "Divide-by-zero error");
+          return vm_runtime_error(vm, "Divide-by-zero error");
         }
 
         vm_push(vm, DOUBLE_VAL(l.as.d / r.as.d));
@@ -539,7 +538,7 @@ static InterpretResult run(VM vm) {
       {
         Value_ assert_val = vm_pop(vm);
         if (is_falsey(assert_val)) {
-          runtime_error(vm, "Assertion failed");
+          vm_runtime_error(vm, "Assertion failed");
           return INTERPRET_ASSERTION_FAILED;
         }
         continue;
@@ -582,17 +581,19 @@ static void reset_stack(VM vm) {
   vm->stack_top = vm->stack;
 }
 
-static InterpretResult runtime_error(VM_* vm, const char* format, ...) {
+InterpretResult vm_runtime_error(VM_* vm, const char* format, ...) {
   va_list args;
   va_start(args, format);
   vfprintf(stderr, format, args);
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction = vm->frames[vm->frame_count-1].ip - vm->chunk->code - 1;
-  int line = vm->chunk->lines[instruction];
-  fprintf(stderr, "[line %d] in script\n", line);
-  reset_stack(vm);
-
+  for (int i = vm->frame_count - 1; i >= 0; i--) {
+    CallFrame_* frame = &vm->frames[i];
+    size_t instruction = frame->ip - frame->chunk->code - 1;
+    fprintf(stderr, "[line %d] in ",
+      frame->chunk->lines[instruction]);
+    fprintf(stderr, "script\n");
+  }
   return INTERPRET_RUNTIME_ERROR;
 }

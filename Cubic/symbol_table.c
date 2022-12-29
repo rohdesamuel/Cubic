@@ -1,6 +1,7 @@
 #include "symbol_table.h"
 #include "memory.h"
 #include "object.h"
+#include "native_fns.h"
 
 #include <string.h>
 

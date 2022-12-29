@@ -16,6 +16,11 @@ typedef enum {
   SYMBOL_TYPE_TMP,
 } SymbolType_;
 
+typedef struct SemanticType_ {
+  Type_ val;
+  struct Symbol_* sym;
+} SemanticType_;
+
 typedef struct StructSymbol_ {
   int a;
 } StructSymbol_;
@@ -34,7 +39,7 @@ typedef struct FunctionSymbol_ {
   ListOf_(Symbol_*) params;
   Type_ return_type;
   
-  struct ObjFunction_* obj_fn;  
+  struct ObjFunction_* obj_fn;
 } FunctionSymbol_;
 
 typedef struct ClosureSymbol_ {
@@ -51,6 +56,8 @@ typedef struct TmpSymbol_ {
 
 typedef struct Symbol_ {
   SymbolType_ type;
+  SemanticType_ sem;
+
   union {
     StructSymbol_ strct;
     VarSymbol_ var;

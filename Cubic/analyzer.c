@@ -397,23 +397,45 @@ void function_param_analysis(AstNode_* n) {
   s->var.type = param->type;
 }
 
-void function_call_analysis(AstNode_* n) {
-  AstFunctionCall_* call = (AstFunctionCall_*)n;
+void function_call_analysis(AstNode_* node) {
+  AstFunctionCall_* call = (AstFunctionCall_*)node;
   do_analysis((AstNode_*)call->prefix);
-  do_analysis(call->args);
+  do_analysis((AstNode_*)call->args);
 
   call->base.type = AS_EXPR(call->prefix)->type;
 
   Symbol_* sym = call->base.type.sym;
   FunctionSymbol_* fn_sym = symbol_ascallable(sym);
   if (!fn_sym) {
-    error(analyzer_, n, "Trying to call variable that is not callable.");
+    error(analyzer_, node, "Trying to call variable that is not callable.");
     return;
   }
 
   if (fn_sym->params.count > UINT8_MAX) {
-    error(analyzer_, n, "Parameter count exceeded maximum of 255.");
+    error(analyzer_, node, "Parameter count exceeded maximum of 255.");
   }
+
+  // TODO: allow for optional arguments
+  AstFunctionArgs_* fn_args = call->args;
+  if (fn_sym->params.count != fn_args->args.count) {
+    error(analyzer_, node,
+      "Parameter count does not match definition. Expected %d, got %d",
+      fn_sym->params.count, fn_args->args.count);
+  }
+
+  //ListNode_* param_node = fn_sym->params.head;
+  //for (AstListNode_* n = fn_args->args.head; n != NULL; n = n->next) {
+  //  AstExpr_* arg = (AstExpr_*)n->node;
+  //  Symbol_* def_sym = list_val(param_node, Symbol_*);
+  //  Symbol_* arg_sym = arg->type.sym;
+  //
+  //  if (def_sym->type != arg_sym->type) {
+  //    error(analyzer_, node, "Argument symbol type does not match definition.");
+  //    continue;
+  //  }
+  //
+  //  param_node = param_node->next;
+  //}
 }
 
 void function_args_analysis(AstNode_* node) {

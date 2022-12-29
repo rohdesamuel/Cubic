@@ -4,10 +4,12 @@
 #include "common.h"
 
 #include "chunk.h"
+#include "native_fns.h"
 #include "value.h"
 
 #define FRAMES_MAX 256
 #define STACK_MAX 256
+#define NATIVE_FNS_MAX 1024
 
 typedef struct CallFrame_ {
   Chunk chunk;
@@ -43,5 +45,7 @@ void vm_push(VM_* vm, Value_ value);
 Value_ vm_pop(VM_* vm);
 void vm_popx(VM_* vm, int distance);
 Value_ vm_peek(VM_* vm, int distance);
+
+InterpretResult vm_runtime_error(VM_* vm, const char* format, ...);
 
 #endif  // VM__H
