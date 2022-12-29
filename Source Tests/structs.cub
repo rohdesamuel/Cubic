@@ -1,0 +1,99 @@
+struct ZeroInit
+  a : int
+end
+
+do
+  let a := ZeroInit()
+  assert a.a == 0
+end
+
+##########
+
+struct OneMember
+  a : int
+end
+
+do
+  let a := OneMember()
+  a.a = 1
+  assert a.a == 1
+end
+
+##########
+
+struct TwoMembers
+  a : int
+  b : int
+end
+
+do
+  let a := TwoMembers()
+  a.a = 1
+  a.b = 2
+  assert a.a == 1
+  assert a.b == 2
+end
+
+##########
+
+struct DiffType
+  a : int
+  b : double
+end
+
+do
+  let a := DiffType()
+  a.a = 1
+  a.b = 2.0
+  assert a.a == 1
+  assert a.b == 2.0
+end
+
+##########
+
+struct DiffTypeWithDefaultVals
+  c : int = 1
+  d : double = 2.0
+end
+
+do
+  let a := DiffTypeWithDefaultVals()
+  assert a.c == 1
+  assert a.d == 2.0
+end
+
+##########
+
+struct Vec3
+  x : double
+  y : double
+  z : double
+end
+
+do
+  let vec := Vec3()
+  assert vec.x == 0.0
+  assert vec.y == 0.0
+  assert vec.z == 0.0
+end
+
+do
+  let vec := Vec3(z=3.0)
+  assert vec.x == 0.0
+  assert vec.y == 0.0
+  assert vec.z == 3.0
+end
+
+do
+  let vec := Vec3(y=2.0, z=3.0)
+  assert vec.x == 0.0
+  assert vec.y == 2.0
+  assert vec.z == 3.0
+end
+
+do
+  let vec := Vec3(x=1.0, y=2.0, z=3.0)
+  assert vec.x == 1.0
+  assert vec.y == 2.0
+  assert vec.z == 3.0
+end

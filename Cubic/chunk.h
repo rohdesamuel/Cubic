@@ -14,10 +14,6 @@ typedef enum {
   OP_CONSTANT_LONG,  // Unimplemented.  
 
   OP_EQ,
-  OP_NEQ,
-
-  OP_GT,
-  OP_GTE,
   OP_LT,
   OP_LTE,
 
@@ -28,14 +24,18 @@ typedef enum {
   OP_IMUL,
   OP_IDIV,
 
-  OP_FADD, // Unimplemented.
-  OP_FSUB, // Unimplemented.
-  OP_FMUL, // Unimplemented.
-  OP_FDIV, // Unimplemented.
+  OP_FADD,
+  OP_FSUB,
+  OP_FMUL,
+  OP_FDIV,
+
+  OP_CONCAT,
 
   OP_CAST,
 
-  OP_MOD, 
+  OP_MOD,
+  OP_IMOD,
+
   OP_BITWISE_AND,
   OP_BITWISE_OR,
   OP_BITWISE_XOR,
@@ -48,7 +48,8 @@ typedef enum {
   OP_XOR,
   OP_NOT,
 
-  OP_NEGATE,
+  OP_NEG,
+  OP_FNEG,
   OP_RETURN,
   
   OP_POP,
@@ -59,13 +60,9 @@ typedef enum {
 
   OP_PROLOGUE,
   OP_EPILOGUE,
-  OP_BEGIN_SCOPE,
-  OP_END_SCOPE,
 
   OP_GET_VAR,
   OP_SET_VAR,
-  OP_COPY_VAR,
-
   OP_DESTROY_VAR,  // TODO: turn this into a function call. But maybe a VM operation is faster?
 
   OP_PRINT,

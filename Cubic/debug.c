@@ -40,9 +40,6 @@ int disassemble_instruction(Chunk chunk, int offset) {
     DEBUG_INSTRUCTION(OP_TRUE, simple_instruction);
     DEBUG_INSTRUCTION(OP_FALSE, simple_instruction);
     DEBUG_INSTRUCTION(OP_EQ, simple_instruction);
-    DEBUG_INSTRUCTION(OP_NEQ, simple_instruction);
-    DEBUG_INSTRUCTION(OP_GT, simple_instruction);
-    DEBUG_INSTRUCTION(OP_GTE, simple_instruction);
     DEBUG_INSTRUCTION(OP_LT, simple_instruction);
     DEBUG_INSTRUCTION(OP_LTE, simple_instruction);
     DEBUG_INSTRUCTION(OP_ADD, simple_instruction);
@@ -60,7 +57,7 @@ int disassemble_instruction(Chunk chunk, int offset) {
     DEBUG_INSTRUCTION(OP_OR, simple_instruction);
     DEBUG_INSTRUCTION(OP_XOR, simple_instruction);
     DEBUG_INSTRUCTION(OP_NOT, simple_instruction);
-    DEBUG_INSTRUCTION(OP_NEGATE, simple_instruction);
+    DEBUG_INSTRUCTION(OP_NEG, simple_instruction);
     DEBUG_INSTRUCTION(OP_RETURN, simple_instruction);
     DEBUG_INSTRUCTION(OP_POP, simple_instruction);
     DEBUG_INSTRUCTION(OP_JMP, jump_instruction);
@@ -77,8 +74,6 @@ int disassemble_instruction(Chunk chunk, int offset) {
 
     DEBUG_INSTRUCTION(OP_PROLOGUE, short_instruction);
     DEBUG_INSTRUCTION(OP_EPILOGUE, simple_instruction);
-    DEBUG_INSTRUCTION(OP_BEGIN_SCOPE, simple_instruction);
-    DEBUG_INSTRUCTION(OP_END_SCOPE, simple_instruction);
 
     default:
       printf("Unknown opcode %d\n", instruction);

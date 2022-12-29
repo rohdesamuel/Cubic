@@ -25,6 +25,7 @@ static void end_compiler(Parser_* parser, Chunk_* chunk);
 static CodeGenRule_* get_rule(int type);
 
 static void emit_return(Chunk_* chunk, int line);
+static void emit_cast(Chunk_* chunk, Type_ from, Type_ to, int line);
 
 static void code_gen(Chunk_* chunk, AstNode_* node) {
   get_rule(node->cls)->code_gen(chunk, node);
@@ -126,14 +127,94 @@ static void emit_constant(Chunk_* chunk, Value_ value, int line) {
   emit_bytes(chunk, OP_CONSTANT, make_constant(chunk, value), line);
 }
 
+static void emit_cast(Chunk_* chunk, Type_ from, Type_ to, int line) {
+  emit_byte(chunk, OP_CAST, line);
+  emit_long(chunk, type_toint(from), line);
+  emit_long(chunk, type_toint(to), line);
+}
+
 static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
   AstUnaryExp_* exp = (AstUnaryExp_*)node;
   code_gen(chunk, exp->expr);
   // Emit the operator instruction.
   switch (exp->op) {
-    case TK_MINUS: emit_byte(chunk, OP_NEGATE, node->line); break;
+    case TK_MINUS: emit_byte(chunk, OP_NEG, node->line); break;
     case TK_NOT: emit_byte(chunk, OP_NOT, node->line); break;
     default: assertf(false, "UnaryOp '%d' unimplemented", exp->op);  return; // Unreachable.
+  }
+}
+
+static void emit_add(Chunk_* chunk, Type_ l, Type_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l) || ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_ADD, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FADD, line);
+  } else if (IS_TY_OBJ(l, OBJ_TYPE_STRING)) {
+    emit_byte(chunk, OP_CONCAT, line);
+  }
+}
+
+static void emit_sub(Chunk_* chunk, Type_ l, Type_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l) || ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_SUB, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FSUB, line);
+  }
+}
+
+static void emit_mul(Chunk_* chunk, Type_ l, Type_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l)) {
+    emit_byte(chunk, OP_MUL, line);
+  } else if (ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_IMUL, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FMUL, line);
+  }
+}
+
+static void emit_div(Chunk_* chunk, Type_ l, Type_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l)) {
+    emit_byte(chunk, OP_DIV, line);
+  } else if (ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_IDIV, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FDIV, line);
+  }
+}
+
+static void emit_mod(Chunk_* chunk, Type_ l, Type_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l)) {
+    emit_byte(chunk, OP_MOD, line);
+  } else if (ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_IMOD, line);
+  }
+}
+
+static void emit_neg(Chunk_* chunk, Type_ t, int line) {
+  if (ISA_TY_REAL(t)) {
+    emit_byte(chunk, OP_FNEG, line);
+  } else {
+    emit_byte(chunk, OP_NEG, line);
   }
 }
 
@@ -142,6 +223,9 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
   AstExpr_* l = AS_EXPR(exp->left);
   AstExpr_* r = AS_EXPR(exp->right);
   
+  Type_ ltype = l->type;
+  Type_ rtype = r->type;
+
   code_gen(chunk, (AstNode_*)l);
   code_gen(chunk, (AstNode_*)r);
 
@@ -149,16 +233,16 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
     case TK_AND:           emit_byte(chunk, OP_AND, node->line); break;
     case TK_OR:            emit_byte(chunk, OP_OR, node->line); break;
     case TK_XOR:           emit_byte(chunk, OP_XOR, node->line); break;
-    case TK_PLUS:          emit_byte(chunk, OP_ADD, node->line); break;
-    case TK_MINUS:         emit_byte(chunk, OP_SUB, node->line); break;
-    case TK_STAR:          emit_byte(chunk, OP_MUL, node->line); break;
-    case TK_SLASH:         emit_byte(chunk, OP_DIV, node->line); break;
+    case TK_PLUS:          emit_add(chunk, ltype, rtype, node->line); break;
+    case TK_MINUS:         emit_sub(chunk, ltype, rtype, node->line); break;
+    case TK_STAR:          emit_mul(chunk, ltype, rtype, node->line); break;
+    case TK_SLASH:         emit_div(chunk, ltype, rtype, node->line); break;
     // case TK_DOUBLE_SLASH:  emit_byte(chunk, OP_DIV, node->line); break; // TODO: convert integers to floats
-    case TK_PERCENT:       emit_byte(chunk, OP_MOD, node->line); break;
+    case TK_PERCENT:       emit_mod(chunk, ltype, rtype, node->line); break;
     case TK_EQUAL_EQUAL:   emit_byte(chunk, OP_EQ, node->line); break;
-    case TK_BANG_EQUAL:    emit_byte(chunk, OP_NEQ, node->line); break;
-    case TK_GT:            emit_byte(chunk, OP_GT, node->line); break;
-    case TK_GTE:           emit_byte(chunk, OP_GTE, node->line); break;
+    case TK_BANG_EQUAL:    emit_byte(chunk, OP_EQ, node->line); emit_byte(chunk, OP_NOT, node->line); break;
+    case TK_GT:            emit_byte(chunk, OP_LTE, node->line); emit_byte(chunk, OP_NOT, node->line); break;
+    case TK_GTE:           emit_byte(chunk, OP_LT, node->line); emit_byte(chunk, OP_NOT, node->line); break;
     case TK_LT:            emit_byte(chunk, OP_LT, node->line); break;
     case TK_LTE:           emit_byte(chunk, OP_LTE, node->line); break;
     case TK_LSHIFT:        emit_byte(chunk, OP_LSHIFT, node->line); break;
@@ -213,7 +297,6 @@ static void expr_code_gen(Chunk_* chunk, AstNode_* node) {
 }
 
 static void begin_scope(Chunk_* chunk, AstBlock_* block) {
-  emit_byte(chunk, OP_BEGIN_SCOPE, block->base.line);
 #if 0
   List_* vars = &block->base.symbol_table->vars;
 
@@ -235,7 +318,9 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
     Symbol_* var = list_val(n, Symbol_*);
     switch (var->type) {
       case SYMBOL_TYPE_VAR:
-        emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
+        if (var->var.type.ty == VAL_OBJ && var->var.type.kind == KIND_VAL) {
+          emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
+        }        
         break;
       case SYMBOL_TYPE_FN:  // TODO: how to handle this?
         break;
@@ -244,7 +329,6 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
         break;
     }
   }
-  emit_byte(chunk, OP_END_SCOPE, block->base.line);
 }
 
 static void block_code_gen(Chunk_* chunk, AstNode_* node) {
@@ -389,8 +473,7 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
   // TODO: allow for multiple expressions.
   code_gen(chunk, (AstNode_*)stmt->expr);
   if (stmt->expr->type.ty != stmt->type.ty && type_iscoercible(stmt->expr->type, stmt->type)) {
-    emit_byte(chunk, OP_CAST, node->line);
-    emit_long(chunk, type_toint(stmt->type), node->line);
+    emit_cast(chunk, stmt->expr->type, stmt->type, node->line);
   }
   emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
 }
@@ -430,7 +513,10 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   int slot = resolve_local(node->scope, &id_expr->name);
   
   code_gen(chunk, expr->right);
-  emit_bytes(chunk, OP_DESTROY_VAR, (uint8_t)slot, node->line);
+
+  if (var->base.type.ty == VAL_OBJ && var->base.type.kind == KIND_VAL) {
+    emit_bytes(chunk, OP_DESTROY_VAR, (uint8_t)slot, node->line);
+  }  
   emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
 }
 

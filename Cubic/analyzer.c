@@ -109,19 +109,21 @@ void binary_analysis(AstNode_* n) {
   do_analysis(exp->left);
   do_analysis(exp->right);
 
-  if (IS_TY_UNKNOWN(AS_EXPR(exp->left)->type)) {
+  Type_ ltype = AS_EXPR(exp->left)->type;
+  Type_ rtype = AS_EXPR(exp->right)->type;
+
+  if (IS_TY_UNKNOWN(ltype)) {
     error(analyzer_, n, "left-hand expression type could not be deduced.");
     return;
   }
 
-  if (IS_TY_UNKNOWN(AS_EXPR(exp->right)->type)) {
+  if (IS_TY_UNKNOWN(rtype)) {
     error(analyzer_, n, "right-hand expression type could not be deduced.");
     return;
   }
 
-  if (AS_EXPR(exp->left)->type.ty != AS_EXPR(exp->right)->type.ty) {
-    error(analyzer_, n, "left and right expressions are not the same type.");
-    return;
+  if (!type_iscoercible(rtype, ltype)) {
+    error(analyzer_, n, "right-hand expression cannot be coerced to left-hand expression.");
   }
 
   Type_ expected_type = UNKNOWN_TY;
@@ -145,7 +147,7 @@ void binary_analysis(AstNode_* n) {
     case TK_AMPERSAND:
     case TK_PIPE:
     case TK_HAT:
-      exp->base.type = AS_EXPR(exp->left)->type;
+      exp->base.type = ltype;
       if (!ISA_TY_INTEGER(exp->base.type)) {
         error(analyzer_, n, "expected the expression type to be a number.");
       }
@@ -155,7 +157,7 @@ void binary_analysis(AstNode_* n) {
     case TK_MINUS:
     case TK_STAR:
     case TK_SLASH:
-      exp->base.type = AS_EXPR(exp->left)->type;
+      exp->base.type = ltype;
       if (!ISA_TY_NUMBER(exp->base.type) && !IS_TY_STRING(exp->base.type)) {
         error(analyzer_, n, "expected the expression type to be a number or a string.");
       }
@@ -165,7 +167,7 @@ void binary_analysis(AstNode_* n) {
     case TK_PERCENT:
     case TK_LSHIFT:
     case TK_RSHIFT:
-      exp->base.type = AS_EXPR(exp->left)->type;
+      exp->base.type = ltype;
       expected_type = INT_TY;
       expected_type.kind = KIND_VAL;
       break;
@@ -176,11 +178,11 @@ void binary_analysis(AstNode_* n) {
   }
 
   if (!IS_TY_UNKNOWN(expected_type)) {
-    if ((AS_EXPR(exp->left)->type.ty != expected_type.ty)) {
+    if (ltype.ty != expected_type.ty) {
       error(analyzer_, n, "left-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
 
-    if ((AS_EXPR(exp->right)->type.ty != expected_type.ty)) {
+    if (rtype.ty != expected_type.ty) {
       error(analyzer_, n, "right-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
   }

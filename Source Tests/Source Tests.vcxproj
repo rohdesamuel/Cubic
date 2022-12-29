@@ -194,10 +194,12 @@
     <None Include="multiline_comments.cub" />
     <None Include="operators.cub" />
     <None Include="precedence.cub" />
+    <None Include="references.cub" />
     <None Include="scope.cub" />
     <None Include="local_variables.cub" />
     <None Include="simple_type_inference.cub" />
     <None Include="strings.cub" />
+    <None Include="structs.cub" />
     <None Include="while_loops.cub" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -24,6 +24,7 @@
 #define ISA_TY_INTEGER(TYPE)     (type_isainteger(TYPE))
 #define ISA_TY_INT(TYPE)         (type_isaint(TYPE))
 #define ISA_TY_UINT(TYPE)        (type_isauint(TYPE))
+#define ISA_TY_REAL(TYPE)        (type_isareal(TYPE))
 #define IS_TY_UNKNOWN(TYPE) ((TYPE).ty == VAL_UNKNOWN)
 #define IS_TY_NIL(TYPE) ((TYPE).ty == VAL_NIL)
 #define IS_TY_BOOL(TYPE) ((TYPE).ty == VAL_BOOL)
@@ -106,24 +107,28 @@ inline bool type_equiv(Type_ from, Type_ to) {
       (from.kind == KIND_VAL && to.kind == KIND_TMP));
 }
 
-inline bool type_isobj(Type_ type, enum ObjType obj_type) {
+inline static bool type_isobj(Type_ type, enum ObjType obj_type) {
   return type.ty == VAL_OBJ && type.obj == obj_type;
 }
 
-inline bool type_isanumber(Type_ type) {
+inline static bool type_isanumber(Type_ type) {
   return type.ty >= VAL_INT && type.ty <= VAL_DOUBLE;
 }
 
-inline bool type_isainteger(Type_ type) {
+inline static bool type_isainteger(Type_ type) {
   return type.ty >= VAL_INT && type.ty <= VAL_UINT64;
 }
 
-inline bool type_isaint(Type_ type) {
+inline static bool type_isaint(Type_ type) {
   return type.ty >= VAL_INT && type.ty <= VAL_INT64;
 }
 
-inline bool type_isauint(Type_ type) {
+inline static bool type_isauint(Type_ type) {
   return type.ty >= VAL_UINT && type.ty <= VAL_UINT64;
+}
+
+inline static bool type_isareal(Type_ type) {
+  return type.ty == VAL_FLOAT || type.ty == VAL_DOUBLE;
 }
 
 #endif  // TYPE__H

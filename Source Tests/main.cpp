@@ -112,6 +112,24 @@ UTEST_F(MyTestFixture, closures) {
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, structs) {
+  auto output = run_file(exedir, "structs.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, fib) {
+  auto output = run_file(exedir, "fib.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, references) {
+  auto output = run_file(exedir, "references.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
 int main(int argc, char** argv) {
   exedir = std::filesystem::path(argv[0]).parent_path();
   return utest_main(argc, argv);
