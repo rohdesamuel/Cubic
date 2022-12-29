@@ -16,11 +16,15 @@ static InterpretResult runtime_error(VM_* vm, const char* format, ...);
 
 void vm_init(VM_* vm) {
   memset(vm, 0, sizeof(VM_));
+  vm->frames = calloc(FRAMES_MAX, sizeof(CallFrame_));
+  vm->stack = calloc(STACK_MAX, sizeof(Value_));
+
   reset_stack(vm);
 }
 
 void vm_free(VM_* vm) {
-
+  free(vm->frames);
+  free(vm->stack);
 }
 
 InterpretResult vm_interpret(VM vm, const char* source) {

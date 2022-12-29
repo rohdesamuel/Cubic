@@ -21,11 +21,11 @@ typedef struct VM_ {
   Chunk chunk;
   uint8_t* ip;
 
-  CallFrame_ frames[FRAMES_MAX];
+  CallFrame_* frames;
   int frame_count;
 
   // TODO: change this to dynamically grow.
-  Value_ stack[STACK_MAX];
+  Value_* stack;
   Value_* stack_top;
 } VM_, *VM;
 

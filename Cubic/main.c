@@ -141,7 +141,9 @@ h: float[2][2]
 */
 
 static void repl(VM vm) {
-  char line[1024];
+  char* line = malloc(1024);
+  assert(line);
+
   for (;;) {
     printf("> ");
 
@@ -151,6 +153,8 @@ static void repl(VM vm) {
     }
     vm_interpret(vm, line);
   }
+
+  free(line);
 }
 
 static char* read_file(const char* path) {
