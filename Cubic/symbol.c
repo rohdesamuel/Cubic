@@ -11,7 +11,7 @@ FunctionSymbol_* symbol_ascallable(Symbol_* sym) {
     case SYMBOL_TYPE_CLOSURE:
       return &sym->closure.fn->fn;
     case SYMBOL_TYPE_VAR:
-      return symbol_ascallable(sym->var.type.sym);
+      return symbol_ascallable(sym->var.meta.sym);
   }
 
   return NULL;

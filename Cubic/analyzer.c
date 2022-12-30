@@ -67,7 +67,7 @@ void stmt_analysis(AstNode_* node) {
 void expr_analysis(AstNode_* node) {
   AstExpr_* expr = (AstExpr_*)node;
   do_analysis(expr->expr);
-  expr->type = AS_EXPR(expr->expr)->type;
+  expr->meta = AS_EXPR(expr->expr)->meta;
 }
 
 void print_analysis(AstNode_* n) {
@@ -80,23 +80,23 @@ void unary_analysis(AstNode_* n) {
   
   do_analysis(exp->expr);
 
-  exp->base.type = AS_EXPR(exp->expr)->type;
+  exp->base.meta = AS_EXPR(exp->expr)->meta;
 
   switch (exp->op) {
     case TK_TILDE:
-      if (!ISA_TY_NUMBER(exp->base.type)) {
+      if (!ISA_TY_NUMBER(exp->base.meta.type)) {
         error(analyzer_, n, "expression does not have a number type.");
       }
       break;
 
     case TK_NOT:
-      if (!IS_TY_BOOL(exp->base.type)) {
+      if (!IS_TY_BOOL(exp->base.meta.type)) {
         error(analyzer_, n, "expression does not have a boolean type.");
       }
       break;
 
     case TK_MINUS:
-      if (!ISA_TY_NUMBER(exp->base.type)) {
+      if (!ISA_TY_NUMBER(exp->base.meta.type)) {
         error(analyzer_, n, "expression does not have a number type.");
       }
       break;
@@ -109,20 +109,20 @@ void binary_analysis(AstNode_* n) {
   do_analysis(exp->left);
   do_analysis(exp->right);
 
-  Type_ ltype = AS_EXPR(exp->left)->type;
-  Type_ rtype = AS_EXPR(exp->right)->type;
+  SemanticInfo_ lmeta = AS_EXPR(exp->left)->meta;
+  SemanticInfo_ rmeta = AS_EXPR(exp->right)->meta;
 
-  if (IS_TY_UNKNOWN(ltype)) {
+  if (IS_TY_UNKNOWN(lmeta.type)) {
     error(analyzer_, n, "left-hand expression type could not be deduced.");
     return;
   }
 
-  if (IS_TY_UNKNOWN(rtype)) {
+  if (IS_TY_UNKNOWN(rmeta.type)) {
     error(analyzer_, n, "right-hand expression type could not be deduced.");
     return;
   }
 
-  if (!type_iscoercible(rtype, ltype)) {
+  if (!type_iscoercible(rmeta.type, lmeta.type)) {
     error(analyzer_, n, "right-hand expression cannot be coerced to left-hand expression.");
   }
 
@@ -131,7 +131,7 @@ void binary_analysis(AstNode_* n) {
     case TK_AND: 
     case TK_OR:
     case TK_XOR:
-      exp->base.type = BOOL_TY;
+      exp->base.meta.type = BOOL_TY;
       expected_type = BOOL_TY;
       break;
 
@@ -141,14 +141,14 @@ void binary_analysis(AstNode_* n) {
     case TK_LTE:
     case TK_EQUAL_EQUAL:
     case TK_BANG_EQUAL:
-      exp->base.type = BOOL_TY;
+      exp->base.meta.type = BOOL_TY;
       break;
 
     case TK_AMPERSAND:
     case TK_PIPE:
     case TK_HAT:
-      exp->base.type = ltype;
-      if (!ISA_TY_INTEGER(exp->base.type)) {
+      exp->base.meta = lmeta;
+      if (!ISA_TY_INTEGER(exp->base.meta.type)) {
         error(analyzer_, n, "expected the expression type to be a number.");
       }
       break;
@@ -157,8 +157,8 @@ void binary_analysis(AstNode_* n) {
     case TK_MINUS:
     case TK_STAR:
     case TK_SLASH:
-      exp->base.type = ltype;
-      if (!ISA_TY_NUMBER(exp->base.type) && !IS_TY_STRING(exp->base.type)) {
+      exp->base.meta = lmeta;
+      if (!ISA_TY_NUMBER(exp->base.meta.type) && !IS_TY_STRING(exp->base.meta.type)) {
         error(analyzer_, n, "expected the expression type to be a number or a string.");
       }
       break;
@@ -167,7 +167,7 @@ void binary_analysis(AstNode_* n) {
     case TK_PERCENT:
     case TK_LSHIFT:
     case TK_RSHIFT:
-      exp->base.type = ltype;
+      exp->base.meta = lmeta;
       expected_type = INT_TY;
       expected_type.kind = KIND_VAL;
       break;
@@ -178,29 +178,26 @@ void binary_analysis(AstNode_* n) {
   }
 
   if (!IS_TY_UNKNOWN(expected_type)) {
-    if (ltype.ty != expected_type.ty) {
+    if (lmeta.type.ty != expected_type.ty) {
       error(analyzer_, n, "left-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
 
-    if (rtype.ty != expected_type.ty) {
+    if (rmeta.type.ty != expected_type.ty) {
       error(analyzer_, n, "right-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
   }
 
-  exp->base.type.kind = KIND_TMP;
+  exp->base.meta.type.kind = KIND_TMP;
 }
 
-void primary_analysis(AstNode_* n) {
-  AstPrimaryExp_* primary = (AstPrimaryExp_*)n;
-  primary->base.type = primary->value.type;  
-}
+void primary_analysis(AstNode_* n) {}
 
 void return_analysis(AstNode_* n) {
   AstReturnStmt_* stmt = (AstReturnStmt_*)n;
   Frame_* frame = stmt->base.scope->frame;
 
   do_analysis(stmt->expr);
-  if (!type_equiv(AS_EXPR(stmt->expr)->type, frame->fn_symbol->fn.return_type)) {
+  if (AS_EXPR(stmt->expr)->meta.type.ty != frame->fn_symbol->fn.return_type.ty) {
     error(analyzer_, n, "Return statement type does not match function type.");
   }
 }
@@ -209,7 +206,7 @@ void if_analysis(AstNode_* n) {
   AstIfStmt_* stmt = (AstIfStmt_*)n;
 
   do_analysis(stmt->condition_expr);
-  if (!IS_TY_BOOL(AS_EXPR(stmt->condition_expr)->type)) {
+  if (!IS_TY_BOOL(AS_EXPR(stmt->condition_expr)->meta.type)) {
     error(analyzer_, n, "if expression must have a boolean type.");
   }
 
@@ -220,7 +217,7 @@ void if_analysis(AstNode_* n) {
 
   for (AstListNode_* n = stmt->elif_exprs.head; n != NULL; n = n->next) {
     do_analysis(n->node);
-    if (!IS_TY_BOOL(AS_EXPR(n->node)->type)) {
+    if (!IS_TY_BOOL(AS_EXPR(n->node)->meta.type)) {
       error(analyzer_, n->node, "elif expression must have a boolean type.");
     }
   }
@@ -233,7 +230,7 @@ void assert_analysis(AstNode_* n) {
   AstAssertStmt_* stmt = (AstAssertStmt_*)n;
   do_analysis(stmt->expr);
 
-  if (!IS_TY_BOOL(AS_EXPR(stmt->expr)->type)) {
+  if (!IS_TY_BOOL(AS_EXPR(stmt->expr)->meta.type)) {
     error(analyzer_, n, "assert expression must have a boolean type.");
   }
 }
@@ -245,22 +242,22 @@ void var_decl_analysis(AstNode_* n) {
     do_analysis((AstNode_*)stmt->expr);
   }
 
-  if (IS_TY_UNKNOWN(stmt->type)) {
+  if (IS_TY_UNKNOWN(stmt->meta.type)) {
     assertf(stmt->expr, "type deduced variable must have an expression");        
-    stmt->type = AS_EXPR(stmt->expr)->type;
+    stmt->meta = AS_EXPR(stmt->expr)->meta;
   }
 
   // The type will be KIND_TMP if created from a PRIMARY_EXP. Only change the kind for
   // non-pointer/reference types.
-  if (stmt->type.kind == KIND_UNKNOWN || stmt->type.kind == KIND_TMP) {
-    stmt->type.kind = KIND_VAL;
+  if (stmt->meta.type.kind == KIND_UNKNOWN || stmt->meta.type.kind == KIND_TMP) {
+    stmt->meta.type.kind = KIND_VAL;
   }
 
   // TODO: implement tuples (and others) for variable declarations.
   VarSymbol_* var = scope_var(n->scope, &stmt->name);  
-  var->type = stmt->type;
+  var->meta = stmt->meta;
   
-  if (stmt->expr && !type_iscoercible(AS_EXPR(stmt->expr)->type, stmt->type)) {
+  if (stmt->expr && !type_iscoercible(AS_EXPR(stmt->expr)->meta.type, stmt->meta.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
 }
@@ -268,7 +265,7 @@ void var_decl_analysis(AstNode_* n) {
 void var_expr_analysis(AstNode_* n) {
   AstVarExpr_* expr = (AstVarExpr_*)n;
   do_analysis((AstNode_*)expr->expr);
-  expr->base.type = expr->expr->type;
+  expr->base.meta = expr->expr->meta;
 }
 
 void id_expr_analysis(AstNode_* n) {
@@ -278,17 +275,17 @@ void id_expr_analysis(AstNode_* n) {
     switch (sym->type) {
       case SYMBOL_TYPE_STRUCT: break;
       case SYMBOL_TYPE_FN:
-        expr->base.type = sym->fn.return_type;
-        expr->base.type.sym = sym;
+        expr->base.meta.type = sym->fn.return_type;
+        expr->base.meta.sym = sym;
         break;
       case SYMBOL_TYPE_VAR:
-        expr->base.type = sym->var.type;
-        expr->base.type.sym = sym;
+        expr->base.meta.type = sym->var.meta.type;
+        expr->base.meta.sym = sym;
         break;
 
       case SYMBOL_TYPE_CLOSURE:
-        expr->base.type = sym->closure.fn->fn.return_type;
-        expr->base.type.sym = sym;
+        expr->base.meta.type = sym->closure.fn->fn.return_type;
+        expr->base.meta.sym = sym;
         break;
       default:
         error(analyzer_, n, "Unhandled symbol type: %d", sym->type);
@@ -296,7 +293,7 @@ void id_expr_analysis(AstNode_* n) {
     }
   } else {
     error(analyzer_, n, "Could not find variable '%.*s'", expr->name.length, expr->name.start);
-    expr->base.type = UNKNOWN_TY;    
+    expr->base.meta.type = UNKNOWN_TY;
   }
 }
 
@@ -314,10 +311,10 @@ void assignment_expr_analysis(AstNode_* n) {
 
   AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->right;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
-  if (!type_equal(lvalue_expr->base.type, rvalue_expr->type)) {
+  if (!type_equal(lvalue_expr->base.meta.type, rvalue_expr->meta.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
-  expr->base.type = lvalue_expr->base.type;
+  expr->base.meta = lvalue_expr->base.meta;
 }
 
 void while_stmt_analysis(AstNode_* n) {
@@ -325,7 +322,7 @@ void while_stmt_analysis(AstNode_* n) {
   do_analysis(stmt->condition_expr);
   do_analysis(stmt->block_stmt);
 
-  if (!IS_TY_BOOL(AS_EXPR(stmt->condition_expr)->type)) {
+  if (!IS_TY_BOOL(AS_EXPR(stmt->condition_expr)->meta.type)) {
     error(analyzer_, n, "while loop conditional must be a bool.");
   }
 }
@@ -344,10 +341,12 @@ void function_def_analysis(AstNode_* n) {
   ObjFunction_* obj_fn = objfn_create(def->fn_symbol);
   fn->obj_fn = obj_fn;
 
-  def->base.type = (Type_) {
-    .ty = SYMBOL_TYPE_FN,
-    .kind = KIND_STATIC,
-    .obj = OBJ_TYPE_FUNCTION,
+  def->base.meta = (SemanticInfo_) {
+    .type = {
+      .ty = SYMBOL_TYPE_FN,
+      .kind = KIND_STATIC,
+      .obj = OBJ_TYPE_FUNCTION,
+    },
     .sym = def->fn_symbol
   };
 
@@ -374,12 +373,12 @@ void function_param_analysis(AstNode_* n) {
   
   if (param->opt_expr) {
     do_analysis(param->opt_expr);
-    if (!type_iscoercible(param->type, AS_EXPR(param->opt_expr)->type)) {
+    if (!type_iscoercible(param->type, AS_EXPR(param->opt_expr)->meta.type)) {
       error(analyzer_, n, "Parameter type is not coercible.");
     }
 
     if (IS_TY_UNKNOWN(param->type)) {
-      param->type = AS_EXPR(param->opt_expr)->type;
+      param->type = AS_EXPR(param->opt_expr)->meta.type;
     }
   }
 
@@ -394,7 +393,7 @@ void function_param_analysis(AstNode_* n) {
     return;
   }
 
-  s->var.type = param->type;
+  s->var.meta.type = param->type;
 }
 
 void function_call_analysis(AstNode_* node) {
@@ -402,9 +401,9 @@ void function_call_analysis(AstNode_* node) {
   do_analysis((AstNode_*)call->prefix);
   do_analysis((AstNode_*)call->args);
 
-  call->base.type = AS_EXPR(call->prefix)->type;
+  call->base.meta = AS_EXPR(call->prefix)->meta;
 
-  Symbol_* sym = call->base.type.sym;
+  Symbol_* sym = call->base.meta.sym;
   FunctionSymbol_* fn_sym = symbol_ascallable(sym);
   if (!fn_sym) {
     error(analyzer_, node, "Trying to call variable that is not callable.");
@@ -454,7 +453,7 @@ void clean_up_temps_analysis(AstNode_* n) {
 void ast_tmp_decl_analysis(AstNode_* n) {
   AstTmpDecl_* decl = (AstTmpDecl_*)n;
   do_analysis((AstNode_*)decl->expr);
-  decl->base.type = decl->expr->type;
+  decl->base.meta = decl->expr->meta;
 }
 
 AnalysisRule_ analysis_rules[] = {

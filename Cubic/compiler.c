@@ -223,8 +223,8 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
   AstExpr_* l = AS_EXPR(exp->left);
   AstExpr_* r = AS_EXPR(exp->right);
   
-  Type_ ltype = l->type;
-  Type_ rtype = r->type;
+  Type_ ltype = l->meta.type;
+  Type_ rtype = r->meta.type;
 
   code_gen(chunk, (AstNode_*)l);
   code_gen(chunk, (AstNode_*)r);
@@ -318,7 +318,7 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
     Symbol_* var = list_val(n, Symbol_*);
     switch (var->type) {
       case SYMBOL_TYPE_VAR:
-        if (var->var.type.ty == VAL_OBJ && var->var.type.kind == KIND_VAL) {
+        if (var->var.meta.type.ty == VAL_OBJ && var->var.meta.type.kind == KIND_VAL) {
           emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
         }        
         break;
@@ -472,8 +472,8 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
 
   // TODO: allow for multiple expressions.
   code_gen(chunk, (AstNode_*)stmt->expr);
-  if (stmt->expr->type.ty != stmt->type.ty && type_iscoercible(stmt->expr->type, stmt->type)) {
-    emit_cast(chunk, stmt->expr->type, stmt->type, node->line);
+  if (stmt->expr->meta.type.ty != stmt->meta.type.ty && type_iscoercible(stmt->expr->meta.type, stmt->meta.type)) {
+    emit_cast(chunk, stmt->expr->meta.type, stmt->meta.type, node->line);
   }
   emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
 }
@@ -514,7 +514,7 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   
   code_gen(chunk, expr->right);
 
-  if (var->base.type.ty == VAL_OBJ && var->base.type.kind == KIND_VAL) {
+  if (var->base.meta.type.ty == VAL_OBJ && var->base.meta.type.kind == KIND_VAL) {
     emit_bytes(chunk, OP_DESTROY_VAR, (uint8_t)slot, node->line);
   }  
   emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
@@ -590,7 +590,7 @@ void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
 void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionCall_* call = (AstFunctionCall_*)node;
   AstExpr_* prefix = call->prefix;
-  Symbol_* sym = prefix->type.sym;
+  Symbol_* sym = prefix->meta.sym;
 
   FunctionSymbol_* fn_sym = symbol_ascallable(sym);
   assertf(fn_sym, "Unknown symbol type.");
@@ -628,7 +628,7 @@ void clean_up_temps_code_gen(Chunk_* chunk, AstNode_* node) {
 void ast_tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
   AstTmpDecl_* decl = (AstTmpDecl_*)n;
   code_gen(chunk, (AstNode_*)decl->expr);
-  if (decl->base.type.ty == VAL_OBJ) {
+  if (decl->base.meta.type.ty == VAL_OBJ) {
     // OP_SET_VAR doesn't pop the value from the stack, so there is no need to
     // have an OP_GET_VAR after.
     emit_bytes(chunk, OP_SET_VAR, symboltmp_index(decl->tmp), n->line);

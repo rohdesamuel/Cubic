@@ -76,12 +76,6 @@ UTEST_F(MyTestFixture, strings) {
   ASSERT_EQ(0, output->exit_code);
 }
 
-UTEST_F(MyTestFixture, arrays) {
-  auto output = run_file(exedir, "arrays.cub");
-  ASSERT_TRUE(output.has_value());
-  ASSERT_EQ(0, output->exit_code);
-}
-
 UTEST_F(MyTestFixture, while_loops) {
   auto output = run_file(exedir, "while_loops.cub");
   ASSERT_TRUE(output.has_value());
@@ -102,6 +96,13 @@ UTEST_F(MyTestFixture, precedence) {
 
 UTEST_F(MyTestFixture, lambdas) {
   auto output = run_file(exedir, "lambdas.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+/*
+UTEST_F(MyTestFixture, arrays) {
+  auto output = run_file(exedir, "arrays.cub");
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }
@@ -129,6 +130,7 @@ UTEST_F(MyTestFixture, references) {
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }
+*/
 
 int main(int argc, char** argv) {
   exedir = std::filesystem::path(argv[0]).parent_path();

@@ -88,7 +88,6 @@ typedef struct Type_ {
   enum ValueType ty;
   enum ValueKind kind;
   enum ObjType obj;
-  struct Symbol_* sym;
 } Type_;
 
 bool type_iscoercible(Type_ from, Type_ to);

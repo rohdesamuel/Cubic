@@ -218,7 +218,9 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
   Symbol_ s = (Symbol_){
     .type = SYMBOL_TYPE_VAR,
     .var = (VarSymbol_) {
-      .type = type,
+      .meta = {
+        .type = type,
+      },
       .scope_index = scope_index,
       .frame_index = frame_index,
     },

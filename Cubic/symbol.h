@@ -16,17 +16,19 @@ typedef enum {
   SYMBOL_TYPE_TMP,
 } SymbolType_;
 
-typedef struct SemanticType_ {
-  Type_ val;
+typedef struct SemanticInfo_ {
+  Type_ type;
   struct Symbol_* sym;
-} SemanticType_;
+} SemanticInfo_;
+
+#define MAKE_SEMANTIC_INFO(TYPE) ((SemanticInfo_){.type = (TYPE), .sym = NULL})
 
 typedef struct StructSymbol_ {
   int a;
 } StructSymbol_;
 
 typedef struct VarSymbol_ {
-  Type_ type;
+  SemanticInfo_ meta;
 
   // Incrementing index from 0 in the frame stack.
   int frame_index;
@@ -56,7 +58,7 @@ typedef struct TmpSymbol_ {
 
 typedef struct Symbol_ {
   SymbolType_ type;
-  SemanticType_ sem;
+  SemanticInfo_ info;
 
   union {
     StructSymbol_ strct;

@@ -3,13 +3,14 @@
 
 #include "memory.h"
 #include "tokens.h"
+#include "symbol.h"
 #include "value.h"
 
 #define AST_CLS(name) AST_##name
-#define MAKE_AST_NODE(allocator, type, scope) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (scope)))
-#define MAKE_AST_NOOP(allocator) (make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL)))
-#define MAKE_AST_STMT(allocator, type, scope) MAKE_AST_NODE(allocator, type, scope)
-#define MAKE_AST_EXPR(allocator, type, scope) MAKE_AST_NODE(allocator, type, scope)
+#define MAKE_AST_NODE(allocator, type, scope, line) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (scope), line))
+#define MAKE_AST_NOOP(allocator) (make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL), 0))
+#define MAKE_AST_STMT(allocator, type, scope, line) MAKE_AST_NODE(allocator, type, scope, line)
+#define MAKE_AST_EXPR(allocator, type, scope, line) MAKE_AST_NODE(allocator, type, scope, line)
 
 // TODO: implement types as UnionTypes.
 typedef struct AstNode_ {
@@ -58,7 +59,7 @@ typedef struct AstStmt_ {
 typedef struct AstExpr_ {
   AstNode_ base;
   AstNode_* expr;
-  struct Type_ type;
+  struct SemanticInfo_ meta;
 } AstExpr_;
 
 typedef struct AstCleanUpTemps_ {
@@ -116,7 +117,7 @@ typedef struct AstVarDeclStmt_ {
 
   // Owned by Parser allocator.
   Token_ name;
-  struct Type_ type;
+  struct SemanticInfo_ meta;
 
   AstExpr_* expr;
 } AstVarDeclStmt_;
@@ -265,6 +266,6 @@ typedef struct Ast_ {
   struct AstProgram_* program;
 } Ast_;
 
-AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct Scope_* symbol_table);
+AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct Scope_* symbol_table, int line);
 
 #endif  // AST__H
