@@ -83,3 +83,14 @@ do
   foo(&a)
   assert a == 100
 end
+
+do
+  let a := 1
+  function foo(x : int&) -> int&
+    return x
+  end
+
+  let b := foo(&a)
+  b = 2
+  assert a == 2
+end
