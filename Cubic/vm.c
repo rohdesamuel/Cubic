@@ -64,7 +64,7 @@ Value_ vm_peek(VM_* vm, int distance) {
 }
 
 static bool is_falsey(Value_ value) {
-  return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+  return value.as.u == 0;
 }
 
 static ObjString_* concatenate(ObjString_* l, ObjString_* r) {
@@ -194,7 +194,6 @@ static InterpretResult run(VM vm) {
           }
         }
 
-        expr_val.type = to_type;
         vm_push(vm, expr_val);
         continue;
       }
@@ -211,6 +210,52 @@ static InterpretResult run(VM vm) {
         uint8_t slot = READ_BYTE();
         Value_ val = vm_peek(vm, 0);
         frame->slots[slot] = val;
+        continue;
+      }
+
+      case OP_ADDROF_VAR:
+      {
+        uint8_t slot = READ_BYTE();
+        vm_push(vm, PTR_VAL(&frame->slots[slot]));
+        continue;
+      }
+
+      case OP_MAKE_REF:
+      {
+        Value_ addr = vm_pop(vm);
+        Value_ ret = {
+          .as.ref = {
+            .val = (Value_*)addr.as.ptr,
+            .count = calloc(1, sizeof(int))
+          },
+        };
+        vm_push(vm, ret);
+        continue;
+      }
+
+      case OP_GET_REF:
+      {
+        uint8_t slot = READ_BYTE();
+        vm_push(vm, *frame->slots[slot].as.ref.val);
+        continue;
+      }
+
+      case OP_SET_REF:
+      {
+        uint8_t slot = READ_BYTE();
+        Value_ val = vm_peek(vm, 0);
+        *frame->slots[slot].as.ref.val = val;
+        continue;
+      }
+
+      case OP_INC_REF:
+      {
+
+        continue;
+      }
+
+      case OP_DEC_REF:
+      {
         continue;
       }
 
@@ -288,31 +333,17 @@ static InterpretResult run(VM vm) {
         continue;
       }
      
-      case OP_LT: 
+      case OP_LT:
       {
-        Value_ r = vm_pop(vm);
-        Value_ l = vm_pop(vm);
-
-        switch (l.type.ty) {
-          case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d < r.as.d)); break;
-          case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i < r.as.i)); break;
-          case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u < r.as.u)); break;
-          default: assertf(false, "Unimplemented < for type: %d\n", l.type.ty);
-        }
+        Value_ v = vm_pop(vm);
+        vm_push(vm, BOOL_VAL(v.as.i < 0 ? true : false));
         continue;
       }
       
       case OP_LTE:
       {
-        Value_ r = vm_pop(vm);
-        Value_ l = vm_pop(vm);
-
-        switch (l.type.ty) {
-          case VAL_DOUBLE: vm_push(vm, BOOL_VAL(l.as.d <= r.as.d)); break;
-          case VAL_INT: vm_push(vm, BOOL_VAL(l.as.i <= r.as.i)); break;
-          case VAL_UINT: vm_push(vm, BOOL_VAL(l.as.u <= r.as.u)); break;
-          default: assertf(false, "Unimplemented <= for type: %d\n", l.type.ty);
-        }
+        Value_ v = vm_pop(vm);
+        vm_push(vm, BOOL_VAL(v.as.i <= 0 ? true : false));
         continue;
       }
 
@@ -321,8 +352,41 @@ static InterpretResult run(VM vm) {
         Value_ r = vm_pop(vm);
         Value_ l = vm_pop(vm);
 
-        vm_push(vm, BOOL_VAL(value_equal(&l, &r)));
+        vm_push(vm, BOOL_VAL(l.as.u == r.as.u));
         continue;
+      }
+
+      case OP_OBJ_EQ:
+      {
+        Value_ r = vm_pop(vm);
+        Value_ l = vm_pop(vm);
+
+        vm_push(vm, BOOL_VAL(obj_equal(l.as.obj, r.as.obj)));
+        continue;
+      }
+
+      case OP_CMP:
+      {
+        Value_ r = vm_pop(vm);
+        Value_ l = vm_pop(vm);
+        vm_push(vm, INT_VAL(l.as.u == r.as.u ? 0 : (l.as.u < r.as.u ? -1 : 1)));
+        break;
+      }
+
+      case OP_ICMP:
+      {
+        Value_ r = vm_pop(vm);
+        Value_ l = vm_pop(vm);
+        vm_push(vm, INT_VAL(l.as.i == r.as.i ? 0 : (l.as.i < r.as.i ? -1 : 1)));
+        break;
+      }
+
+      case OP_FCMP:
+      {
+        Value_ r = vm_pop(vm);
+        Value_ l = vm_pop(vm);
+        vm_push(vm, INT_VAL(l.as.d == r.as.d ? 0 : (l.as.d < r.as.d ? -1 : 1)));
+        break;
       }
 
       case OP_AND:
@@ -529,7 +593,10 @@ static InterpretResult run(VM vm) {
 
       case OP_PRINT:
       {
-        value_print(vm_pop(vm));
+        Value_ v = vm_pop(vm);
+        Type_ t = type_fromint(READ_LONG());
+
+        value_print(v, t);
         printf("\n");
         continue;
       }

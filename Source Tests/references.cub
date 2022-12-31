@@ -1,10 +1,85 @@
-let a := 0
-let b := &a
+# References can weakly reference stack variables.
+do
+  let a := 100
+  let b := &a
 
-assert a == 0
-assert b == 0
+  assert a == 100
+  assert b == 100
 
-b = 1
+  b = 200
 
-assert a == 1
-assert b == 1
+  assert a == 200
+  assert b == 200
+end
+
+# References can weakly reference stack variables.
+do
+  let a : int = 100
+  let b : int& = &a
+
+  assert a == 100
+  assert b == 100
+
+  b = 200
+
+  assert a == 200
+  assert b == 200
+end
+
+# References can strongly reference heap variables.
+do
+  let a := 'hello'
+  let b := &a
+
+  assert a == 'hello'
+  assert b == 'hello'
+
+  b = 'world'
+
+  assert a == 'world'
+  assert b == 'world'
+end
+
+# Duplicate references.
+do
+  let a := 100
+  let b := &a
+  let c := b
+
+  assert a == 100
+  assert b == 100
+  assert c == 100
+
+  c = 200
+
+  assert a == 200
+  assert b == 200
+  assert c == 200
+end
+
+do
+  let a : int = 100
+  let b : int& = &a
+  let c : int& = b
+
+  assert a == 100
+  assert b == 100
+  assert c == 100
+
+  c = 200
+
+  assert a == 200
+  assert b == 200
+  assert c == 200
+end
+
+do
+  let a := 1
+  function foo(x : int&) 
+    x = 100
+  end
+
+  assert a == 1
+  foo(&a)
+  assert a == 100
+end

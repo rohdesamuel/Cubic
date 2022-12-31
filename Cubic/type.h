@@ -60,7 +60,9 @@ typedef enum {
   VAL_UINT64,
   VAL_FLOAT,
   VAL_DOUBLE,
+  VAL_REF,
   VAL_OBJ,
+  VAL_PTR,
 
   __VALUE_TYPE_COUNT__,
 } ValueType;
@@ -76,6 +78,9 @@ typedef enum {
 
   // A named variable is stored on heap, reference counted.
   KIND_REF,
+
+  // A named variable is stored on stack or heap, not reference counted.
+  KIND_WEAK_REF,
 
   // An intermediate result and used once (rvalue).
   KIND_TMP,
@@ -101,9 +106,7 @@ inline bool type_equal(Type_ from, Type_ to) {
 
 // Returns true if value and object types are the same.
 inline bool type_equiv(Type_ from, Type_ to) {
-  return from.ty == to.ty && from.obj == to.obj &&
-    ((from.kind && to.kind) ||
-      (from.kind == KIND_VAL && to.kind == KIND_TMP));
+  return from.ty == to.ty && from.obj == to.obj;
 }
 
 inline static bool type_isobj(Type_ type, enum ObjType obj_type) {

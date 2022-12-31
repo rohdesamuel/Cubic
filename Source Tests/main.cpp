@@ -100,6 +100,18 @@ UTEST_F(MyTestFixture, lambdas) {
   ASSERT_EQ(0, output->exit_code);
 }
 
+UTEST_F(MyTestFixture, references) {
+  auto output = run_file(exedir, "references.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
+UTEST_F(MyTestFixture, structs) {
+  auto output = run_file(exedir, "structs.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
 /*
 UTEST_F(MyTestFixture, arrays) {
   auto output = run_file(exedir, "arrays.cub");
@@ -113,20 +125,8 @@ UTEST_F(MyTestFixture, closures) {
   ASSERT_EQ(0, output->exit_code);
 }
 
-UTEST_F(MyTestFixture, structs) {
-  auto output = run_file(exedir, "structs.cub");
-  ASSERT_TRUE(output.has_value());
-  ASSERT_EQ(0, output->exit_code);
-}
-
 UTEST_F(MyTestFixture, fib) {
   auto output = run_file(exedir, "fib.cub");
-  ASSERT_TRUE(output.has_value());
-  ASSERT_EQ(0, output->exit_code);
-}
-
-UTEST_F(MyTestFixture, references) {
-  auto output = run_file(exedir, "references.cub");
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }

@@ -140,14 +140,15 @@ h: float[2][2]
 ";
 */
 
+#define MAX_LINE_LENGTH 4096
 static void repl(VM vm) {
-  char* line = malloc(1024);
+  char* line = malloc(MAX_LINE_LENGTH);
   assert(line);
 
   for (;;) {
     printf("> ");
 
-    if (!fgets(line, sizeof(line), stdin)) {
+    if (!fgets(line, MAX_LINE_LENGTH, stdin)) {
       printf("\n");
       break;
     }
@@ -205,8 +206,8 @@ int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
 
-  const char* filename = "C:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\functions.cub";
-  run_file(&vm, filename);
+  //const char* filename = "C:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\references.cub";
+  //run_file(&vm, filename);
   
   if (argc == 1) {
     repl(&vm);

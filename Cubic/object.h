@@ -21,6 +21,7 @@ typedef enum ObjType {
 
 typedef struct Obj_ {
   ObjType type;
+  int count;
   size_t size;
 } Obj_;
 
@@ -38,11 +39,10 @@ typedef struct ObjFunction_ {
 
 } ObjFunction_;
 
-Obj_* obj_copy(Obj_* obj);
 void obj_destroy(Obj_* obj);
 
 static inline bool obj_istype(Value_ value, ObjType type) {
-  return IS_OBJ(value) && AS_OBJ(value)->type == type;
+  return AS_OBJ(value)->type == type;
 }
 
 static inline Value_ obj_val(struct Obj_* obj) {
@@ -50,16 +50,12 @@ static inline Value_ obj_val(struct Obj_* obj) {
     {
       .obj = obj
     },
-      .type = {
-          VAL_OBJ,
-          KIND_VAL,
-          ((struct Obj_*)obj)->type
-      }
   };
 }
 
 ObjString_* objstring_create(char* chars, int length);
 ObjString_* objstring_from(const char* chars, int length);
 ObjFunction_* objfn_create(struct Symbol_* fn_sym);
+bool obj_equal(struct Obj_* l, struct Obj_* r);
 
 #endif  // OBJECT__H

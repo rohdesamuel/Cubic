@@ -29,8 +29,8 @@ void valuearray_free(ValueArray array) {
 const char* kTrue = "true";
 const char* kFalse = "false";
 
-void value_print(Value_ value) {
-  switch (value.type.ty) {
+void value_print(Value_ value, Type_ type) {
+  switch (type.ty) {
     case VAL_NIL:    printf("nil"); break;
     case VAL_BOOL:   printf("%s", AS_BOOL(value) ? kTrue : kFalse); break;
     case VAL_INT:    printf("%lld", AS_INT(value)); break;
@@ -85,29 +85,6 @@ const char* valuetype_str(Type_ ty) {
       }
   }
   return "unknown";
-}
-
-const char* value_typestr(Value_* value) {
-  return valuetype_str(value->type);
-}
-
-bool value_iscoercible(Value_ from, Value_ to) {
-  return type_iscoercible(from.type, to.type);
-}
-
-bool value_equal(Value_* l, Value_* r) {
-  switch (l->type.ty) {
-    case VAL_OBJ:
-    {
-      ObjString_* l_string = AS_STRING(*l);
-      ObjString_* r_string = AS_STRING(*r);
-      return l_string == r_string ||
-        (l_string->length == r_string->length && memcmp(l_string->chars, r_string->chars, l_string->length) == 0);
-    }
-
-    default:
-      return l->as.u == r->as.u;
-  }
 }
 
 void value_set(Value_* l, Value_* r) {

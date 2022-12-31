@@ -184,8 +184,10 @@ Type_ parse_type(Parser_* parser, Scanner_* scanner) {
     default: break;
   }
 
+  advance(parser, scanner);
+
   if (match(parser, scanner, TK_AMPERSAND)) {
-    ret.kind = KIND_REF;
+    ret.kind = KIND_WEAK_REF;
   } else if (match(parser, scanner, TK_STAR)) {
     ret.kind = KIND_PTR;
   } else {
@@ -296,11 +298,10 @@ static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope
   param->type = UNKNOWN_TY;
   if (match(parser, scanner, TK_COLON)) {
     param->type = parse_type(parser, scanner);
-    advance(parser, scanner);
   }
 
   if (match(parser, scanner, TK_EQUAL)) {
-    param->opt_expr = Expr(parser, scanner, scope);
+    param->opt_expr = (AstExpr_*)Expr(parser, scanner, scope);
   }
 
   frame_addparam(scope->frame, &param->name);
@@ -324,11 +325,10 @@ static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope)
       astlist_append(&body->function_params, FunctionParam(parser, scanner, scope));
     } while (match(parser, scanner, TK_COMMA));
     consume(parser, scanner, TK_RPAREN, "Expected ')' after arguments.");
-  }  
+  }
 
   if (match(parser, scanner, TK_ARROW)) {
     body->return_type = parse_type(parser, scanner);
-    advance(parser, scanner);
   } else {
     body->return_type = NIL_TY;
   }
@@ -364,7 +364,7 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
 
 static AstNode_* ExpressionStmt(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstExpressionStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstExpressionStmt_, scope, parser->current.line);
-  stmt->expr = Expr(parser, scanner, scope);
+  stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
   return (AstNode_*)stmt;
 }
 
@@ -381,9 +381,9 @@ static AstNode_* clean_up_temps(Parser_* parser, Scanner_* scanner, Scope_* scop
 static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstReturnStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstReturnStmt_, scope, parser->current.line);
   if (block_follow(parser, scanner, true) || parser->current.type == ';') {
-    stmt->expr = MAKE_AST_NOOP(&parser->allocator);
+    stmt->expr = (AstExpr_*)MAKE_AST_NODE(&parser->allocator, AstNoopExpr_, NULL, 0);
   } else {
-    stmt->expr = Expr(parser, scanner, scope);
+    stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
   }
 
   return (AstNode_*)stmt;
@@ -420,8 +420,6 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
         // TODO: Add object and custom types.
         assertf(stmt->meta.type.ty != VAL_UNKNOWN, "Unknown type");
-        
-        advance(parser, scanner);
       }
 
       if (match(parser, scanner, TK_EQUAL)) {
@@ -454,7 +452,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
     {
       advance(parser, scanner);
       AstWhileStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstWhileStmt_, scope, parser->current.line);
-      stmt->condition_expr = Expr(parser, scanner, scope);      
+      stmt->condition_expr = (AstExpr_*)Expr(parser, scanner, scope);
 
       consume(parser, scanner, TK_DO, "Expected 'do' at end of while expression.");
 
@@ -471,7 +469,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       advance(parser, scanner);
       AstAssertStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstAssertStmt_, scope, parser->current.line);
       stmt->base.line = parser->current.line;
-      stmt->expr = Expr(parser, scanner, scope);
+      stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
       ret->stmt = (AstNode_*)stmt;
       break;
     }
@@ -489,7 +487,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       advance(parser, scanner);
       AstIfStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstIfStmt_, scope, parser->current.line);
 
-      stmt->condition_expr = Expr(parser, scanner, scope);
+      stmt->condition_expr = (AstExpr_*)Expr(parser, scanner, scope);
       consume(parser, scanner, TK_THEN, "Expected 'then' after condition.");
 
       stmt->if_stmt = (AstNode_*)Block(parser, scanner, scope);
@@ -521,7 +519,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
     {
       advance(parser, scanner);
       AstPrintStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstPrintStmt_, scope, parser->current.line);
-      stmt->expr = Expr(parser, scanner, scope);
+      stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
       ret->stmt = (AstNode_*)stmt;
       break;
     }
@@ -574,14 +572,18 @@ static bool check(Parser_* parser, TokenType type) {
 
 ///////////////////////////////////////////////////////////////////////////////
 static AstNode_* Expr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstExpr_* ret = MAKE_AST_NODE(&parser->allocator, AstExpr_, scope, parser->current.line);
-  ret->expr = parse_precedence(parser, scanner, PREC_ASSIGNMENT, scope);
+  //AstExpr_* ret = MAKE_AST_NODE(&parser->allocator, AstExpr_, scope, parser->current.line);
+  AstExpr_* ret = (AstExpr_*)parse_precedence(parser, scanner, PREC_ASSIGNMENT, scope);
+  ret->top_meta = (SemanticInfo_){
+    .type = UNKNOWN_TY,
+    .sym = NULL
+  };
   return (AstNode_*)ret;
 }
 
 static AstPrintStmt_* Print(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrintStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstPrintStmt_, scope, parser->current.line);
-  stmt->expr = Expr(parser, scanner, scope);
+  stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
 
   return stmt;
 }
@@ -632,9 +634,7 @@ static AstNode_* String(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
   expr->base.meta = MAKE_SEMANTIC_INFO(STRING_TY);
   expr->base.meta.type.kind = KIND_STATIC;
-
   expr->value = OBJ_VAL(objstring_from(parser->previous.start + 1, parser->previous.length - 2));
-  expr->value.type.kind = KIND_STATIC;
   return (AstNode_*)expr;
 }
 
@@ -650,7 +650,7 @@ static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
   AstUnaryExp_* unary = MAKE_AST_EXPR(&parser->allocator, AstUnaryExp_, scope, parser->previous.line);
   unary->op = operator_type;
-  unary->expr = parse_precedence(parser, scanner, PREC_UNARY, scope);
+  unary->expr = (AstExpr_*)parse_precedence(parser, scanner, PREC_UNARY, scope);
   unary->base.meta = MAKE_SEMANTIC_INFO(UNKNOWN_TY);
 
   return (AstNode_*)unary;
@@ -711,15 +711,15 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
     } else if (parser->previous.type == TK_EQUAL) {
       AstAssignmentExpr_* new_exp = MAKE_AST_EXPR(&parser->allocator, AstAssignmentExpr_, scope, parser->previous.line);
       new_exp->left = exp;
-      new_exp->right = infix_rule(parser, scanner, scope);
+      new_exp->right = (AstExpr_*)infix_rule(parser, scanner, scope);
       exp = (AstNode_*)new_exp;
     } else {     
       AstBinaryExp_* bin_exp = MAKE_AST_EXPR(&parser->allocator, AstBinaryExp_, scope, parser->previous.line);
       bin_exp->base.meta = MAKE_SEMANTIC_INFO(UNKNOWN_TY);
       bin_exp->base.meta.type.kind = KIND_TMP;
       bin_exp->op = parser->previous.type;
-      bin_exp->left = exp;
-      bin_exp->right = infix_rule(parser, scanner, scope);
+      bin_exp->left = (AstExpr_*)exp;
+      bin_exp->right = (AstExpr_*)infix_rule(parser, scanner, scope);
 
       AstTmpDecl_* tmp_decl = MAKE_AST_EXPR(&parser->allocator, AstTmpDecl_, scope, parser->previous.line);
       tmp_decl->expr = (AstExpr_*)bin_exp;
@@ -748,7 +748,7 @@ ParseRule_ rules[] = {
   [TK_COMMA]        = {NULL,        NULL,         PREC_NONE},
   [TK_PLUS]         = {NULL,        BinaryOp,     PREC_TERM},
   [TK_MINUS]        = {UnaryOp,     BinaryOp,     PREC_TERM},
-  [TK_AMPERSAND]    = {NULL,        BinaryOp,     PREC_BITWISE_AND},
+  [TK_AMPERSAND]    = {UnaryOp,     BinaryOp,     PREC_BITWISE_AND},
   [TK_PIPE]         = {NULL,        BinaryOp,     PREC_BITWISE_OR},
   [TK_HAT]          = {NULL,        BinaryOp,     PREC_BITWISE_XOR},
   [TK_TILDE]        = {UnaryOp,     NULL,         PREC_UNARY},

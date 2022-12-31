@@ -1,11 +1,13 @@
 #include "object.h"
 
+static Obj_* obj_copy(Obj_* obj);
 static void objstring_destroy(ObjString_* obj);
 
 static Obj_* obj_create(size_t size, ObjType type) {
   Obj_* object = (Obj_*)malloc(size);
   memset(object, 0, size);
   object->type = type;
+  object->count = 1;
   object->size = size;
   return object;
 }
@@ -63,4 +65,18 @@ ObjFunction_* objfn_create(struct Symbol_* fn_sym) {
   ObjFunction_* ret = malloc(sizeof(ObjFunction_));
   *ret = (ObjFunction_){0};
   return ret;
+}
+
+bool obj_equal(struct Obj_* l, struct Obj_* r) {
+  switch (l->type) {
+    case OBJ_TYPE_STRING:
+    {
+      ObjString_* l_string = (ObjString_*)l;
+      ObjString_* r_string = (ObjString_*)r;
+      return l_string == r_string ||
+        (l_string->length == r_string->length && memcmp(l_string->chars, r_string->chars, l_string->length) == 0);
+    }
+  }
+
+  return 0;
 }

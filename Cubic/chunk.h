@@ -11,11 +11,16 @@ typedef enum {
   OP_FALSE,  
   
   OP_CONSTANT,
-  OP_CONSTANT_LONG,  // Unimplemented.  
+  OP_CONSTANT_LONG,  // Unimplemented.
 
+  OP_OBJ_EQ,
   OP_EQ,
   OP_LT,
   OP_LTE,
+
+  OP_CMP,
+  OP_ICMP,
+  OP_FCMP,
 
   OP_ADD,
   OP_SUB,
@@ -64,6 +69,14 @@ typedef enum {
   OP_GET_VAR,
   OP_SET_VAR,
   OP_DESTROY_VAR,  // TODO: turn this into a function call. But maybe a VM operation is faster?
+ 
+  OP_MAKE_REF,
+  OP_GET_REF,
+  OP_SET_REF,
+  OP_ADDROF_VAR,
+
+  OP_INC_REF,
+  OP_DEC_REF,
 
   OP_PRINT,
   OP_ASSERT,

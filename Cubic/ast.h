@@ -37,6 +37,7 @@ typedef struct AstNode_ {
     AST_CLS(AstFunctionCall_),
     AST_CLS(AstFunctionArgs_),
     AST_CLS(AstExpressionStmt_),
+    AST_CLS(AstNoopExpr_),
     AST_CLS(AstNoopStmt_),
     AST_CLS(AstCleanUpTemps_),
     AST_CLS(AstTmpDecl_),
@@ -58,8 +59,9 @@ typedef struct AstStmt_ {
 
 typedef struct AstExpr_ {
   AstNode_ base;
-  AstNode_* expr;
+  struct AstExpr_* expr;
   struct SemanticInfo_ meta;
+  struct SemanticInfo_ top_meta;
 } AstExpr_;
 
 typedef struct AstCleanUpTemps_ {
@@ -78,6 +80,10 @@ typedef struct AstTmpDecl_ {
 typedef struct AstNoopStmt_ {
   AstNode_ base;
 } AstNoopStmt_;
+
+typedef struct AstNoopExpr_ {
+  AstExpr_ base;
+} AstNoopExpr_;
 
 typedef struct AstListNode_ {
   AstNode_* node;
@@ -108,7 +114,7 @@ typedef struct AstBlock_ {
 typedef struct AstPrintStmt_ {
   AstNode_ base;
 
-  struct AstNode_* expr;
+  struct AstExpr_* expr;
 } AstPrintStmt_;
 
 // VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
@@ -125,7 +131,7 @@ typedef struct AstVarDeclStmt_ {
 // ExpressionStmt ::= AssignmentExpr | PrefixExpr
 typedef struct AstExpressionStmt_ {
   AstNode_ base;
-  AstNode_* expr;
+  AstExpr_* expr;
 } AstExpressionStmt_;
 
 // AssignmentExpr ::= VarList '=' ExprList
@@ -133,7 +139,7 @@ typedef struct AstAssignmentExpr_ {
   AstExpr_ base;
 
   AstNode_* left;
-  AstNode_* right;
+  AstExpr_* right;
 } AstAssignmentExpr_;
 
 // Expr ::= UnaryOp Expr
@@ -141,7 +147,7 @@ typedef struct AstUnaryExp_ {
   struct AstExpr_ base;
   TokenType op;
 
-  AstNode_* expr;
+  AstExpr_* expr;
 } AstUnaryExp_;
 
 // Expr ::= Expr BinaryOp Expr
@@ -149,8 +155,8 @@ typedef struct AstBinaryExp_ {
   struct AstExpr_ base;
   TokenType op;
 
-  AstNode_* left;
-  AstNode_* right;
+  AstExpr_* left;
+  AstExpr_* right;
 } AstBinaryExp_;
 
 // Primary ::= 'nil'
@@ -193,7 +199,7 @@ typedef struct AstDotExpr_ {
 // ReturnStmt ::= 'return' [Expr {',' Expr}]
 typedef struct AstReturnStmt_ {
   struct AstNode_ base;
-  AstNode_* expr;
+  AstExpr_* expr;
 } AstReturnStmt_;
 
 // IfStmt ::= 'if' Expr 'then' Block
@@ -202,7 +208,7 @@ typedef struct AstReturnStmt_ {
 // 'end'
 typedef struct AstIfStmt_ {
   struct AstNode_ base;
-  AstNode_* condition_expr;
+  AstExpr_* condition_expr;
   AstNode_* if_stmt;
   AstList_ elif_exprs;
   AstList_ elif_stmts;
@@ -212,14 +218,14 @@ typedef struct AstIfStmt_ {
 // WhileStmt ::= 'while' Expr 'do' Block 'end'
 typedef struct AstWhileStmt_ {
   struct AstNode_ base;
-  AstNode_* condition_expr;
+  AstExpr_* condition_expr;
   AstNode_* block_stmt;
 } AstWhileStmt_;
 
 // AssertStmt ::= 'assert' Expr
 typedef struct AstAssertStmt_ {
   struct AstNode_ base;
-  AstNode_* expr;
+  AstExpr_* expr;
 } AstAssertStmt_;
 
 // FunctionDef ::= 'function' [Id] FunctionBody 'end'
@@ -243,7 +249,7 @@ typedef struct AstFunctionParam_ {
   struct AstNode_ base;
   Token_ name;
   struct Type_ type;
-  AstNode_* opt_expr;
+  AstExpr_* opt_expr;
 
 } AstFunctionParam_;
 
@@ -258,8 +264,9 @@ typedef struct AstFunctionCall_ {
 
 // FunctionArgs ::= '(' [ExprList] ')'
 typedef struct AstFunctionArgs_ {
-  struct AstNode_* base;
+  struct AstNode_ base;
   AstList_ args;
+  struct FunctionSymbol_* fn_sym;
 } AstFunctionArgs_;
 
 typedef struct Ast_ {

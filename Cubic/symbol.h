@@ -9,10 +9,19 @@
 typedef struct Type_ Type_;
 
 typedef enum {
-  SYMBOL_TYPE_STRUCT,
+  // A symbol that is a value or has a reference on the stack.
   SYMBOL_TYPE_VAR,
+
+  // A symbol holding return and parameter typing.
   SYMBOL_TYPE_FN,
+
+  // A symbol holding member typing.
+  SYMBOL_TYPE_STRUCT,
+
   SYMBOL_TYPE_CLOSURE,
+
+  // A symbol that lives on the stack temporarily during an expression
+  // evaluation. 
   SYMBOL_TYPE_TMP,
 } SymbolType_;
 
@@ -27,6 +36,8 @@ typedef struct StructSymbol_ {
   int a;
 } StructSymbol_;
 
+// Any symbol living on the stack uses this as the base variable.
+// If the symbol references another symbol, the SemanticInfo_::sym will be set.
 typedef struct VarSymbol_ {
   SemanticInfo_ meta;
 
@@ -36,6 +47,10 @@ typedef struct VarSymbol_ {
   // Incrementing index from 0 in local scope.  
   int scope_index;
 } VarSymbol_;
+
+typedef struct RefSymbol_ {
+  struct Symbol_* var;
+} RefSymbol_;
 
 typedef struct FunctionSymbol_ {
   ListOf_(Symbol_*) params;
@@ -58,7 +73,6 @@ typedef struct TmpSymbol_ {
 
 typedef struct Symbol_ {
   SymbolType_ type;
-  SemanticInfo_ info;
 
   union {
     StructSymbol_ strct;
@@ -66,6 +80,7 @@ typedef struct Symbol_ {
     FunctionSymbol_ fn;
     ClosureSymbol_ closure;
     TmpSymbol_ tmp;
+    // RefSymbol_ ref;
   };
 
   Token_ name;
@@ -73,5 +88,6 @@ typedef struct Symbol_ {
 } Symbol_;
 
 FunctionSymbol_* symbol_ascallable(Symbol_* sym);
+Symbol_* symbol_resolveref(Symbol_* sym);
 
 #endif  // SYMBOL__H

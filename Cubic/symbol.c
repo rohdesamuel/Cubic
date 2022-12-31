@@ -16,3 +16,11 @@ FunctionSymbol_* symbol_ascallable(Symbol_* sym) {
 
   return NULL;
 }
+
+Symbol_* symbol_resolveref(Symbol_* sym) {
+  if (!sym || sym->type != SYMBOL_TYPE_VAR) {
+    return NULL;
+  }
+
+  return sym->var.meta.sym;
+}

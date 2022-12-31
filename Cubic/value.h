@@ -38,23 +38,29 @@
 #define IS_PTR(value)          ((value).type.kind == KIND_PTR)
 #define IS_REF(value)          ((value).type.kind == KIND_REF)
 
-#define NIL_VAL                ((Value_){{.i = 0}, VAL_NIL, KIND_VAL})
-#define BOOL_VAL(value)        ((Value_){{.b = value}, VAL_BOOL, KIND_VAL})
+#define NIL_VAL                ((Value_){{.i = 0}})
+#define BOOL_VAL(value)        ((Value_){{.b = value}})
 #define TRUE_VAL               BOOL_VAL(true)
 #define FALSE_VAL              BOOL_VAL(false)
-#define INT_VAL(value)         ((Value_){{.i = value},   VAL_INT,    KIND_VAL})
-#define INT8_VAL(value)        ((Value_){{.i8 = value},  VAL_INT8,   KIND_VAL})
-#define INT16_VAL(value)       ((Value_){{.i16 = value}, VAL_INT16,  KIND_VAL})
-#define INT32_VAL(value)       ((Value_){{.i32 = value}, VAL_INT32,  KIND_VAL})
-#define INT64_VAL(value)       ((Value_){{.i64 = value}, VAL_INT64,  KIND_VAL})
-#define UINT_VAL(value)        ((Value_){{.u = value},   VAL_UINT,   KIND_VAL})
-#define UINT8_VAL(value)       ((Value_){{.u8 = value},  VAL_UINT8,  KIND_VAL})
-#define UNT16_VAL(value)       ((Value_){{.u16 = value}, VAL_UINT16, KIND_VAL})
-#define UNT32_VAL(value)       ((Value_){{.u32 = value}, VAL_UINT32, KIND_VAL})
-#define UNT64_VAL(value)       ((Value_){{.u64 = value}, VAL_UINT64, KIND_VAL})
-#define FLOAT_VAL(value)       ((Value_){{.f = value},   VAL_FLOAT,  KIND_VAL})
-#define DOUBLE_VAL(value)      ((Value_){{.d = value},   VAL_DOUBLE, KIND_VAL})
+#define INT_VAL(value)         ((Value_){{.i = value}})
+#define INT8_VAL(value)        ((Value_){{.i8 = value}})
+#define INT16_VAL(value)       ((Value_){{.i16 = value}})
+#define INT32_VAL(value)       ((Value_){{.i32 = value}})
+#define INT64_VAL(value)       ((Value_){{.i64 = value}})
+#define UINT_VAL(value)        ((Value_){{.u = value}})
+#define UINT8_VAL(value)       ((Value_){{.u8 = value}})
+#define UNT16_VAL(value)       ((Value_){{.u16 = value}})
+#define UNT32_VAL(value)       ((Value_){{.u32 = value}})
+#define UNT64_VAL(value)       ((Value_){{.u64 = value}})
+#define FLOAT_VAL(value)       ((Value_){{.f = value}})
+#define DOUBLE_VAL(value)      ((Value_){{.d = value}})
 #define OBJ_VAL(object)        obj_val((Obj_*)object)
+#define PTR_VAL(PTR)           ((Value_){{.ptr = ((uintptr_t)(PTR))}})
+
+typedef struct Ref_ {
+  struct Value_* val;
+  int* count;
+} Ref_;
 
 typedef struct Value_ {
   union {
@@ -75,13 +81,11 @@ typedef struct Value_ {
     float f;
     double d;
 
-    uintptr_t ref;
+    struct Ref_ ref;
     uintptr_t ptr;
 
     struct Obj_* obj;
   } as;
-
-  Type_ type;
 } Value_;
 
 typedef Value_* Value;
@@ -96,14 +100,10 @@ void valuearray_init(ValueArray value_array);
 void valuearray_write(ValueArray value_array, Value_ value);
 void valuearray_free(ValueArray value_array);
 
-void value_print(Value_ value);
-bool value_equal(Value_* l, Value_* r);
+void value_print(Value_ value, Type_ type);
 void value_set(Value_* l, Value_* r);
 
 const char* valuetype_str(Type_ type);
-const char* value_typestr(Value_* value);
-
-bool value_iscoercible(Value_ from, Value_ to);
 
 #define VALUE_VAL_TYPE(type) ((type & 0x00FF0000) >> 16)
 #define VALUE_VAL_KIND(type) ((type & 0x0000FF00) >> 8)
