@@ -488,40 +488,18 @@ void function_args_analysis(AstNode_* node) {
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     AS_EXPR(n->node)->top_meta = list_val(param_node, Symbol_*)->var.meta;
     do_analysis(n->node);
+
+    VarSymbol_* param = &list_val(param_node, Symbol_*)->var;
+    SemanticInfo_ param_meta = param->meta;
+    SemanticInfo_ expr_meta = AS_EXPR(n->node)->meta;
+
+    if (param_meta.type.ty != expr_meta.type.ty ||
+      (param_meta.type.kind == KIND_REF && expr_meta.type.kind != KIND_REF && expr_meta.type.kind != KIND_WEAK_REF)) {
+      error(analyzer_, n->node, "Expression does not match function parameter type.");
+    }
+
     param_node = param_node->next;
   }
-
-#if 0
-  {
-    List_* params = &args->fn_sym->fn.params;
-    ListNode_* param_node = params->head;
-
-    for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-      VarSymbol_* param = &list_val(param_node, Symbol_*)->var;
-      SemanticInfo_ param_meta = param->meta;
-      SemanticInfo_ expr_meta = AS_EXPR(n->node)->meta;
-
-      if (param_meta.type.kind == KIND_REF && expr_meta.type.kind != KIND_REF && expr_meta.type.kind != KIND_VAL) {
-        error("");
-      }
-
-      param_node = param_node->next;
-    }
-  }
-#endif
-  //ListNode_* param_node = fn_sym->params.head;
-  //for (AstListNode_* n = fn_args->args.head; n != NULL; n = n->next) {
-  //  AstExpr_* arg = (AstExpr_*)n->node;
-  //  Symbol_* def_sym = list_val(param_node, Symbol_*);
-  //  Symbol_* arg_sym = arg->type.sym;
-  //
-  //  if (def_sym->type != arg_sym->type) {
-  //    error(analyzer_, node, "Argument symbol type does not match definition.");
-  //    continue;
-  //  }
-  //
-  //  param_node = param_node->next;
-  //}
 }
 
 void noop_analysis(AstNode_* n) {}
