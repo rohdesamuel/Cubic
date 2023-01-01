@@ -20,23 +20,23 @@
 #define AS_FLOAT(value)        ((value).as.f)
 #define AS_DOUBLE(value)       ((value).as.d)
 
-#define IS_BOOL(value)         ((value).type.ty == VAL_BOOL)
-#define IS_NIL(value)          ((value).type.ty == VAL_NIL)
-#define ISA_NUMBER(value)      ((value).type.ty >= VAL_INT && (value).type <= VAL_DOUBLE)
-#define ISA_INTEGER(value)     ((value).type.ty >= VAL_INT && (value).type <= VAL_UINT64)
-#define ISA_INT(value)         ((value).type.ty >= VAL_INT && (value).type <= VAL_INT64)
-#define ISA_UINT(value)        ((value).type.ty >= VAL_UINT && (value).type <= VAL_UINT64)
+#define IS_BOOL(value)         ((value).info.ty == VAL_BOOL)
+#define IS_NIL(value)          ((value).info.ty == VAL_NIL)
+#define ISA_NUMBER(value)      ((value).info.ty >= VAL_INT && (value).info <= VAL_DOUBLE)
+#define ISA_INTEGER(value)     ((value).info.ty >= VAL_INT && (value).info <= VAL_UINT64)
+#define ISA_INT(value)         ((value).info.ty >= VAL_INT && (value).info <= VAL_INT64)
+#define ISA_UINT(value)        ((value).info.ty >= VAL_UINT && (value).info <= VAL_UINT64)
 
-#define IS_INT(value)          ((value).type.ty == VAL_INT)
-#define IS_INTX(value, width)  ((value).type.ty == VAL_INT##width)
-#define IS_UINT(value)         ((value).type.ty == VAL_UINT)
-#define IS_UINTX(value, width) ((value).type.ty == VAL_UINT##width)
-#define IS_FLOAT(value)        ((value).type.ty == VAL_FLOAT)
-#define IS_DOUBLE(value)       ((value).type.ty == VAL_DOUBLE)
-#define IS_OBJ(value)          ((value).type.ty == VAL_OBJ)
-#define IS_VAL(value)          ((value).type.kind == KIND_VAL)
-#define IS_PTR(value)          ((value).type.kind == KIND_PTR)
-#define IS_REF(value)          ((value).type.kind == KIND_REF)
+#define IS_INT(value)          ((value).info.ty == VAL_INT)
+#define IS_INTX(value, width)  ((value).info.ty == VAL_INT##width)
+#define IS_UINT(value)         ((value).info.ty == VAL_UINT)
+#define IS_UINTX(value, width) ((value).info.ty == VAL_UINT##width)
+#define IS_FLOAT(value)        ((value).info.ty == VAL_FLOAT)
+#define IS_DOUBLE(value)       ((value).info.ty == VAL_DOUBLE)
+#define IS_OBJ(value)          ((value).info.ty == VAL_OBJ)
+#define IS_VAL(value)          ((value).info.kind == KIND_VAL)
+#define IS_PTR(value)          ((value).info.kind == KIND_PTR)
+#define IS_REF(value)          ((value).info.kind == KIND_REF)
 
 #define NIL_VAL                ((Value_){{.i = 0}})
 #define BOOL_VAL(value)        ((Value_){{.b = value}})
@@ -100,13 +100,13 @@ void valuearray_init(ValueArray value_array);
 void valuearray_write(ValueArray value_array, Value_ value);
 void valuearray_free(ValueArray value_array);
 
-void value_print(Value_ value, Type_ type);
+void value_print(Value_ value, RuntimeType_ info);
 void value_set(Value_* l, Value_* r);
 
-const char* valuetype_str(Type_ type);
+const char* valuetype_str(RuntimeType_ info);
 
-#define VALUE_VAL_TYPE(type) ((type & 0x00FF0000) >> 16)
-#define VALUE_VAL_KIND(type) ((type & 0x0000FF00) >> 8)
-#define VALUE_OBJ_TYPE(type)  (type & 0x000000FF)
+#define VALUE_VAL_TYPE(info) ((info & 0x00FF0000) >> 16)
+#define VALUE_VAL_KIND(info) ((info & 0x0000FF00) >> 8)
+#define VALUE_OBJ_TYPE(info)  (info & 0x000000FF)
 
 #endif  // VALUE__H

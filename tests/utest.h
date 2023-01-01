@@ -262,8 +262,8 @@ UTEST_C_FUNC __declspec(dllimport) int __stdcall QueryPerformanceFrequency(
 #endif
 
 #if defined(__cplusplus)
-#define UTEST_CAST(type, x) static_cast<type>(x)
-#define UTEST_PTR_CAST(type, x) reinterpret_cast<type>(x)
+#define UTEST_CAST(info, x) static_cast<info>(x)
+#define UTEST_PTR_CAST(info, x) reinterpret_cast<info>(x)
 #define UTEST_EXTERN extern "C"
 #define UTEST_NULL NULL
 #else

@@ -10,17 +10,17 @@ static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
 
 Frame_* frame_root(struct MemoryAllocator_* allocator) {  
   Token_ entry_name = {
-    .type = TK_ID,
+    .info = TK_ID,
     .start = "main",
     .length = 4,
     .line = 0,
   };
 
-  Symbol_* entry_fn = alloc_ty(allocator, Token_);
+  Symbol_* entry_fn = alloc_ty(allocator, Symbol_);
   *entry_fn = (Symbol_){
-    .type = SYMBOL_TYPE_FN,
+    .info = SYMBOL_TYPE_FN,
     .fn = (FunctionSymbol_) {
-      .return_type = VAL_UNKNOWN,
+      .return_type = SemanticType_Unknown,
       .params = {0}
     },
     .name = entry_name,
@@ -51,7 +51,7 @@ void frame_destroy(Frame_** frame) {
 Symbol_* frame_addparam(Frame_* frame, Token_* name) {
   Scope_* scope = frame->scope;
   SymbolTable_* table = scope->table;  
-  Symbol_* s = scope_addvar(scope, name, UNKNOWN_TY);
+  Symbol_* s = scope_addvar(scope, name, SemanticType_Unknown);
   frame->var_count += 1;
   frame->stack_size += 1;
   list_push(&frame->fn_symbol->fn.params, &s);
@@ -60,7 +60,7 @@ Symbol_* frame_addparam(Frame_* frame, Token_* name) {
 }
 
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope) {
-  Symbol_* s = scope_addvar(scope, name, UNKNOWN_TY);
+  Symbol_* s = scope_addvar(scope, name, SemanticType_Unknown);
   frame->var_count += 1;
   frame->stack_size += 1;// max(frame->stack_size, scope->offset + scope->table->vars.count);  
   return s;
@@ -73,7 +73,7 @@ Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
 
   Symbol_* ret = alloc(allocator, sizeof(Symbol_));
   *ret = (Symbol_){
-    .type = SYMBOL_TYPE_TMP,
+    .info = SYMBOL_TYPE_TMP,
     .tmp = {
       .tmp_index = tmp_index,
     },
@@ -211,16 +211,14 @@ Symbol_* scope_add(Scope_* scope, Symbol_* symbol) {
   return (Symbol_*)symbol_addr;
 }
 
-Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
+Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type) {
   int scope_index = scope->stack_size++;
   int frame_index = scope->frame->var_count;
 
   Symbol_ s = (Symbol_){
-    .type = SYMBOL_TYPE_VAR,
+    .info = SYMBOL_TYPE_VAR,
     .var = (VarSymbol_) {
-      .meta = {
-        .type = type,
-      },
+      .sem_type = type,
       .scope_index = scope_index,
       .frame_index = frame_index,
     },
@@ -233,7 +231,7 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type) {
 
 Symbol_* scope_addfn(Scope_* scope, Token_* name) {
   Symbol_ s = (Symbol_){
-    .type = SYMBOL_TYPE_FN,
+    .info = SYMBOL_TYPE_FN,
     .fn = (FunctionSymbol_) {
       .return_type = VAL_UNKNOWN,
       .params = {0}
@@ -249,7 +247,7 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   scope->stack_size++;
 
   Symbol_ s = {
-    .type = SYMBOL_TYPE_CLOSURE,
+    .info = SYMBOL_TYPE_CLOSURE,
     .closure = {
       .fn = fn,
       .closures = {0},
@@ -262,6 +260,37 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   list_of(&s.closure.closures, Symbol_*, scope->allocator);
 
   return scope_add(scope, &s);
+}
+
+Symbol_* scope_addstruct(Scope_* scope, Token_* name) {
+  Symbol_ s = (Symbol_){
+    .info = SYMBOL_TYPE_FN,
+    .strct = {0},
+    .name = *name,
+    .parent = scope,
+  };
+  list_of(&s.strct.members, Symbol_*, scope->allocator);
+  return scope_add(scope, &s);
+}
+
+Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
+  StructSymbol_* struct_sym = &sym->strct;
+  MemoryAllocator_* allocator = sym->parent->allocator;
+
+  Symbol_* field = alloc(allocator, sizeof(Symbol_));
+  *field = (Symbol_){
+    .info = SYMBOL_TYPE_FIELD,
+    .field = {
+      .sem_type = type,
+      .index = struct_sym->members.count,
+      .val = NIL_VAL,
+    },
+    .name = name,
+    .parent = sym->parent,
+  };
+
+  list_push(&struct_sym->members, field);
+  return field;
 }
 
 Symbol_* scope_find(Scope_* scope, Token_* name) {
@@ -279,7 +308,7 @@ Symbol_* scope_find(Scope_* scope, Token_* name) {
 
 VarSymbol_* scope_var(Scope_* scope, Token_* name) {
   Symbol_* ret = scope_find(scope, name);
-  if (!ret || ret->type != SYMBOL_TYPE_VAR) {
+  if (!ret || ret->info != SYMBOL_TYPE_VAR) {
     return NULL;
   }
 
@@ -288,7 +317,7 @@ VarSymbol_* scope_var(Scope_* scope, Token_* name) {
 
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name) {
   Symbol_* ret = scope_find(scope, name);
-  if (!ret || ret->type != SYMBOL_TYPE_FN) {
+  if (!ret || ret->info != SYMBOL_TYPE_FN) {
     return NULL;
   }
 

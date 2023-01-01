@@ -8,6 +8,7 @@ Block ::= {Statement} [ReturnStmt]
 Statement ::= ';'    
     | DeclarationStmt
     | FunctionDef
+    | StructDef
     | BlockStmt
     | IfStmt 
     | ForStmt
@@ -19,7 +20,7 @@ Statement ::= ';'
     | AssertStmt
     | ExpressionStmt
 
-DeclarationStmt ::= VarDecl | StructDecl
+DeclarationStmt ::= VarDecl
 BlockStmt ::= 'do' Block 'end'
 IfStmt ::= 'if' Expr 'then' Block {'elif' Expr 'then' Block} ['else' Block] 'end'
 ForStmt ::= 'for' Id 'in' Expr {'and' Expr} ['step' Expr] 'do' Block 'end'
@@ -51,8 +52,8 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 ///////////////////////////////////////////////////////////////////////////////
 
 VarDecl ::= ('let' | 'ptr' | 'ref') IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
-StructDecl ::= 'struct' {StructMemberDecl} 'end'
-StructMemberDecl ::= [IdList ':'] UnionType ['=' ExprList]
+StructDef ::= 'struct' {StructMemberDecl} 'end'
+StructMemberDecl ::= IdList ':' UnionType ['=' ExprList]
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helpers

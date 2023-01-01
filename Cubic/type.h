@@ -1,22 +1,24 @@
 #ifndef TYPE__H
 #define TYPE__H
 
-#define UNKNOWN_TY       ((Type_){VAL_UNKNOWN, KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define NIL_TY           ((Type_){VAL_NIL,     KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define BOOL_TY          ((Type_){VAL_BOOL,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT_TY           ((Type_){VAL_INT,     KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT8_TY          ((Type_){VAL_INT8,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT16_TY         ((Type_){VAL_INT16,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT32_TY         ((Type_){VAL_INT32,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT64_TY         ((Type_){VAL_INT64,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UINT_TY          ((Type_){VAL_UINT,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UINT8_TY         ((Type_){VAL_UINT8,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UNT16_TY         ((Type_){VAL_UINT16,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UNT32_TY         ((Type_){VAL_UINT32,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UNT64_TY         ((Type_){VAL_UINT64,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define FLOAT_TY         ((Type_){VAL_FLOAT,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define DOUBLE_TY        ((Type_){VAL_DOUBLE,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define OBJ_TY(OBJ_TYPE) ((Type_){VAL_OBJ,     KIND_UNKNOWN, OBJ_TYPE})
+#include "tokens.h"
+
+#define UNKNOWN_TY       ((RuntimeType_){VAL_UNKNOWN, KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define NIL_TY           ((RuntimeType_){VAL_NIL,     KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define BOOL_TY          ((RuntimeType_){VAL_BOOL,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define INT_TY           ((RuntimeType_){VAL_INT,     KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define INT8_TY          ((RuntimeType_){VAL_INT8,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define INT16_TY         ((RuntimeType_){VAL_INT16,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define INT32_TY         ((RuntimeType_){VAL_INT32,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define INT64_TY         ((RuntimeType_){VAL_INT64,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define UINT_TY          ((RuntimeType_){VAL_UINT,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define UINT8_TY         ((RuntimeType_){VAL_UINT8,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define UNT16_TY         ((RuntimeType_){VAL_UINT16,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define UNT32_TY         ((RuntimeType_){VAL_UINT32,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define UNT64_TY         ((RuntimeType_){VAL_UINT64,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define FLOAT_TY         ((RuntimeType_){VAL_FLOAT,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define DOUBLE_TY        ((RuntimeType_){VAL_DOUBLE,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
+#define OBJ_TY(OBJ_TYPE) ((RuntimeType_){VAL_OBJ,     KIND_UNKNOWN, OBJ_TYPE})
 #define STRING_TY        OBJ_TY(OBJ_TYPE_STRING)
 #define FUNCTION_TY      OBJ_TY(OBJ_TYPE_FUNCTION)
 
@@ -63,6 +65,7 @@ typedef enum {
   VAL_REF,
   VAL_OBJ,
   VAL_PTR,
+  VAL_STRUCT,
 
   __VALUE_TYPE_COUNT__,
 } ValueType;
@@ -70,7 +73,7 @@ typedef enum {
 typedef enum {
   KIND_UNKNOWN,
 
-  // A named variable that is stored on stack.
+  // A named variable that is stored on stack or in a struct.
   KIND_VAL,
 
   // A named variable that is stored on stack or heap, no ownership.
@@ -89,48 +92,48 @@ typedef enum {
   KIND_STATIC,
 } ValueKind;
 
-typedef struct Type_ {
+typedef struct RuntimeType_ {
   enum ValueType ty;
   enum ValueKind kind;
   enum ObjType obj;
-} Type_;
+} RuntimeType_;
 
-bool type_iscoercible(Type_ from, Type_ to);
-uint32_t type_toint(Type_ type);
-Type_ type_fromint(uint32_t n);
+bool type_iscoercible(RuntimeType_ from, RuntimeType_ to);
+uint32_t type_toint(RuntimeType_ info);
+RuntimeType_ type_fromint(uint32_t n);
 
 // Returns true if both types are equal on all fields.
-inline bool type_equal(Type_ from, Type_ to) {
+inline bool type_equal(RuntimeType_ from, RuntimeType_ to) {
   return from.ty == to.ty && from.kind == to.kind && from.obj == to.obj;
 }
 
 // Returns true if value and object types are the same.
-inline bool type_equiv(Type_ from, Type_ to) {
+inline bool type_equiv(RuntimeType_ from, RuntimeType_ to) {
   return from.ty == to.ty && from.obj == to.obj;
 }
 
-inline static bool type_isobj(Type_ type, enum ObjType obj_type) {
-  return type.ty == VAL_OBJ && type.obj == obj_type;
+inline static bool type_isobj(RuntimeType_ info, enum ObjType obj_type) {
+  return info.ty == VAL_OBJ && info.obj == obj_type;
 }
 
-inline static bool type_isanumber(Type_ type) {
-  return type.ty >= VAL_INT && type.ty <= VAL_DOUBLE;
+inline static bool type_isanumber(RuntimeType_ info) {
+  return info.ty >= VAL_INT && info.ty <= VAL_DOUBLE;
 }
 
-inline static bool type_isainteger(Type_ type) {
-  return type.ty >= VAL_INT && type.ty <= VAL_UINT64;
+inline static bool type_isainteger(RuntimeType_ info) {
+  return info.ty >= VAL_INT && info.ty <= VAL_UINT64;
 }
 
-inline static bool type_isaint(Type_ type) {
-  return type.ty >= VAL_INT && type.ty <= VAL_INT64;
+inline static bool type_isaint(RuntimeType_ info) {
+  return info.ty >= VAL_INT && info.ty <= VAL_INT64;
 }
 
-inline static bool type_isauint(Type_ type) {
-  return type.ty >= VAL_UINT && type.ty <= VAL_UINT64;
+inline static bool type_isauint(RuntimeType_ info) {
+  return info.ty >= VAL_UINT && info.ty <= VAL_UINT64;
 }
 
-inline static bool type_isareal(Type_ type) {
-  return type.ty == VAL_FLOAT || type.ty == VAL_DOUBLE;
+inline static bool type_isareal(RuntimeType_ info) {
+  return info.ty == VAL_FLOAT || info.ty == VAL_DOUBLE;
 }
 
 #endif  // TYPE__H

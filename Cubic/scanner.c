@@ -10,7 +10,7 @@
 
 static char advance(Scanner scanner);
 static bool isatend(Scanner scanner);
-static Token_ make_token(Scanner scanner, TokenType type);
+static Token_ make_token(Scanner scanner, TokenType info);
 static Token_ error_token(Scanner scanner, const char* message);
 static bool match(Scanner scanner, char expected);
 static Token_ skip_whitespace(Scanner scanner);
@@ -24,7 +24,7 @@ static Token_ match_fractional(Scanner scanner);
 static Token_ match_identifier(Scanner scanner);
 static TokenType identifier_type(Scanner scanner);
 static TokenType check_keyword(Scanner scanner, int start, int length,
-  const char* rest, TokenType type);
+  const char* rest, TokenType info);
 
 void scanner_init(Scanner_* scanner, const char* source) {
   scanner->start = source;
@@ -34,7 +34,7 @@ void scanner_init(Scanner_* scanner, const char* source) {
 
 Token_ scanner_scan(Scanner scanner) {
   Token_ err_tk = skip_whitespace(scanner);
-  if (err_tk.type == TK_ERR) {
+  if (err_tk.info == TK_ERR) {
     return err_tk;
   }
 
@@ -133,9 +133,9 @@ static char advance(Scanner scanner) {
   return scanner->current[-1];
 }
 
-static Token_ make_token(Scanner scanner, TokenType type) {
+static Token_ make_token(Scanner scanner, TokenType info) {
   Token_ ret;
-  ret.type = type;
+  ret.info = info;
   ret.start = scanner->start;
   ret.length = (int)(scanner->current - scanner->start);
   ret.line = scanner->line;
@@ -145,7 +145,7 @@ static Token_ make_token(Scanner scanner, TokenType type) {
 
 static Token_ error_token(Scanner scanner, const char* message) {
   Token_ token = {
-    .type = TK_ERR,
+    .info = TK_ERR,
     .start = message,
     .length = (int)strlen(message),
     .line = scanner->line
@@ -191,7 +191,7 @@ static Token_ skip_whitespace(Scanner scanner) {
           advance(scanner);
           break;
         }
-        return (Token_) { .type = TK_NIL };
+        return (Token_) { .info = TK_NIL };
 #endif
       case '#':
         while (peek(scanner) != '\n' && !isatend(scanner)) {
@@ -199,11 +199,11 @@ static Token_ skip_whitespace(Scanner scanner) {
         }
         break;
       default:
-        return (Token_) { .type = TK_NIL };
+        return (Token_) { .info = TK_NIL };
     }
   }
 
-  return (Token_) {.type = TK_NIL};
+  return (Token_) {.info = TK_NIL};
 }
 
 static bool isatend(Scanner scanner) {
@@ -235,10 +235,10 @@ static Token_ match_string(Scanner scanner, char string_token) {
 static Token_ match_number(Scanner scanner) {
   while (isdigit(peek(scanner))) advance(scanner);
 
-  TokenType type = TK_INTEGER;
+  TokenType info = TK_INTEGER;
   // Look for a fractional part.
   if (peek(scanner) == '.') {
-    type = TK_NUMBER;
+    info = TK_NUMBER;
 
     // Consume the ".".
     advance(scanner);
@@ -246,7 +246,7 @@ static Token_ match_number(Scanner scanner) {
     while (isdigit(peek(scanner))) advance(scanner);
   }
 
-  return make_token(scanner, type);
+  return make_token(scanner, info);
 }
 
 static Token_ match_fractional(Scanner scanner) {
@@ -458,10 +458,10 @@ static TokenType identifier_type(Scanner scanner) {
 }
 
 static TokenType check_keyword(Scanner scanner, int start, int length,
-  const char* rest, TokenType type) {
+  const char* rest, TokenType info) {
   if (scanner->current - scanner->start == start + length &&
     memcmp(scanner->start + start, rest, length) == 0) {
-    return type;
+    return info;
   }
 
   return TK_ID;

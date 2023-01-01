@@ -29,8 +29,8 @@ void valuearray_free(ValueArray array) {
 const char* kTrue = "true";
 const char* kFalse = "false";
 
-void value_print(Value_ value, Type_ type) {
-  switch (type.ty) {
+void value_print(Value_ value, RuntimeType_ info) {
+  switch (info.ty) {
     case VAL_NIL:    printf("nil"); break;
     case VAL_BOOL:   printf("%s", AS_BOOL(value) ? kTrue : kFalse); break;
     case VAL_INT:    printf("%lld", AS_INT(value)); break;
@@ -60,7 +60,7 @@ void value_print(Value_ value, Type_ type) {
   }
 }
 
-const char* valuetype_str(Type_ ty) {
+const char* valuetype_str(RuntimeType_ ty) {
   switch (ty.ty) {
     case VAL_NIL:    return "nil";
     case VAL_BOOL:   return "bool";
@@ -91,42 +91,15 @@ void value_set(Value_* l, Value_* r) {
 
 }
 
-bool type_iscoercible(Type_ from, Type_ to) {
-  return type_equiv(from, to) ||
-    // 64-bit conversion
-    ((to.ty == VAL_UINT || to.ty == VAL_UINT64 || to.ty == VAL_INT || to.ty == VAL_INT64) &&
-      (from.ty >= VAL_INT && from.ty <= VAL_UINT64)) ||
-
-    // 8-bit conversion
-    ((to.ty == VAL_UINT8 || to.ty == VAL_INT8) && (from.ty == VAL_UINT8 || from.ty == VAL_INT8)) ||
-
-    // 16-bit conversion
-    ((to.ty == VAL_UINT16 || to.ty == VAL_INT16) && (from.ty == VAL_UINT8 || from.ty == VAL_INT8 ||
-      from.ty == VAL_UINT16 || from.ty == VAL_INT16)) ||
-
-    // 32-bit conversion
-    ((to.ty == VAL_UINT32 || to.ty == VAL_INT32) && (from.ty == VAL_UINT8 || from.ty == VAL_INT8 ||
-      from.ty == VAL_UINT16 || from.ty == VAL_INT16 ||
-      from.ty == VAL_UINT32 || from.ty == VAL_INT32)) ||
-
-    // Double conversion
-    (to.ty == VAL_DOUBLE && (from.ty >= VAL_INT && from.ty <= VAL_DOUBLE)) ||
-
-    // Float conversion
-    (to.ty == VAL_FLOAT && (from.ty == VAL_FLOAT ||
-      from.ty >= VAL_INT8 && from.ty <= VAL_INT32 ||
-      from.ty >= VAL_UINT8 && from.ty <= VAL_UINT32));
-}
-
-uint32_t type_toint(Type_ type) {
-  uint32_t t = type.ty & 0xFF;
-  uint32_t k = type.kind & 0xFF;
-  uint32_t o = type.obj & 0xFF;
+uint32_t type_toint(RuntimeType_ info) {
+  uint32_t t = info.ty & 0xFF;
+  uint32_t k = info.kind & 0xFF;
+  uint32_t o = info.obj & 0xFF;
   return (t << 16) | (k << 8) | o;
 }
 
-Type_ type_fromint(uint32_t n) {
-  return (Type_) {
+RuntimeType_ type_fromint(uint32_t n) {
+  return (RuntimeType_) {
     .ty = ((n & 0x00FF0000) >> 16),
     .kind = ((n & 0x0000FF00) >> 8),
     .obj = ((n & 0x000000FF))

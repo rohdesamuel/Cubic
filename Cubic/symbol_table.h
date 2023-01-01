@@ -74,8 +74,9 @@ SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
 Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
-Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_ type);
+Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type);
 Symbol_* scope_addfn(Scope_* scope, Token_* name);
+Symbol_* scope_addstruct(Scope_* scope, Token_* name);
 
 Symbol_* scope_find(Scope_* table, Token_* name);
 VarSymbol_* scope_var(Scope_* table, Token_* name);
@@ -87,5 +88,7 @@ void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
 
 int symbolvar_index(Symbol_* var);
 int symboltmp_index(Symbol_* tmp);
+
+Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type);
 
 #endif  // SYMBOL_TABLE__H

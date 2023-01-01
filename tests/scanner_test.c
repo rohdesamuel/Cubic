@@ -23,9 +23,9 @@ void test_token(TokenType expected_token, const char* source) {
   scanner_init(&scanner, source);
 
   Token_ actual = scanner_scan(&scanner);
-  if (actual.type != expected_token) {
+  if (actual.info != expected_token) {
     fprintf(stderr, "Tokens did not match. Got %d expected %d\n",
-      actual.type, expected_token);
+      actual.info, expected_token);
   } else {
     printf("ok\n");
   }
@@ -36,9 +36,9 @@ void test_literal(TokenType expected_token, const char* expected_lexeme, const c
   scanner_init(&scanner, source);
 
   Token_ actual = scanner_scan(&scanner);
-  if (actual.type != expected_token) {
+  if (actual.info != expected_token) {
     fprintf(stderr, "Tokens did not match. Got %d expected %d\n",
-      actual.type, expected_token);
+      actual.info, expected_token);
   } else if (strncmp(actual.start, expected_lexeme, actual.length) != 0) {
     fprintf(stderr, "Lexeme did not match. Got %.*s expected %s\n",
       actual.length, actual.start, expected_lexeme);
@@ -56,19 +56,19 @@ void test_token_stream(TokenType expected_tokens[], const char* source) {
   for (;;) {
     Token_ token = scanner_scan(&scanner);
 
-    if (expected_tokens[pos] != TK_ERR && token.type == TK_ERR) {
+    if (expected_tokens[pos] != TK_ERR && token.info == TK_ERR) {
       fprintf(stderr, "Got scanner error at position %d: %s\n", pos, token.start);
       break;
     }
 
-    if (token.type != expected_tokens[pos]) {
+    if (token.info != expected_tokens[pos]) {
       fprintf(stderr, "At position %d Tokens did not match. Got %d expected %d\n",
-        pos, token.type, expected_tokens[pos]);
+        pos, token.info, expected_tokens[pos]);
       ok = false;
       break;
     }
 
-    if (token.type == TK_EOF || expected_tokens[pos] == TK_EOF) {
+    if (token.info == TK_EOF || expected_tokens[pos] == TK_EOF) {
       break;
     }
 

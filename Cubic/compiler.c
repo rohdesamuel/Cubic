@@ -22,10 +22,10 @@ typedef struct CodeGenRule_ {
 Compiler_* current_compiler;
 
 static void end_compiler(Parser_* parser, Chunk_* chunk);
-static CodeGenRule_* get_rule(int type);
+static CodeGenRule_* get_rule(int info);
 
 static void emit_return(Chunk_* chunk, int line);
-static void emit_cast(Chunk_* chunk, Type_ from, Type_ to, int line);
+static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line);
 
 static void code_gen(Chunk_* chunk, AstNode_* node) {
   get_rule(node->cls)->code_gen(chunk, node);
@@ -127,7 +127,7 @@ static void emit_constant(Chunk_* chunk, Value_ value, int line) {
   emit_bytes(chunk, OP_CONSTANT, make_constant(chunk, value), line);
 }
 
-static void emit_cast(Chunk_* chunk, Type_ from, Type_ to, int line) {
+static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line) {
   emit_byte(chunk, OP_CAST, line);
   emit_long(chunk, type_toint(from), line);
   emit_long(chunk, type_toint(to), line);
@@ -138,13 +138,13 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
 
   // If getting the address of a symbol...
   if (exp->op == TK_AMPERSAND) {
-    Symbol_* sym = exp->base.meta.sym;
-    switch (sym->type) {
+    Symbol_* sym = exp->base.sem_type.sym;
+    switch (sym->info) {
 
       case SYMBOL_TYPE_VAR:
       {
         VarSymbol_* var = &sym->var;
-        switch (var->meta.type.kind) {
+        switch (var->sem_type.info.kind) {
           // If the symbol lives on the stack, create a weak reference to it.
           case KIND_VAL:
             emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)symbolvar_index(sym), node->line);
@@ -168,14 +168,14 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
             break;
 
           default:
-            assertf(false, "Unimplemented address of for symbol kind '%d'", var->meta.type.kind);
+            assertf(false, "Unimplemented address of for symbol kind '%d'", var->sem_type.info.kind);
             break;
         }
         break;
       }
 
       default:
-        assertf(false, "Unimplemented address of for symbol type '%d'", sym->type);
+        assertf(false, "Unimplemented address of for symbol type '%d'", sym->info);
         break;
     }    
   } else {
@@ -189,7 +189,7 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
-static void emit_add(Chunk_* chunk, Type_ l, Type_ r, int line) {
+static void emit_add(Chunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
   if (l.ty != r.ty) {
     emit_cast(chunk, r, l, line);
   }
@@ -203,7 +203,7 @@ static void emit_add(Chunk_* chunk, Type_ l, Type_ r, int line) {
   }
 }
 
-static void emit_sub(Chunk_* chunk, Type_ l, Type_ r, int line) {
+static void emit_sub(Chunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
   if (l.ty != r.ty) {
     emit_cast(chunk, r, l, line);
   }
@@ -215,7 +215,7 @@ static void emit_sub(Chunk_* chunk, Type_ l, Type_ r, int line) {
   }
 }
 
-static void emit_mul(Chunk_* chunk, Type_ l, Type_ r, int line) {
+static void emit_mul(Chunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
   if (l.ty != r.ty) {
     emit_cast(chunk, r, l, line);
   }
@@ -229,7 +229,7 @@ static void emit_mul(Chunk_* chunk, Type_ l, Type_ r, int line) {
   }
 }
 
-static void emit_div(Chunk_* chunk, Type_ l, Type_ r, int line) {
+static void emit_div(Chunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
   if (l.ty != r.ty) {
     emit_cast(chunk, r, l, line);
   }
@@ -243,7 +243,7 @@ static void emit_div(Chunk_* chunk, Type_ l, Type_ r, int line) {
   }
 }
 
-static void emit_mod(Chunk_* chunk, Type_ l, Type_ r, int line) {
+static void emit_mod(Chunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
   if (l.ty != r.ty) {
     emit_cast(chunk, r, l, line);
   }
@@ -255,7 +255,7 @@ static void emit_mod(Chunk_* chunk, Type_ l, Type_ r, int line) {
   }
 }
 
-static void emit_neg(Chunk_* chunk, Type_ t, int line) {
+static void emit_neg(Chunk_* chunk, RuntimeType_ t, int line) {
   if (ISA_TY_REAL(t)) {
     emit_byte(chunk, OP_FNEG, line);
   } else {
@@ -268,8 +268,8 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
   AstExpr_* l = AS_EXPR(exp->left);
   AstExpr_* r = AS_EXPR(exp->right);
   
-  Type_ ltype = l->meta.type;
-  Type_ rtype = r->meta.type;
+  RuntimeType_ ltype = semantictype_toruntime(l->sem_type);
+  RuntimeType_ rtype = semantictype_toruntime(r->sem_type);
 
   code_gen(chunk, (AstNode_*)l);
   code_gen(chunk, (AstNode_*)r);
@@ -359,10 +359,11 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
 
 static void primary_code_gen(Chunk_* chunk, AstNode_* node) {
   AstPrimaryExp_* exp = (AstPrimaryExp_*)node;
-  Type_ type = exp->base.meta.type;
-  if (IS_TY_NIL(type)) {
+  RuntimeType_ info = semantictype_toruntime(exp->base.sem_type);
+
+  if (IS_TY_NIL(info)) {
     emit_byte(chunk, OP_NIL, node->line);
-  } else if (IS_TY_BOOL(type)) {
+  } else if (IS_TY_BOOL(info)) {
     if (exp->value.as.b) {
       emit_byte(chunk, OP_TRUE, node->line);
     } else {
@@ -377,7 +378,7 @@ static void print_code_gen(Chunk_* chunk, AstNode_* node) {
   AstPrintStmt_* stmt = (AstPrintStmt_*)node;
   code_gen(chunk, (AstNode_*)stmt->expr);
   emit_byte(chunk, OP_PRINT, node->line);
-  emit_long(chunk, type_toint(AS_EXPR(stmt->expr)->meta.type), node->line);
+  emit_long(chunk, type_toint(semantictype_toruntime(AS_EXPR(stmt->expr)->sem_type)), node->line);
 }
 
 static void program_code_gen(Chunk_* chunk, AstNode_* node) {
@@ -421,16 +422,16 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
 
   for (ListNode_* n = vars->head; n != NULL; n = n->next) {
     Symbol_* var = list_val(n, Symbol_*);
-    switch (var->type) {
+    switch (var->info) {
       case SYMBOL_TYPE_VAR:
-        if (var->var.meta.type.ty == VAL_OBJ && var->var.meta.type.kind == KIND_VAL) {
+        if (var->var.sem_type.info.val == VAL_OBJ && var->var.sem_type.info.kind == KIND_VAL) {
           emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
         }        
         break;
       case SYMBOL_TYPE_FN:  // TODO: how to handle this?
         break;
       default:
-        assertf(false, "Unknown variable type to destroy %d", var->type);
+        assertf(false, "Unknown variable type to destroy %d", var->info);
         break;
     }
   }
@@ -575,16 +576,17 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
   int slot = resolve_local(stmt->base.scope, &stmt->name);
 
-  SemanticInfo_ meta = stmt->meta;
+  SemanticType_ sem_type = stmt->sem_type;
 
   // TODO: allow for multiple expressions.
   if (stmt->expr) {
     code_gen(chunk, (AstNode_*)stmt->expr);
-    if (stmt->expr->meta.type.ty != stmt->meta.type.ty && type_iscoercible(stmt->expr->meta.type, stmt->meta.type)) {
-      emit_cast(chunk, stmt->expr->meta.type, stmt->meta.type, node->line);
+    if (stmt->expr->sem_type.info.val != stmt->sem_type.info.val &&
+        semantictype_iscoercible(stmt->expr->sem_type, stmt->sem_type)) {
+      emit_cast(chunk, semantictype_toruntime(stmt->expr->sem_type), semantictype_toruntime(stmt->sem_type), node->line);
     }
 
-    if (meta.type.kind == KIND_REF) {
+    if (sem_type.info.kind == KIND_REF) {
       emit_byte(chunk, OP_INC_REF, node->line);
     }
 
@@ -602,12 +604,12 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
   Symbol_* sym = scope_find(node->scope, &expr->name);
 
-  switch (sym->type) {
+  switch (sym->info) {
     case SYMBOL_TYPE_VAR:
     {
       VarSymbol_* var = &sym->var;
-      if (expr->base.top_meta.type.kind == KIND_VAL && 
-          (var->meta.type.kind == KIND_REF || var->meta.type.kind == KIND_WEAK_REF)) {
+      if (expr->base.top_sem_type.info.kind == KIND_VAL && 
+          (var->sem_type.info.kind == KIND_REF || var->sem_type.info.kind == KIND_WEAK_REF)) {
         emit_bytes(chunk, OP_GET_REF, (uint8_t)symbolvar_index(sym), node->line);
       } else {
         emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
@@ -636,15 +638,15 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   
   AstIdExpr_* id_expr = (AstIdExpr_*)var->expr;
   int slot = resolve_local(node->scope, &id_expr->name);
-  SemanticInfo_ meta = var->base.meta;
+  SemanticType_ sem_type = var->base.sem_type;
 
   code_gen(chunk, (AstNode_*)expr->right);
 
-  if (meta.type.ty == VAL_OBJ && meta.type.kind == KIND_VAL) {
+  if (sem_type.info.val == VAL_OBJ && sem_type.info.kind == KIND_VAL) {
     emit_bytes(chunk, OP_DESTROY_VAR, (uint8_t)slot, node->line);
   }
 
-  if (meta.type.kind == KIND_REF || meta.type.kind == KIND_WEAK_REF) {
+  if (sem_type.info.kind == KIND_REF || sem_type.info.kind == KIND_WEAK_REF) {
     emit_bytes(chunk, OP_SET_REF, (uint8_t)slot, node->line);
   } else {
     emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
@@ -712,7 +714,7 @@ void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
     code_gen(chunk, n->node);
   }
 
-  if (IS_TY_NIL(body->return_type)) {
+  if (semantictype_isnil(body->return_type)) {
     emit_constant(chunk, NIL_VAL, node->line);
     emit_byte(chunk, OP_RETURN, node->line);
   }
@@ -721,7 +723,7 @@ void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
 void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionCall_* call = (AstFunctionCall_*)node;
   AstExpr_* prefix = call->prefix;
-  Symbol_* sym = prefix->meta.sym;
+  Symbol_* sym = prefix->sem_type.sym;
 
   FunctionSymbol_* fn_sym = symbol_ascallable(sym);
   assertf(fn_sym, "Unknown symbol type.");
@@ -744,8 +746,8 @@ void function_args_code_gen(Chunk_* chunk, AstNode_* node) {
 
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     VarSymbol_* param = &list_val(param_node, Symbol_*)->var;
-    //SemanticInfo_ param_meta = param->meta;
-    //SemanticInfo_ expr_meta = AS_EXPR(n->node)->meta;
+    //SemanticType_ param_sem_type = param->sem_type;
+    //SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
 
 
     code_gen(chunk, n->node);
@@ -769,7 +771,7 @@ void clean_up_temps_code_gen(Chunk_* chunk, AstNode_* node) {
 void ast_tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
   AstTmpDecl_* decl = (AstTmpDecl_*)n;
   code_gen(chunk, (AstNode_*)decl->expr);
-  if (decl->base.meta.type.ty == VAL_OBJ) {
+  if (semantictype_isaobj(decl->base.sem_type)) {
     // OP_SET_VAR doesn't pop the value from the stack, so there is no need to
     // have an OP_GET_VAR after.
     emit_bytes(chunk, OP_SET_VAR, symboltmp_index(decl->tmp), n->line);
@@ -777,40 +779,42 @@ void ast_tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
 }
 
 CodeGenRule_ code_gen_rules[] = {
-  [AST_CLS(AstProgram_)]        = {program_code_gen},
-  [AST_CLS(AstBlock_)]          = {block_code_gen},
-  [AST_CLS(AstStmt_)]           = {stmt_code_gen},
-  [AST_CLS(AstExpr_)]           = {expr_code_gen},
-  [AST_CLS(AstPrintStmt_)]      = {print_code_gen},
-  [AST_CLS(AstUnaryExp_)]       = {unary_code_gen},
-  [AST_CLS(AstBinaryExp_)]      = {binary_code_gen},
-  [AST_CLS(AstPrimaryExp_)]     = {primary_code_gen},
-  [AST_CLS(AstReturnStmt_)]     = {return_code_gen},
-  [AST_CLS(AstIfStmt_)]         = {if_code_gen},
-  [AST_CLS(AstAssertStmt_)]     = {assert_code_gen},
-  [AST_CLS(AstVarDeclStmt_)]    = {var_decl_code_gen},
-  [AST_CLS(AstVarExpr_)]        = {var_expr_code_gen},
-  [AST_CLS(AstIdExpr_)]         = {id_expr_code_gen},
-  [AST_CLS(AstAssignmentExpr_)] = {assignment_expr_code_gen},
-  [AST_CLS(AstWhileStmt_)]      = {while_stmt_code_gen},
-  [AST_CLS(AstFunctionDef_)]    = {function_def_code_gen},
-  [AST_CLS(AstFunctionBody_)]   = {function_body_code_gen},
-  [AST_CLS(AstFunctionParam_)]  = {noop_code_gen},
-  [AST_CLS(AstFunctionCall_)]   = {function_call_code_gen},
-  [AST_CLS(AstFunctionArgs_)]   = {function_args_code_gen},
-  [AST_CLS(AstExpressionStmt_)] = {expression_statement_code_gen},
-  [AST_CLS(AstNoopExpr_)]       = {noop_code_gen},
-  [AST_CLS(AstNoopStmt_)]       = {noop_code_gen},
-  [AST_CLS(AstCleanUpTemps_)]   = {clean_up_temps_code_gen},
-  [AST_CLS(AstTmpDecl_)]        = {ast_tmp_decl_code_gen},
+  [AST_CLS(AstProgram_)]          = {program_code_gen},
+  [AST_CLS(AstBlock_)]            = {block_code_gen},
+  [AST_CLS(AstStmt_)]             = {stmt_code_gen},
+  [AST_CLS(AstExpr_)]             = {expr_code_gen},
+  [AST_CLS(AstPrintStmt_)]        = {print_code_gen},
+  [AST_CLS(AstUnaryExp_)]         = {unary_code_gen},
+  [AST_CLS(AstBinaryExp_)]        = {binary_code_gen},
+  [AST_CLS(AstPrimaryExp_)]       = {primary_code_gen},
+  [AST_CLS(AstReturnStmt_)]       = {return_code_gen},
+  [AST_CLS(AstIfStmt_)]           = {if_code_gen},
+  [AST_CLS(AstAssertStmt_)]       = {assert_code_gen},
+  [AST_CLS(AstVarDeclStmt_)]      = {var_decl_code_gen},
+  [AST_CLS(AstVarExpr_)]          = {var_expr_code_gen},
+  [AST_CLS(AstIdExpr_)]           = {id_expr_code_gen},
+  [AST_CLS(AstAssignmentExpr_)]   = {assignment_expr_code_gen},
+  [AST_CLS(AstWhileStmt_)]        = {while_stmt_code_gen},
+  [AST_CLS(AstFunctionDef_)]      = {function_def_code_gen},
+  [AST_CLS(AstFunctionBody_)]     = {function_body_code_gen},
+  [AST_CLS(AstFunctionParam_)]    = {noop_code_gen},
+  [AST_CLS(AstFunctionCall_)]     = {function_call_code_gen},
+  [AST_CLS(AstFunctionArgs_)]     = {function_args_code_gen},
+  [AST_CLS(AstExpressionStmt_)]   = {expression_statement_code_gen},
+  [AST_CLS(AstNoopExpr_)]         = {noop_code_gen},
+  [AST_CLS(AstNoopStmt_)]         = {noop_code_gen},
+  [AST_CLS(AstCleanUpTemps_)]     = {clean_up_temps_code_gen},
+  [AST_CLS(AstTmpDecl_)]          = {ast_tmp_decl_code_gen},
+  [AST_CLS(AstStructDef_)]        = {noop_code_gen},
+  [AST_CLS(AstStructMemberDecl_)] = {noop_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(
   sizeof(code_gen_rules) / sizeof(CodeGenRule_) == __AST_NODE_COUNT__,
   CHECK_CODE_GEN_COUNT);
 
-static CodeGenRule_* get_rule(int type) {
-  CodeGenRule_* ret = &code_gen_rules[type];
-  assertf(ret->code_gen, "Could not find code gen rule for AST class: %d", type);
+static CodeGenRule_* get_rule(int info) {
+  CodeGenRule_* ret = &code_gen_rules[info];
+  assertf(ret->code_gen, "Could not find code gen rule for AST class: %d", info);
   return ret;
 }

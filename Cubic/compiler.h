@@ -9,7 +9,7 @@
 
 typedef struct {
   Token_ name;
-  Type_ type;
+  RuntimeType_ info;
   int depth;
 } Local;
 

@@ -5,8 +5,10 @@
 #include "type.h"
 #include "memory.h"
 #include "tokens.h"
+#include "value.h"
+#include "object.h"
 
-typedef struct Type_ Type_;
+typedef struct Value_ Value_;
 
 typedef enum {
   // A symbol that is a value or has a reference on the stack.
@@ -18,6 +20,9 @@ typedef enum {
   // A symbol holding member typing.
   SYMBOL_TYPE_STRUCT,
 
+  // A field within a struct.
+  SYMBOL_TYPE_FIELD,
+
   SYMBOL_TYPE_CLOSURE,
 
   // A symbol that lives on the stack temporarily during an expression
@@ -25,21 +30,34 @@ typedef enum {
   SYMBOL_TYPE_TMP,
 } SymbolType_;
 
-typedef struct SemanticInfo_ {
-  Type_ type;
-  struct Symbol_* sym;
-} SemanticInfo_;
+typedef struct SemanticType_ {
+  struct {
+    enum ValueType val;
+    enum ValueKind kind;
+    enum ObjType obj;
+  } info;
 
-#define MAKE_SEMANTIC_INFO(TYPE) ((SemanticInfo_){.type = (TYPE), .sym = NULL})
+  Token_ name;
+  struct Symbol_* sym;
+} SemanticType_;
+
+#define MAKE_SEMANTIC_INFO(TYPE) ((SemanticType_){.info = (TYPE), .sym = NULL})
 
 typedef struct StructSymbol_ {
-  int a;
+  ListOf_(Symbol_*) members;
 } StructSymbol_;
 
+typedef struct FieldSymbol_ {
+  SemanticType_ sem_type;
+  int index;
+
+  struct Value_ val;
+} FieldSymbol_;
+
 // Any symbol living on the stack uses this as the base variable.
-// If the symbol references another symbol, the SemanticInfo_::sym will be set.
+// If the symbol references another symbol, the SemanticType_::sym will be set.
 typedef struct VarSymbol_ {
-  SemanticInfo_ meta;
+  SemanticType_ sem_type;
 
   // Incrementing index from 0 in the frame stack.
   int frame_index;
@@ -54,7 +72,7 @@ typedef struct RefSymbol_ {
 
 typedef struct FunctionSymbol_ {
   ListOf_(Symbol_*) params;
-  Type_ return_type;
+  SemanticType_ return_type;
   
   struct ObjFunction_* obj_fn;
 } FunctionSymbol_;
@@ -72,7 +90,7 @@ typedef struct TmpSymbol_ {
 } TmpSymbol_;
 
 typedef struct Symbol_ {
-  SymbolType_ type;
+  SymbolType_ info;
 
   union {
     StructSymbol_ strct;
@@ -80,7 +98,7 @@ typedef struct Symbol_ {
     FunctionSymbol_ fn;
     ClosureSymbol_ closure;
     TmpSymbol_ tmp;
-    // RefSymbol_ ref;
+    FieldSymbol_ field;
   };
 
   Token_ name;
@@ -89,5 +107,113 @@ typedef struct Symbol_ {
 
 FunctionSymbol_* symbol_ascallable(Symbol_* sym);
 Symbol_* symbol_resolveref(Symbol_* sym);
+
+bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to);
+
+RuntimeType_ semantictype_toruntime(SemanticType_ semantic_type);
+
+extern SemanticType_ SemanticType_Unknown;
+extern SemanticType_ SemanticType_Nil;
+
+inline static bool semantictype_infoequal(SemanticType_ a, SemanticType_ b) {
+  return a.info.val == b.info.val && a.info.kind == b.info.kind && a.info.obj == b.info.obj;
+}
+
+inline static SemanticType_ semantictype_as(ValueType val) {
+  return (SemanticType_) {
+    .info = {
+      .val = val,
+      .kind = KIND_UNKNOWN,
+      .obj = OBJ_TYPE_UNKNOWN
+    },
+    .name = {0},
+    .sym = NULL
+  };
+}
+
+inline static SemanticType_ semantictype_frominfo(ValueType val, ValueKind kind, ObjType obj) {
+  return (SemanticType_) {
+    .info = {
+      .val = val,
+      .kind = kind,
+      .obj = obj
+    },
+    .name = {0},
+    .sym = NULL
+  };
+}
+
+inline static SemanticType_ semantictype_tmp(ValueType val) {
+  return (SemanticType_) {
+    .info = {
+      .val = val,
+      .kind = KIND_TMP,
+      .obj = OBJ_TYPE_UNKNOWN
+    },
+    .name = {0},
+    .sym = NULL
+  };
+}
+
+inline static SemanticType_ semantictype_static(ValueType val) {
+  return (SemanticType_) {
+    .info = {
+      .val = val,
+      .kind = KIND_STATIC,
+      .obj = OBJ_TYPE_UNKNOWN
+    },
+      .name = {0},
+      .sym = NULL
+  };
+}
+
+// Returns true if value and object types are the same.
+inline static bool semantictype_equiv(SemanticType_ from, SemanticType_ to) {
+  return from.info.val == to.info.val && from.info.obj == to.info.obj;
+}
+
+inline static bool semantictype_isabool(SemanticType_ type) {
+  return type.info.val == VAL_BOOL;
+}
+
+inline static bool semantictype_isaobj(SemanticType_ type) {
+  return type.info.val == VAL_OBJ;
+}
+
+inline static bool semantictype_isobj(SemanticType_ type, enum ObjType obj_type) {
+  return type.info.val == VAL_OBJ && type.info.obj == obj_type;
+}
+
+inline static bool semantictype_isastring(SemanticType_ type) {
+  return semantictype_isobj(type, OBJ_TYPE_STRING);
+}
+
+inline static bool semantictype_isanumber(SemanticType_ type) {
+  return type.info.val >= VAL_INT && type.info.val <= VAL_DOUBLE;
+}
+
+inline static bool semantictype_isainteger(SemanticType_ type) {
+  return type.info.val >= VAL_INT && type.info.val <= VAL_UINT64;
+}
+
+inline static bool semantictype_isaint(SemanticType_ type) {
+  return type.info.val >= VAL_INT && type.info.val <= VAL_INT64;
+}
+
+inline static bool semantictype_isauint(SemanticType_ type) {
+  return type.info.val >= VAL_UINT && type.info.val <= VAL_UINT64;
+}
+
+inline static bool semantictype_isareal(SemanticType_ type) {
+  return type.info.val == VAL_FLOAT || type.info.val == VAL_DOUBLE;
+}
+
+inline static bool semantictype_isunknown(SemanticType_ type) {
+  return type.info.val == VAL_UNKNOWN;
+}
+
+inline static bool semantictype_isnil(SemanticType_ type) {
+  return type.info.val == VAL_NIL;
+}
 
 #endif  // SYMBOL__H

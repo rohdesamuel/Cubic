@@ -171,8 +171,8 @@ static InterpretResult run(VM vm) {
       case OP_CAST:
       {
         Value_ expr_val = vm_pop(vm);
-        Type_ from_type = type_fromint(READ_LONG());
-        Type_ to_type = type_fromint(READ_LONG());
+        RuntimeType_ from_type = type_fromint(READ_LONG());
+        RuntimeType_ to_type = type_fromint(READ_LONG());
 
         switch (to_type.ty) {
           case VAL_FLOAT:
@@ -594,7 +594,7 @@ static InterpretResult run(VM vm) {
       case OP_PRINT:
       {
         Value_ v = vm_pop(vm);
-        Type_ t = type_fromint(READ_LONG());
+        RuntimeType_ t = type_fromint(READ_LONG());
 
         value_print(v, t);
         printf("\n");

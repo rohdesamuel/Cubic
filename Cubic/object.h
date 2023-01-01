@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#define OBJ_TYPE(value)    (AS_OBJ(value)->type)
+#define OBJ_TYPE(value)    (AS_OBJ(value)->info)
 #define AS_STRING(value)   ((struct ObjString_*)AS_OBJ(value))
 #define AS_CSTRING(value)  (((struct ObjString_*)AS_OBJ(value))->chars)
 #define AS_FUNCTION(value) ((struct ObjFunction_*)AS_OBJ(value))
@@ -20,7 +20,7 @@ typedef enum ObjType {
 } ObjType;
 
 typedef struct Obj_ {
-  ObjType type;
+  ObjType info;
   int count;
   size_t size;
 } Obj_;
@@ -41,8 +41,8 @@ typedef struct ObjFunction_ {
 
 void obj_destroy(Obj_* obj);
 
-static inline bool obj_istype(Value_ value, ObjType type) {
-  return AS_OBJ(value)->type == type;
+static inline bool obj_istype(Value_ value, ObjType info) {
+  return AS_OBJ(value)->info == info;
 }
 
 static inline Value_ obj_val(struct Obj_* obj) {

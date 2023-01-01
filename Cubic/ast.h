@@ -7,10 +7,10 @@
 #include "value.h"
 
 #define AST_CLS(name) AST_##name
-#define MAKE_AST_NODE(allocator, type, scope, line) ((type*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(type), sizeof(type), (scope), line))
+#define MAKE_AST_NODE(allocator, info, scope, line) ((info*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(info), sizeof(info), (scope), line))
 #define MAKE_AST_NOOP(allocator) (make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL), 0))
-#define MAKE_AST_STMT(allocator, type, scope, line) MAKE_AST_NODE(allocator, type, scope, line)
-#define MAKE_AST_EXPR(allocator, type, scope, line) MAKE_AST_NODE(allocator, type, scope, line)
+#define MAKE_AST_STMT(allocator, info, scope, line) MAKE_AST_NODE(allocator, info, scope, line)
+#define MAKE_AST_EXPR(allocator, info, scope, line) MAKE_AST_NODE(allocator, info, scope, line)
 
 // TODO: implement types as UnionTypes.
 typedef struct AstNode_ {
@@ -41,6 +41,8 @@ typedef struct AstNode_ {
     AST_CLS(AstNoopStmt_),
     AST_CLS(AstCleanUpTemps_),
     AST_CLS(AstTmpDecl_),
+    AST_CLS(AstStructDef_),
+    AST_CLS(AstStructMemberDecl_),
 
     __AST_NODE_COUNT__,
   } cls;
@@ -60,8 +62,8 @@ typedef struct AstStmt_ {
 typedef struct AstExpr_ {
   AstNode_ base;
   struct AstExpr_* expr;
-  struct SemanticInfo_ meta;
-  struct SemanticInfo_ top_meta;
+  struct SemanticType_ sem_type;
+  struct SemanticType_ top_sem_type;
 } AstExpr_;
 
 typedef struct AstCleanUpTemps_ {
@@ -123,7 +125,7 @@ typedef struct AstVarDeclStmt_ {
 
   // Owned by Parser allocator.
   Token_ name;
-  struct SemanticInfo_ meta;
+  struct SemanticType_ sem_type;
 
   AstExpr_* expr;
 } AstVarDeclStmt_;
@@ -240,7 +242,7 @@ typedef struct AstFunctionDef_ {
 typedef struct AstFunctionBody_ {
   struct AstNode_ base;
   AstList_ function_params;
-  struct Type_ return_type;
+  struct SemanticType_ return_type;
   AstNode_* stmt;
 } AstFunctionBody_;
 
@@ -248,7 +250,7 @@ typedef struct AstFunctionBody_ {
 typedef struct AstFunctionParam_ {
   struct AstNode_ base;
   Token_ name;
-  struct Type_ type;
+  struct SemanticType_ type;
   AstExpr_* opt_expr;
 
 } AstFunctionParam_;
@@ -268,6 +270,24 @@ typedef struct AstFunctionArgs_ {
   AstList_ args;
   struct FunctionSymbol_* fn_sym;
 } AstFunctionArgs_;
+
+// StructDef ::= 'struct' {StructMemberDecl} 'end'
+typedef struct AstStructDef_ {
+  struct AstNode_ base;
+  Token_ name;
+  AstList_ members;
+
+  Symbol_* struct_sym;
+} AstStructDef_;
+
+// StructMemberDecl :: = IdList ':' UnionType['=' ExprList]
+typedef struct AstStructMemberDecl_ {
+  struct AstNode_ base;
+
+  Token_ name;
+  struct SemanticType_ sem_type;
+  AstExpr_* opt_expr;
+} AstStructMemberDecl_;
 
 typedef struct Ast_ {
   struct AstProgram_* program;

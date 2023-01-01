@@ -152,7 +152,7 @@ static int cast_instruction(const char* name, Chunk chunk, int offset) {
     | (uint32_t)(chunk->code[offset + 3]) << 8
     | (uint32_t)(chunk->code[offset + 4]);
 
-  Type_ t = type_fromint(arg);
+  RuntimeType_ t = type_fromint(arg);
 
   printf("%-16s %4d %d %d\n", name, t.ty, t.kind, t.obj);
 

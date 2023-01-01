@@ -47,13 +47,15 @@ static AstNode_* Block(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* Var(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* StructMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope);
 
 static void advance(Parser_* parser, Scanner_* scanner);
-static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message);
-static bool match(Parser_* parser, Scanner_* scanner, TokenType type);
-static bool check(Parser_* parser, TokenType type);
+static void consume(Parser_* parser, Scanner_* scanner, TokenType info, const char* message);
+static bool match(Parser_* parser, Scanner_* scanner, TokenType info);
+static bool check(Parser_* parser, TokenType info);
 
-static ParseRule_* get_rule(TokenType type);
+static ParseRule_* get_rule(TokenType info);
 
 static void error_at_current(Parser_* parser, const char* message);
 static void error(Parser_* parser, const char* message);
@@ -127,7 +129,7 @@ static void astlist_append(AstList_* list, AstNode_* node) {
 // so it is handled in separate. This is used, for example, when determining if
 // a function ends with a simple `return` or with a `return expr`.
 static bool block_follow(Parser_* parser, Scanner_* scanner, bool withuntil) {
-  switch (parser->current.type) {
+  switch (parser->current.info) {
     case TK_ELSE:
     case TK_ELIF:
     case TK_END:
@@ -161,37 +163,45 @@ Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
   return ret;
 }
 
-Type_ parse_type(Parser_* parser, Scanner_* scanner) {
-  Type_ ret = {
-    .ty   = VAL_UNKNOWN,
-    .kind = KIND_UNKNOWN,
-    .obj  = OBJ_TYPE_UNKNOWN
+SemanticType_ parse_type(Parser_* parser, Scanner_* scanner) {
+  SemanticType_ ret = {
+    .info = {
+      .val = VAL_UNKNOWN,
+      .kind = KIND_UNKNOWN,
+      .obj = OBJ_TYPE_UNKNOWN,
+    },
+    .name = {0},
+    .sym = NULL
   };
 
   Token_ token = parser->current;
-  switch (token.type) {
-    case TK_BOOL:        ret.ty = VAL_BOOL; break;
-    case TK_INT:         ret.ty = VAL_INT; break;
-    case TK_UINT:        ret.ty = VAL_UINT; break;
-    case TK_FLOAT:       ret.ty = VAL_FLOAT; break;
-    case TK_DOUBLE:      ret.ty = VAL_DOUBLE; break;
+  switch (token.info) {
+    case TK_BOOL:        ret.info.val = VAL_BOOL; break;
+    case TK_INT:         ret.info.val = VAL_INT; break;
+    case TK_UINT:        ret.info.val = VAL_UINT; break;
+    case TK_FLOAT:       ret.info.val = VAL_FLOAT; break;
+    case TK_DOUBLE:      ret.info.val = VAL_DOUBLE; break;
     case TK_STRING_TYPE:
-      ret.ty = VAL_OBJ;
+      ret.info.val = VAL_OBJ;
 
       // TODO: change string types to references
       // ret.kind = KIND_REF;
-      ret.obj = OBJ_TYPE_STRING;
+      ret.info.obj = OBJ_TYPE_STRING;
+      break;
+    case TK_ID:
+      ret.name = parse_variable(parser, scanner, &token);
+      break;
     default: break;
   }
 
   advance(parser, scanner);
 
   if (match(parser, scanner, TK_AMPERSAND)) {
-    ret.kind = KIND_WEAK_REF;
+    ret.info.kind = KIND_WEAK_REF;
   } else if (match(parser, scanner, TK_STAR)) {
-    ret.kind = KIND_PTR;
+    ret.info.kind = KIND_PTR;
   } else {
-    ret.kind = KIND_VAL;
+    ret.info.kind = KIND_VAL;
   }
 
   return ret;
@@ -202,8 +212,8 @@ void synchronize(Parser_* parser, Scanner_* scanner) {
   parser->panic_mode = false;
 
   // These cases are all the tokens that can start a statement.
-  while (parser->current.type != TK_EOF) {
-    switch (parser->current.type) {
+  while (parser->current.info != TK_EOF) {
+    switch (parser->current.info) {
       case TK_DO:
       case TK_LET:
       case TK_END:
@@ -236,7 +246,7 @@ static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* stateme
       synchronize(parser, scanner);
     }
 
-    if (parser->previous.type == TK_RETURN) {
+    if (parser->previous.info == TK_RETURN) {
       return;
     }
   }
@@ -269,21 +279,21 @@ static AstNode_* BlockStatement(Parser_* parser, Scanner_* scanner, Scope_* scop
   return block;
 }
 
-static bool in_assign_first(TokenType type) {
+static bool in_assign_first(TokenType info) {
   return
-    type == TK_ID ||
-    type == TK_LPAREN;
+    info == TK_ID ||
+    info == TK_LPAREN;
 }
 
 static void VarList(Parser_* parser, Scanner_* scanner, AstList_* vars, Scope_* scope) {
-  TokenType tk = parser->current.type;  
+  TokenType tk = parser->current.info;  
   do {
     astlist_append(vars, Var(parser, scanner, scope));
   } while (match(parser, scanner, TK_COMMA));
 }
 
 static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs, Scope_* scope) {
-  TokenType tk = parser->current.type;
+  TokenType tk = parser->current.info;
   do {
     astlist_append(exprs, Expr(parser, scanner, scope));
   } while (match(parser, scanner, TK_COMMA));
@@ -295,7 +305,7 @@ static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope
   consume(parser, scanner, TK_ID, "Expecting parameter name");
   param->name = parse_variable(parser, scanner, &parser->previous);
 
-  param->type = UNKNOWN_TY;
+  param->type = SemanticType_Unknown;
   if (match(parser, scanner, TK_COLON)) {
     param->type = parse_type(parser, scanner);
   }
@@ -330,7 +340,7 @@ static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope)
   if (match(parser, scanner, TK_ARROW)) {
     body->return_type = parse_type(parser, scanner);
   } else {
-    body->return_type = NIL_TY;
+    body->return_type = SemanticType_Nil;
   }
 
   if (match(parser, scanner, TK_END)) {
@@ -380,7 +390,7 @@ static AstNode_* clean_up_temps(Parser_* parser, Scanner_* scanner, Scope_* scop
 
 static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstReturnStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstReturnStmt_, scope, parser->current.line);
-  if (block_follow(parser, scanner, true) || parser->current.type == ';') {
+  if (block_follow(parser, scanner, true) || parser->current.info == ';') {
     stmt->expr = (AstExpr_*)MAKE_AST_NODE(&parser->allocator, AstNoopExpr_, NULL, 0);
   } else {
     stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
@@ -389,8 +399,44 @@ static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* sco
   return (AstNode_*)stmt;
 }
 
+static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstStructDef_* def = MAKE_AST_NODE(&parser->allocator, AstStructDef_, scope, parser->current.line);
+  astlist_init(&def->members, (MemoryAllocator_*)&parser->allocator);
+
+  consume(parser, scanner, TK_ID, "Struct definition must include a name.");
+  def->name = parse_variable(parser, scanner, &parser->previous);
+  def->struct_sym = scope_addstruct(scope, &def->name);
+
+  Symbol_* struct_sym = def->struct_sym;
+  Scope_* struct_scope = scope_createfrom(scope);
+  while (!match(parser, scanner, TK_END)) {
+    AstStructMemberDecl_* decl = (AstStructMemberDecl_*)StructMemberDecl(parser, scanner, struct_scope);
+    astlist_append(&def->members, (AstNode_*)decl);
+
+    //structsymbol_addmember(struct_sym, decl->name, decl->type);
+  }
+
+  return (AstNode_*)def;
+}
+
+static AstNode_* StructMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstStructMemberDecl_* decl = MAKE_AST_NODE(&parser->allocator, AstStructMemberDecl_, scope, parser->current.line);
+  
+  consume(parser, scanner, TK_ID, "Struct definition must include a name.");
+  decl->name = parse_variable(parser, scanner, &parser->previous);
+
+  consume(parser, scanner, TK_COLON, "Expected a ':' after struct member name.");
+  decl->sem_type = parse_type(parser, scanner);
+
+  if (match(parser, scanner, TK_EQUAL)) {
+    decl->opt_expr = (AstExpr_*)Expr(parser, scanner, scope);
+  }
+
+  return (AstNode_*)decl;
+}
+
 static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  TokenType tk = parser->current.type;
+  TokenType tk = parser->current.info;
   MemoryAllocator_* allocator = (MemoryAllocator_*)&parser->allocator;
   AstStmt_* ret = MAKE_AST_NODE(allocator, AstStmt_, scope, parser->current.line);
   ret->cleanup = MAKE_AST_NOOP(allocator);
@@ -413,18 +459,18 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       consume(parser, scanner, TK_COLON, "Expected a ':' for a variable declaration.");
 
       if (check(parser, TK_EQUAL)) {
-        stmt->meta = MAKE_SEMANTIC_INFO(UNKNOWN_TY);
-        stmt->meta.type.kind = KIND_VAL;
+        stmt->sem_type = SemanticType_Unknown;
+        stmt->sem_type.info.kind = KIND_VAL;
       } else {
-        stmt->meta.type = parse_type(parser, scanner);
+        stmt->sem_type = parse_type(parser, scanner);
 
         // TODO: Add object and custom types.
-        assertf(stmt->meta.type.ty != VAL_UNKNOWN, "Unknown type");
+        assertf(!semantictype_isunknown(stmt->sem_type), "Unknown type");
       }
 
       if (match(parser, scanner, TK_EQUAL)) {
         stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
-      } else if (IS_TY_UNKNOWN(stmt->meta.type)) {
+      } else if (semantictype_isunknown(stmt->sem_type)) {
         error_at_current(parser, "Expected an expression for a deduced type variable.");
       }
 
@@ -524,6 +570,13 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       break;
     }
 
+    case TK_STRUCT:
+    {
+      advance(parser, scanner);
+      ret->stmt = StructDef(parser, scanner, scope);
+      break;
+    }
+
     case TK_PASS:
     case TK_SEMICOLON:
     case TK_EOF:
@@ -545,14 +598,14 @@ static void advance(Parser_* parser, Scanner_* scanner) {
 
   for (;;) {
     parser->current = scanner_scan(scanner);
-    if (parser->current.type != TK_ERR) break;
+    if (parser->current.info != TK_ERR) break;
 
     error_at_current(parser, parser->current.start);
   }
 }
 
-static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message) {
-  if (parser->current.type == type) {
+static void consume(Parser_* parser, Scanner_* scanner, TokenType info, const char* message) {
+  if (parser->current.info == info) {
     advance(parser, scanner);
     return;
   }
@@ -560,24 +613,21 @@ static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const ch
   error_at_current(parser, message);
 }
 
-static bool match(Parser_* parser, Scanner_* scanner, TokenType type) {
-  if (!check(parser, type)) return false;
+static bool match(Parser_* parser, Scanner_* scanner, TokenType info) {
+  if (!check(parser, info)) return false;
   advance(parser, scanner);
   return true;
 }
 
-static bool check(Parser_* parser, TokenType type) {
-  return parser->current.type == type;
+static bool check(Parser_* parser, TokenType info) {
+  return parser->current.info == info;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 static AstNode_* Expr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   //AstExpr_* ret = MAKE_AST_NODE(&parser->allocator, AstExpr_, scope, parser->current.line);
   AstExpr_* ret = (AstExpr_*)parse_precedence(parser, scanner, PREC_ASSIGNMENT, scope);
-  ret->top_meta = (SemanticInfo_){
-    .type = UNKNOWN_TY,
-    .sym = NULL
-  };
+  ret->top_sem_type = SemanticType_Unknown;
   return (AstNode_*)ret;
 }
 
@@ -591,8 +641,7 @@ static AstPrintStmt_* Print(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 static AstNode_* Number(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   double value = strtod(parser->previous.start, NULL);
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.meta = MAKE_SEMANTIC_INFO(DOUBLE_TY);
-  expr->base.meta.type.kind = KIND_TMP;
+  expr->base.sem_type = semantictype_tmp(VAL_DOUBLE);
   expr->value = DOUBLE_VAL(value);  
   return (AstNode_*)expr;
 }
@@ -600,40 +649,36 @@ static AstNode_* Number(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 static AstNode_* Integer(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   int64_t value = strtoll(parser->previous.start, NULL, 10);  
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.meta = MAKE_SEMANTIC_INFO(INT_TY);
-  expr->base.meta.type.kind = KIND_TMP;
+  expr->base.sem_type = semantictype_tmp(VAL_INT);
   expr->value = INT_VAL(value);
   return (AstNode_*)expr;
 }
 
 static AstNode_* Nil(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.meta = MAKE_SEMANTIC_INFO(NIL_TY);
-  expr->base.meta.type.kind = KIND_TMP;
+  expr->base.sem_type = semantictype_tmp(VAL_NIL);
   expr->value = NIL_VAL;
   return (AstNode_*)expr;
 }
 
 static AstNode_* True(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.meta = MAKE_SEMANTIC_INFO(BOOL_TY);
-  expr->base.meta.type.kind = KIND_TMP;
+  expr->base.sem_type = semantictype_tmp(VAL_BOOL);
   expr->value = TRUE_VAL;
   return (AstNode_*)expr;
 }
 
 static AstNode_* False(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.meta = MAKE_SEMANTIC_INFO(BOOL_TY);
-  expr->base.meta.type.kind = KIND_TMP;
+  expr->base.sem_type = semantictype_tmp(VAL_BOOL);
   expr->value = FALSE_VAL;
   return (AstNode_*)expr;
 }
 
 static AstNode_* String(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.meta = MAKE_SEMANTIC_INFO(STRING_TY);
-  expr->base.meta.type.kind = KIND_STATIC;
+  expr->base.sem_type = semantictype_static(VAL_OBJ);
+  expr->base.sem_type.info.obj = OBJ_TYPE_STRING;
   expr->value = OBJ_VAL(objstring_from(parser->previous.start + 1, parser->previous.length - 2));
   return (AstNode_*)expr;
 }
@@ -646,18 +691,18 @@ static AstNode_* grouping(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 }
 
 static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  TokenType operator_type = parser->previous.type;
+  TokenType operator_type = parser->previous.info;
 
   AstUnaryExp_* unary = MAKE_AST_EXPR(&parser->allocator, AstUnaryExp_, scope, parser->previous.line);
   unary->op = operator_type;
   unary->expr = (AstExpr_*)parse_precedence(parser, scanner, PREC_UNARY, scope);
-  unary->base.meta = MAKE_SEMANTIC_INFO(UNKNOWN_TY);
+  unary->base.sem_type = SemanticType_Unknown;
 
   return (AstNode_*)unary;
 }
 
 static AstNode_* BinaryOp(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  TokenType operator_type = parser->previous.type;
+  TokenType operator_type = parser->previous.info;
   ParseRule_* rule = get_rule(operator_type);  
   AstNode_* expr = parse_precedence(parser, scanner, (Precedence)(rule->precedence + 1), scope);
   return expr;
@@ -689,35 +734,35 @@ static AstNode_* FunctionArgs(Parser_* parser, Scanner_* scanner, Scope_* scope)
 
 static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence, Scope_* scope) {
   advance(parser, scanner);
-  ParseFn prefix_rule = get_rule(parser->previous.type)->prefix;
+  ParseFn prefix_rule = get_rule(parser->previous.info)->prefix;
   if (!prefix_rule) {
     error(parser, "Expected expression");
     return NULL;
   }
 
   AstNode_* exp = prefix_rule(parser, scanner, scope);
-  while (precedence <= get_rule(parser->current.type)->precedence) {
-    ParseFn infix_rule = get_rule(parser->current.type)->infix;
+  while (precedence <= get_rule(parser->current.info)->precedence) {
+    ParseFn infix_rule = get_rule(parser->current.info)->infix;
     if (!infix_rule) {
       break;
     }
     advance(parser, scanner);
 
-    if (parser->previous.type == TK_LPAREN) {
+    if (parser->previous.info == TK_LPAREN) {
       AstFunctionCall_* new_exp = MAKE_AST_EXPR(&parser->allocator, AstFunctionCall_, scope, parser->previous.line);
       new_exp->prefix = (AstExpr_*)exp;
       new_exp->args = (AstFunctionArgs_*)infix_rule(parser, scanner, scope);      
       exp = (AstNode_*)new_exp;
-    } else if (parser->previous.type == TK_EQUAL) {
+    } else if (parser->previous.info == TK_EQUAL) {
       AstAssignmentExpr_* new_exp = MAKE_AST_EXPR(&parser->allocator, AstAssignmentExpr_, scope, parser->previous.line);
       new_exp->left = exp;
       new_exp->right = (AstExpr_*)infix_rule(parser, scanner, scope);
       exp = (AstNode_*)new_exp;
     } else {     
       AstBinaryExp_* bin_exp = MAKE_AST_EXPR(&parser->allocator, AstBinaryExp_, scope, parser->previous.line);
-      bin_exp->base.meta = MAKE_SEMANTIC_INFO(UNKNOWN_TY);
-      bin_exp->base.meta.type.kind = KIND_TMP;
-      bin_exp->op = parser->previous.type;
+      bin_exp->base.sem_type = SemanticType_Unknown;
+      bin_exp->base.sem_type.info.kind = KIND_TMP;
+      bin_exp->op = parser->previous.info;
       bin_exp->left = (AstExpr_*)exp;
       bin_exp->right = (AstExpr_*)infix_rule(parser, scanner, scope);
 
@@ -816,8 +861,8 @@ STATIC_ASSERT(
   sizeof(rules) / sizeof(ParseRule_) == __TK_COUNT__,
   CHECK_TOKEN_COUNT);
 
-static ParseRule_* get_rule(TokenType type) {
-  return &rules[type];
+static ParseRule_* get_rule(TokenType info) {
+  return &rules[info];
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -835,9 +880,9 @@ static void error_at(Parser_* parser, Token_* token, const char* message) {
   parser->panic_mode = true;
   fprintf(stderr, "[line %d] Error", token->line);
 
-  if (token->type == TK_EOF) {
+  if (token->info == TK_EOF) {
     fprintf(stderr, " at end");
-  } else if (token->type == TK_ERR) {
+  } else if (token->info == TK_ERR) {
     // Nothing.
   } else {
     fprintf(stderr, " at '%.*s'", token->length, token->start);
