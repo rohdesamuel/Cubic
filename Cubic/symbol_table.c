@@ -5,10 +5,15 @@
 
 #include <string.h>
 
+static Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator);
 static Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn);
 static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
+static Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
+static Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type);
+static Symbol_* scope_addfn(Scope_* scope, Token_* name);
+static Symbol_* scope_addstruct(Scope_* scope, Token_* name);
 
-Frame_* frame_root(struct MemoryAllocator_* allocator) {  
+Frame_* frame_root(struct MemoryAllocator_* allocator) {
   Token_ entry_name = {
     .type = TK_ID,
     .start = "main",
@@ -33,17 +38,34 @@ Frame_* frame_root(struct MemoryAllocator_* allocator) {
 Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator) {
   Frame_* ret = alloc(allocator, sizeof(Frame_));
   memset(ret, 0, sizeof(Frame_));
-
+  ret->parent = NULL;
   ret->allocator = allocator;
   ret->scope = scope_create(ret, NULL, allocator);
   ret->fn_symbol = fn_symbol;
   ret->fn_closure = frame_addclosure(ret, &fn_symbol->name, fn_symbol);
 
+  list_of(&ret->children, Frame_*, allocator);
   list_of(&ret->tmps, Symbol_*, allocator);
   return ret;
 }
 
+Frame_* frame_createfrom(Frame_* frame, Symbol_* fn_symbol) {
+  Frame_* ret = frame_create(fn_symbol, frame->allocator);
+  ret->parent = frame;
+  list_push(&frame->children, &frame);
+
+  return ret;
+}
+
 void frame_destroy(Frame_** frame) {
+  Frame_* to_destroy = *frame;
+  struct MemoryAllocator_* allocator = to_destroy->allocator;
+
+  for (ListNode_* n = to_destroy->children.head; n != NULL; n = n->next) {
+    Frame_* child = list_val(n, Frame_*);
+    frame_destroy(&child);
+  }
+
   dealloc((*frame)->allocator, *frame);
   *frame = NULL;
 }
@@ -51,9 +73,7 @@ void frame_destroy(Frame_** frame) {
 Symbol_* frame_addparam(Frame_* frame, Token_* name) {
   Scope_* scope = frame->scope;
   SymbolTable_* table = scope->table;  
-  Symbol_* s = scope_addvar(scope, name, SemanticType_Unknown);
-  frame->var_count += 1;
-  frame->stack_size += 1;
+  Symbol_* s = frame_addvar(frame, name, scope);
   list_push(&frame->fn_symbol->fn.params, &s);
 
   return s;
@@ -64,6 +84,14 @@ Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope) {
   frame->var_count += 1;
   frame->stack_size += 1;// max(frame->stack_size, scope->offset + scope->table->vars.count);  
   return s;
+}
+
+Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope) {
+  return scope_addfn(scope, name);
+}
+
+Symbol_* frame_addstruct(Frame_* frame, Token_* name, Scope_* scope) {
+  return scope_addstruct(scope, name);
 }
 
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {

@@ -24,6 +24,9 @@ typedef struct Scope_ {
 
 typedef struct Frame_ {
   struct MemoryAllocator_* allocator;
+  struct Frame_* parent;
+  ListOf_(Frame_*) children;
+
   Symbol_* fn_symbol;
   Symbol_* fn_closure;
 
@@ -54,11 +57,15 @@ typedef struct SymbolTable_ {
 } SymbolTable_;
 
 Frame_* frame_root(struct MemoryAllocator_* allocator);
-Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator);
+Frame_* frame_createfrom(Frame_* frame, Symbol_* fn_symbol);
 void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addstruct(Frame_* frame, Token_* name, Scope_* scope);
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
+void frame_assignindices(Frame_* frame);
+
 void frame_enterscope(Frame_* frame, Scope_* scope);
 void frame_leavescope(Frame_* frame, Scope_* scope);
 void frame_movetemps(Frame_* frame, List_* list);
@@ -72,11 +79,6 @@ void scope_destroy(Scope_** scope);
 SymbolTable_* symboltable_create(struct MemoryAllocator_* allocator);
 SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
 void symboltable_destroy(SymbolTable_** symbol_table);
-
-Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
-Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type);
-Symbol_* scope_addfn(Scope_* scope, Token_* name);
-Symbol_* scope_addstruct(Scope_* scope, Token_* name);
 
 Symbol_* scope_find(Scope_* table, Token_* name);
 VarSymbol_* scope_var(Scope_* table, Token_* name);

@@ -355,8 +355,8 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
     name = (Token_) { 0 };
   }
 
-  Symbol_* fn_symbol = scope_addfn(scope, &name);
-  Frame_* fn_frame = frame_create(fn_symbol, allocator);
+  Symbol_* fn_symbol = frame_addfn(scope->frame, &name, scope);
+  Frame_* fn_frame = frame_createfrom(scope->frame, allocator);
   Scope_* fn_scope = fn_frame->scope;
 
   def->fn_symbol = fn_symbol;
@@ -405,7 +405,7 @@ static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       .obj = OBJ_TYPE_UNKNOWN,
     },
     .name = def->name,
-    .sym = scope_addstruct(scope, &def->name)
+    .sym = frame_addstruct(scope->frame, &def->name, scope)
   };
 
   Symbol_* struct_sym = def->struct_type.sym;
