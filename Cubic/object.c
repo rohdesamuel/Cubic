@@ -6,7 +6,7 @@ static void objstring_destroy(ObjString_* obj);
 static Obj_* obj_create(size_t size, ObjType info) {
   Obj_* object = (Obj_*)malloc(size);
   memset(object, 0, size);
-  object->info = info;
+  object->type = info;
   object->count = 1;
   object->size = size;
   return object;
@@ -16,7 +16,7 @@ Obj_* obj_copy(Obj_* obj) {
   Obj_* object = (Obj_*)malloc(max(obj->size, sizeof(Obj_)));
   memcpy(object, obj, sizeof(Obj_));
 
-  switch (obj->info) {
+  switch (obj->type) {
     case OBJ_TYPE_STRING: 
     {
       ObjString_* from = (ObjString_*)obj;
@@ -34,7 +34,7 @@ Obj_* obj_copy(Obj_* obj) {
 }
 
 void obj_destroy(Obj_* obj) {
-  switch (obj->info) {
+  switch (obj->type) {
     case OBJ_TYPE_STRING: objstring_destroy((ObjString_*)obj); break;
   }
 
@@ -68,7 +68,7 @@ ObjFunction_* objfn_create(struct Symbol_* fn_sym) {
 }
 
 bool obj_equal(struct Obj_* l, struct Obj_* r) {
-  switch (l->info) {
+  switch (l->type) {
     case OBJ_TYPE_STRING:
     {
       ObjString_* l_string = (ObjString_*)l;

@@ -45,6 +45,7 @@ typedef struct SemanticType_ {
 
 typedef struct StructSymbol_ {
   ListOf_(Symbol_*) members;
+  struct Symbol_* constructor;
 } StructSymbol_;
 
 typedef struct FieldSymbol_ {

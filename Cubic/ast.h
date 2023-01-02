@@ -7,10 +7,11 @@
 #include "value.h"
 
 #define AST_CLS(name) AST_##name
-#define MAKE_AST_NODE(allocator, info, scope, line) ((info*) make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(info), sizeof(info), (scope), line))
-#define MAKE_AST_NOOP(allocator) (make_ast_node((MemoryAllocator_*)(allocator), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL), 0))
-#define MAKE_AST_STMT(allocator, info, scope, line) MAKE_AST_NODE(allocator, info, scope, line)
-#define MAKE_AST_EXPR(allocator, info, scope, line) MAKE_AST_NODE(allocator, info, scope, line)
+#define MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, LINE) ((CLS*) make_ast_node((MemoryAllocator_*)(ALLOCATOR), AST_CLS(CLS), sizeof(CLS), (SCOPE), LINE))
+#define MAKE_AST_NOOP(ALLOCATOR) (make_ast_node((MemoryAllocator_*)(ALLOCATOR), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL), 0))
+#define MAKE_AST_STMT(ALLOCATOR, CLS, SCOPE, LINE) MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, LINE)
+#define MAKE_AST_EXPR(ALLOCATOR, CLS, SCOPE, LINE) MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, LINE)
+#define AST_CAST(TYPE, EXPR) ((TYPE*)(assert_astnode_is(EXPR, AST_CLS(TYPE))))
 
 // TODO: implement types as UnionTypes.
 typedef struct AstNode_ {
@@ -43,6 +44,7 @@ typedef struct AstNode_ {
     AST_CLS(AstTmpDecl_),
     AST_CLS(AstStructDef_),
     AST_CLS(AstStructMemberDecl_),
+    AST_CLS(AstDotExpr_),
 
     __AST_NODE_COUNT__,
   } cls;
@@ -196,6 +198,9 @@ typedef struct AstIndexExpr_ {
 // Var ::= PrefixExpr '.' Id
 typedef struct AstDotExpr_ {
   struct AstExpr_ base;
+
+  struct AstExpr_* prefix;
+  Token_ id;
 } AstDotExpr_;
 
 // ReturnStmt ::= 'return' [Expr {',' Expr}]
@@ -277,7 +282,7 @@ typedef struct AstStructDef_ {
   Token_ name;
   AstList_ members;
 
-  Symbol_* struct_sym;
+  SemanticType_ struct_type;
 } AstStructDef_;
 
 // StructMemberDecl :: = IdList ':' UnionType['=' ExprList]
@@ -294,5 +299,6 @@ typedef struct Ast_ {
 } Ast_;
 
 AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct Scope_* symbol_table, int line);
-
+#define assert_astnode_is(NODE, CLS) assert_astnode_is_((AstNode_*)(NODE), CLS)
+AstNode_* assert_astnode_is_(AstNode_* node, int cls);
 #endif  // AST__H

@@ -10,7 +10,7 @@ static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
 
 Frame_* frame_root(struct MemoryAllocator_* allocator) {  
   Token_ entry_name = {
-    .info = TK_ID,
+    .type = TK_ID,
     .start = "main",
     .length = 4,
     .line = 0,
@@ -290,6 +290,9 @@ Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
   };
 
   list_push(&struct_sym->members, field);
+
+  
+  struct_sym->constructor->fn.params;
   return field;
 }
 

@@ -636,7 +636,9 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   assertf(var->expr->base.cls == AST_CLS(AstIdExpr_),
     "Only assigning to variables is supported at this time.");
   
-  AstIdExpr_* id_expr = (AstIdExpr_*)var->expr;
+
+  AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, var->expr);
+
   int slot = resolve_local(node->scope, &id_expr->name);
   SemanticType_ sem_type = var->base.sem_type;
 
@@ -807,6 +809,7 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstTmpDecl_)]          = {ast_tmp_decl_code_gen},
   [AST_CLS(AstStructDef_)]        = {noop_code_gen},
   [AST_CLS(AstStructMemberDecl_)] = {noop_code_gen},
+  [AST_CLS(AstDotExpr_)]          = {noop_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(

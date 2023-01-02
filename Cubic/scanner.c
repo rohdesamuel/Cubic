@@ -34,7 +34,7 @@ void scanner_init(Scanner_* scanner, const char* source) {
 
 Token_ scanner_scan(Scanner scanner) {
   Token_ err_tk = skip_whitespace(scanner);
-  if (err_tk.info == TK_ERR) {
+  if (err_tk.type == TK_ERR) {
     return err_tk;
   }
 
@@ -135,7 +135,7 @@ static char advance(Scanner scanner) {
 
 static Token_ make_token(Scanner scanner, TokenType info) {
   Token_ ret;
-  ret.info = info;
+  ret.type = info;
   ret.start = scanner->start;
   ret.length = (int)(scanner->current - scanner->start);
   ret.line = scanner->line;
@@ -145,7 +145,7 @@ static Token_ make_token(Scanner scanner, TokenType info) {
 
 static Token_ error_token(Scanner scanner, const char* message) {
   Token_ token = {
-    .info = TK_ERR,
+    .type = TK_ERR,
     .start = message,
     .length = (int)strlen(message),
     .line = scanner->line
@@ -191,7 +191,7 @@ static Token_ skip_whitespace(Scanner scanner) {
           advance(scanner);
           break;
         }
-        return (Token_) { .info = TK_NIL };
+        return (Token_) { .type = TK_NIL };
 #endif
       case '#':
         while (peek(scanner) != '\n' && !isatend(scanner)) {
@@ -199,11 +199,11 @@ static Token_ skip_whitespace(Scanner scanner) {
         }
         break;
       default:
-        return (Token_) { .info = TK_NIL };
+        return (Token_) { .type = TK_NIL };
     }
   }
 
-  return (Token_) {.info = TK_NIL};
+  return (Token_) {.type = TK_NIL};
 }
 
 static bool isatend(Scanner scanner) {

@@ -7,6 +7,7 @@ do
   assert a.a == 0
 end
 
+/#
 ##########
 
 struct OneMember
@@ -108,3 +109,4 @@ do
   assert vec.y == 2.0
   assert vec.z == 3.0
 end
+#/

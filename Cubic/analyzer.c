@@ -567,6 +567,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstTmpDecl_)]          = {ast_tmp_decl_analysis},
   [AST_CLS(AstStructDef_)]        = {ast_struct_def_analysis},
   [AST_CLS(AstStructMemberDecl_)] = {ast_struct_member_decl_analysis},
+  [AST_CLS(AstDotExpr_)]          = {noop_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.
