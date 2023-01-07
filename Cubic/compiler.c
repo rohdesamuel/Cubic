@@ -139,7 +139,7 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
   // If getting the address of a symbol...
   if (exp->op == TK_AMPERSAND) {
     Symbol_* sym = exp->base.sem_type.sym;
-    switch (sym->info) {
+    switch (sym->type) {
 
       case SYMBOL_TYPE_VAR:
       {
@@ -175,7 +175,7 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
       }
 
       default:
-        assertf(false, "Unimplemented address of for symbol type '%d'", sym->info);
+        assertf(false, "Unimplemented address of for symbol type '%d'", sym->type);
         break;
     }    
   } else {
@@ -422,16 +422,17 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
 
   for (ListNode_* n = vars->head; n != NULL; n = n->next) {
     Symbol_* var = list_val(n, Symbol_*);
-    switch (var->info) {
+    switch (var->type) {
       case SYMBOL_TYPE_VAR:
         if (var->var.sem_type.info.val == VAL_OBJ && var->var.sem_type.info.kind == KIND_VAL) {
           emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
         }        
         break;
+      case SYMBOL_TYPE_STRUCT:
       case SYMBOL_TYPE_FN:  // TODO: how to handle this?
         break;
       default:
-        assertf(false, "Unknown variable type to destroy %d", var->info);
+        assertf(false, "Unknown variable type to destroy %d", var->type);
         break;
     }
   }
@@ -590,7 +591,13 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
       emit_byte(chunk, OP_INC_REF, node->line);
     }
 
-    emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
+    if (sem_type.info.val == VAL_STRUCT) {
+      for (int i = 0; i < sem_type.sym->strct.members.count; ++i) {
+        emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot + i, node->line);
+      }
+    } else {
+      emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
+    }
   }
 }
 
@@ -604,7 +611,7 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
   Symbol_* sym = scope_find(node->scope, &expr->name);
 
-  switch (sym->info) {
+  switch (sym->type) {
     case SYMBOL_TYPE_VAR:
     {
       VarSymbol_* var = &sym->var;
@@ -730,14 +737,22 @@ void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   FunctionSymbol_* fn_sym = symbol_ascallable(sym);
   assertf(fn_sym, "Unknown symbol type.");
 
-  // Push function object to call.
-  code_gen(chunk, (AstNode_*)prefix);
+  if (sym->type == SYMBOL_TYPE_STRUCT) {
+    StructSymbol_* struct_sym = &sym->strct;
+    for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
+      Symbol_* field_sym = list_val(n, Symbol_*);
+      emit_constant(chunk, field_sym->field.val, node->line);
+    }
+  } else {
+    // Push function object to call.
+    code_gen(chunk, (AstNode_*)prefix);
 
-  // Push arguments.
-  code_gen(chunk, (AstNode_*)call->args);
+    // Push arguments.
+    code_gen(chunk, (AstNode_*)call->args);
 
-  // Do the call.
-  emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);
+    // Do the call.
+    emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);
+  }
 }
 
 void function_args_code_gen(Chunk_* chunk, AstNode_* node) {
@@ -770,7 +785,7 @@ void clean_up_temps_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
-void ast_tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
+void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
   AstTmpDecl_* decl = (AstTmpDecl_*)n;
   code_gen(chunk, (AstNode_*)decl->expr);
   if (semantictype_isaobj(decl->base.sem_type)) {
@@ -778,6 +793,11 @@ void ast_tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
     // have an OP_GET_VAR after.
     emit_bytes(chunk, OP_SET_VAR, symboltmp_index(decl->tmp), n->line);
   }
+}
+
+void dot_expr_code_gen(Chunk_* chunk, AstNode_* n) {
+  AstDotExpr_* expr = AST_CAST(AstDotExpr_, n);
+  code_gen(chunk, (AstNode_*)expr->prefix);
 }
 
 CodeGenRule_ code_gen_rules[] = {
@@ -806,10 +826,10 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstNoopExpr_)]         = {noop_code_gen},
   [AST_CLS(AstNoopStmt_)]         = {noop_code_gen},
   [AST_CLS(AstCleanUpTemps_)]     = {clean_up_temps_code_gen},
-  [AST_CLS(AstTmpDecl_)]          = {ast_tmp_decl_code_gen},
+  [AST_CLS(AstTmpDecl_)]          = {tmp_decl_code_gen},
   [AST_CLS(AstStructDef_)]        = {noop_code_gen},
   [AST_CLS(AstStructMemberDecl_)] = {noop_code_gen},
-  [AST_CLS(AstDotExpr_)]          = {noop_code_gen},
+  [AST_CLS(AstDotExpr_)]          = {dot_expr_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(

@@ -4,8 +4,6 @@ end
 
 assert returns_true()
 
-# assert (function() -> int return 1 end)() == (function() -> int return 1 end)()
-
 function identity(a : int) -> int
   assert a == 1
   return a

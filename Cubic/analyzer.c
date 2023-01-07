@@ -18,6 +18,12 @@ static void error(Analyzer_* analyzer, AstNode_* node, const char* message, ...)
 
 Analyzer_* analyzer_;
 
+static void analyze_frame(Frame_* frame);
+static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index);
+inline static bool token_eq(Token_ a, Token_ b) {
+  return memcmp(a.start, b.start, a.length) == 0;
+}
+
 static void do_analysis(AstNode_* node) {
   get_rule(node->cls)->fn(node);
 }
@@ -33,6 +39,7 @@ void analyzer_init(Analyzer_* analyzer) {
 void analyze(Analyzer_* analyzer, struct AstProgram_* ast) {
   analyzer_ = analyzer;
   do_analysis((AstNode_*)ast);
+  analyze_frame(analyzer->frame);
 }
 
 void analyzer_clear(Analyzer_* analyzer) {
@@ -40,6 +47,37 @@ void analyzer_clear(Analyzer_* analyzer) {
   frame_destroy(&analyzer->frame);
   pageallocator_deinit(&analyzer->allocator);
   analyzer_ = NULL;
+}
+
+static void analyze_frame(Frame_* frame) {
+  int frame_index = 0;
+  frame->fn_closure->closure.frame_index = frame_index++;
+  analyze_scope(frame, frame->scope, frame_index);
+
+  for (ListNode_* n = frame->children.head; n != NULL; n = n->next) {
+    Frame_* f = list_val(n, Frame_*);
+    analyze_frame(f);
+  }
+}
+
+static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index) {
+  List_* vars = &scope->table->vars;
+  for (ListNode_* n = vars->head; n != NULL; n = n->next) {
+    Symbol_* sym = (Symbol_*)n->data;
+    if (sym->type != SYMBOL_TYPE_VAR) {
+      continue;
+    }
+
+    VarSymbol_* var = &sym->var;
+    int size = var->sem_type.info.val == VAL_STRUCT ? var->sem_type.sym->strct.members.count : 1;
+    var->frame_index = frame_index;
+    frame_index += size;
+  }
+
+  for (ListNode_* n = scope->children.head; n != NULL; n = n->next) {
+    Scope_* s = list_val(n, Scope_*);
+    analyze_scope(frame, s, frame_index);
+  }
 }
 
 void program_analysis(AstNode_* node) {
@@ -211,7 +249,11 @@ void binary_analysis(AstNode_* n) {
     }
   }
 
-  expr->base.sem_type.info.kind = KIND_TMP;
+  if (lsem_type.info.kind == KIND_STATIC && rsem_type.info.kind == KIND_STATIC) {
+    expr->base.sem_type.info.kind = KIND_STATIC;
+  } else {
+    expr->base.sem_type.info.kind = KIND_TMP;
+  }
 }
 
 void primary_analysis(AstNode_* n) {}
@@ -307,8 +349,18 @@ void id_expr_analysis(AstNode_* n) {
   AstIdExpr_* expr = (AstIdExpr_*)n;
   Symbol_* sym = scope_find(n->scope, &expr->name);
   if (sym) {
-    switch (sym->info) {
-      case SYMBOL_TYPE_STRUCT: break;
+    switch (sym->type) {
+      case SYMBOL_TYPE_STRUCT:
+        expr->base.sem_type = (SemanticType_){
+          .info = {
+            .val = VAL_STRUCT,
+            .kind = KIND_UNKNOWN,
+            .obj = OBJ_TYPE_UNKNOWN,
+          },
+          .name = sym->name,
+          .sym = sym
+        };
+        break;
       case SYMBOL_TYPE_FN:
         expr->base.sem_type = sym->fn.return_type;
         expr->base.sem_type.sym = sym;
@@ -323,7 +375,7 @@ void id_expr_analysis(AstNode_* n) {
         expr->base.sem_type.sym = sym;
         break;
       default:
-        error(analyzer_, n, "Unhandled symbol type: %d", sym->info);
+        error(analyzer_, n, "Unhandled symbol type: %d", sym->type);
         break;
     }
   } else {
@@ -429,7 +481,7 @@ void function_param_analysis(AstNode_* n) {
     return;
   }
 
-  if (s->info != SYMBOL_TYPE_VAR) {
+  if (s->type != SYMBOL_TYPE_VAR) {
     error(analyzer_, n, "Parameter type is unimplemented.");
     return;
   }
@@ -456,7 +508,7 @@ void function_call_analysis(AstNode_* node) {
 }
 
 void function_args_analysis(AstNode_* node) {
-  AstFunctionArgs_* args = (AstFunctionArgs_*)node;
+  AstFunctionArgs_* args = AST_CAST(AstFunctionArgs_, node);
   FunctionSymbol_* fn_sym = args->fn_sym;
 
   if (fn_sym->params.count > UINT8_MAX) {
@@ -473,11 +525,17 @@ void function_args_analysis(AstNode_* node) {
   List_* params = &args->fn_sym->params;
   ListNode_* param_node = params->head;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-    AS_EXPR(n->node)->top_sem_type = list_val(param_node, Symbol_*)->var.sem_type;
+    Symbol_* param = list_val(param_node, Symbol_*);
+    SemanticType_ param_sem_type = SemanticType_Unknown;
+    if (param->type == SYMBOL_TYPE_VAR) {
+      param_sem_type = param->var.sem_type;
+    } else if (param->type == SYMBOL_TYPE_FIELD) {
+      param_sem_type = param->field.sem_type;
+    } else {
+      error(analyzer_, node, "Encountered unknown parameter type %d.", param->type);
+    }
+    AS_EXPR(n->node)->top_sem_type = param_sem_type;
     do_analysis(n->node);
-
-    VarSymbol_* param = &list_val(param_node, Symbol_*)->var;
-    SemanticType_ param_sem_type = param->sem_type;
     SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
 
     if (param_sem_type.info.val != expr_sem_type.info.val ||
@@ -538,6 +596,48 @@ void ast_struct_member_decl_analysis(AstNode_* node) {
   }
 }
 
+void ast_dot_expr_analysis(AstNode_* node) {
+  AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
+
+  expr->prefix->top_sem_type = expr->base.top_sem_type;
+  do_analysis((AstNode_*)expr->prefix);
+
+  SemanticType_ prefix_type = expr->prefix->sem_type;
+  if (prefix_type.info.val != VAL_STRUCT || !prefix_type.sym || prefix_type.sym->type != SYMBOL_TYPE_VAR) {
+    error(analyzer_, (AstNode_*)expr->prefix, "Expected struct type for sub-expression.");
+    return;
+  }
+
+  VarSymbol_* sym = &prefix_type.sym->var;
+
+  if (sym->sem_type.sym->type != SYMBOL_TYPE_STRUCT) {
+    error(analyzer_, node, "Expected struct symbol");
+    return;
+  }
+  StructSymbol_* struct_sym = &sym->sem_type.sym->strct;
+
+  Symbol_* found = NULL;
+  for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
+    Symbol_* field = list_val(n, Symbol_*);
+    if (token_eq(field->name, expr->id)) {
+      found = field;
+      break;
+    }
+  }
+
+  if (!found) {
+    error(analyzer_, node, "Could not find field '%.*s'", expr->id.length, expr->id.start);
+  }
+
+  if (found->type == SYMBOL_TYPE_FIELD) {
+    expr->base.sem_type = found->field.sem_type;
+  } else if (found->type == SYMBOL_TYPE_STRUCT) {
+    expr->base.sem_type = found->strct.self_type;
+  } else {
+    error(analyzer_, node, "Unknown type for field %.*s", expr->id.length, expr->id.start);
+  }
+}
+
 AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstProgram_)]          = {program_analysis},
   [AST_CLS(AstBlock_)]            = {block_analysis},
@@ -567,7 +667,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstTmpDecl_)]          = {ast_tmp_decl_analysis},
   [AST_CLS(AstStructDef_)]        = {ast_struct_def_analysis},
   [AST_CLS(AstStructMemberDecl_)] = {ast_struct_member_decl_analysis},
-  [AST_CLS(AstDotExpr_)]          = {noop_analysis},
+  [AST_CLS(AstDotExpr_)]          = {ast_dot_expr_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.

@@ -27,20 +27,24 @@ FunctionSymbol_* symbol_ascallable(Symbol_* sym) {
     return NULL;
   }
 
-  switch (sym->info) {
+  switch (sym->type) {
     case SYMBOL_TYPE_FN:
       return &sym->fn;
     case SYMBOL_TYPE_CLOSURE:
       return &sym->closure.fn->fn;
     case SYMBOL_TYPE_VAR:
       return symbol_ascallable(sym->var.sem_type.sym);
+    case SYMBOL_TYPE_STRUCT:
+      return &sym->strct.constructor->fn;
+    default:
+      assertf(false, "Unhandled symbol type %d in `symbol_ascallable`", sym->type);
   }
 
   return NULL;
 }
 
 Symbol_* symbol_resolveref(Symbol_* sym) {
-  if (!sym || sym->info != SYMBOL_TYPE_VAR) {
+  if (!sym || sym->type != SYMBOL_TYPE_VAR) {
     return NULL;
   }
 

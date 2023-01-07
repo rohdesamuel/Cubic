@@ -80,10 +80,10 @@ SymbolTable_* symboltable_create(struct MemoryAllocator_* allocator);
 SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
-Symbol_* scope_find(Scope_* table, Token_* name);
-VarSymbol_* scope_var(Scope_* table, Token_* name);
-FunctionSymbol_* scope_fn(Scope_* table, Token_* name);
-StructSymbol_* scope_struct(Scope_* table, Token_* name);
+Symbol_* scope_find(Scope_* scope, Token_* name);
+VarSymbol_* scope_var(Scope_* scope, Token_* name);
+FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
+StructSymbol_* scope_struct(Scope_* scope, Token_* name);
 
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);

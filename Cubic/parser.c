@@ -51,11 +51,11 @@ static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* StructMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope);
 
 static void advance(Parser_* parser, Scanner_* scanner);
-static void consume(Parser_* parser, Scanner_* scanner, TokenType info, const char* message);
-static bool match(Parser_* parser, Scanner_* scanner, TokenType info);
-static bool check(Parser_* parser, TokenType info);
+static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message);
+static bool match(Parser_* parser, Scanner_* scanner, TokenType type);
+static bool check(Parser_* parser, TokenType type);
 
-static ParseRule_* get_rule(TokenType info);
+static ParseRule_* get_rule(TokenType type);
 
 static void error_at_current(Parser_* parser, const char* message);
 static void error(Parser_* parser, const char* message);
@@ -279,10 +279,10 @@ static AstNode_* BlockStatement(Parser_* parser, Scanner_* scanner, Scope_* scop
   return block;
 }
 
-static bool in_assign_first(TokenType info) {
+static bool in_assign_first(TokenType type) {
   return
-    info == TK_ID ||
-    info == TK_LPAREN;
+    type == TK_ID ||
+    type == TK_LPAREN;
 }
 
 static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs, Scope_* scope) {
@@ -356,7 +356,7 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
   }
 
   Symbol_* fn_symbol = frame_addfn(scope->frame, &name, scope);
-  Frame_* fn_frame = frame_createfrom(scope->frame, allocator);
+  Frame_* fn_frame = frame_createfrom(scope->frame, fn_symbol);
   Scope_* fn_scope = fn_frame->scope;
 
   def->fn_symbol = fn_symbol;
@@ -409,19 +409,25 @@ static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   };
 
   Symbol_* struct_sym = def->struct_type.sym;
+  Symbol_* constructor = struct_sym->strct.constructor;
 
-  /*Symbol_* constructor = scope_addfn(scope, &def->name);
   constructor->fn.obj_fn = objfn_create(constructor);
   constructor->fn.return_type = def->struct_type;
 
-  struct_sym->strct.constructor = constructor;*/
+  struct_sym->strct.constructor = constructor;
+  struct_sym->strct.self_type = def->struct_type;
 
   Scope_* struct_scope = scope_createfrom(scope);
-  while (!match(parser, scanner, TK_END)) {
+  while (check(parser, TK_ID)) {
     AstStructMemberDecl_* decl = (AstStructMemberDecl_*)StructMemberDecl(parser, scanner, struct_scope);
     astlist_append(&def->members, (AstNode_*)decl);
 
-    structsymbol_addmember(struct_sym, decl->name, decl->sem_type);
+    Symbol_* field = structsymbol_addmember(struct_sym, decl->name, decl->sem_type);
+    list_push(&constructor->fn.params, &field);
+
+    if (match(parser, scanner, TK_END)) {
+      break;
+    }
 
     match(parser, scanner, TK_COMMA);
   }
@@ -614,8 +620,8 @@ static void advance(Parser_* parser, Scanner_* scanner) {
   }
 }
 
-static void consume(Parser_* parser, Scanner_* scanner, TokenType info, const char* message) {
-  if (parser->current.type == info) {
+static void consume(Parser_* parser, Scanner_* scanner, TokenType type, const char* message) {
+  if (parser->current.type == type) {
     advance(parser, scanner);
     return;
   }
@@ -623,14 +629,14 @@ static void consume(Parser_* parser, Scanner_* scanner, TokenType info, const ch
   error_at_current(parser, message);
 }
 
-static bool match(Parser_* parser, Scanner_* scanner, TokenType info) {
-  if (!check(parser, info)) return false;
+static bool match(Parser_* parser, Scanner_* scanner, TokenType type) {
+  if (!check(parser, type)) return false;
   advance(parser, scanner);
   return true;
 }
 
-static bool check(Parser_* parser, TokenType info) {
-  return parser->current.type == info;
+static bool check(Parser_* parser, TokenType type) {
+  return parser->current.type == type;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -774,6 +780,7 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       var_exp->expr = (AstExpr_*)new_exp;
       new_exp->prefix = (AstExpr_*)exp;
       new_exp->id = parse_variable(parser, scanner, &parser->current);
+      advance(parser, scanner);
       exp = (AstNode_*)var_exp;
     } else {
       AstBinaryExp_* bin_exp = MAKE_AST_EXPR(&parser->allocator, AstBinaryExp_, scope, parser->previous.line);
@@ -878,8 +885,8 @@ STATIC_ASSERT(
   sizeof(rules) / sizeof(ParseRule_) == __TK_COUNT__,
   CHECK_TOKEN_COUNT);
 
-static ParseRule_* get_rule(TokenType info) {
-  return &rules[info];
+static ParseRule_* get_rule(TokenType type) {
+  return &rules[type];
 }
 
 ///////////////////////////////////////////////////////////////////////////////

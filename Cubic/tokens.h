@@ -1,6 +1,8 @@
 #ifndef TOKENS__H
 #define TOKENS__H
 
+#include "common.h"
+
 typedef enum {
   TK_EOF,
   TK_ERR,

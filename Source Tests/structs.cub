@@ -1,10 +1,13 @@
 struct ZeroInit
-  a : int
+  x : int
 end
 
 do
-  let a := ZeroInit()
-  assert a.a == 0
+  let a := ZeroInit(0)
+  print(a.x)
+
+  a.x = 1
+  assert a.x == 1
 end
 
 /#
@@ -44,6 +47,23 @@ do
   c = 3
   assert a.a == 2
   assert a.b == 3
+end
+
+##########
+
+struct Inner
+  a : int
+  b : int
+end
+
+struct Outer
+  inner : Inner
+end
+
+do
+  let a := Outer(Inner(1, 2))
+  assert a.inner.a == 1
+  assert a.inner.b == 2
 end
 
 ##########

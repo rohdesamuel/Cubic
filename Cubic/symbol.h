@@ -31,13 +31,27 @@ typedef enum {
 } SymbolType_;
 
 typedef struct SemanticType_ {
+  // The type information of the given symbol.
   struct {
+    // The type that is the final result of resolving the symbol.
+    // E.g. return value of a function, the type that a pointer is addressing
+    // to, the field of a given struct.
     enum ValueType val;
+
+    // How to interpret the type, is it an address, a reference?
     enum ValueKind kind;
+
+    // If the value is allocated on the heap, this type will be filled.
     enum ObjType obj;
+
+    // If the type is user-defined like structs or functions, this will point
+    // to the symbol holding more metadata.
+    struct Symbol_* sym;
   } info;
 
+  // If the type is user-defined, this is the name of the type.
   Token_ name;
+
   struct Symbol_* sym;
 } SemanticType_;
 
@@ -46,6 +60,8 @@ typedef struct SemanticType_ {
 typedef struct StructSymbol_ {
   ListOf_(Symbol_*) members;
   struct Symbol_* constructor;
+
+  SemanticType_ self_type;
 } StructSymbol_;
 
 typedef struct FieldSymbol_ {
@@ -91,7 +107,7 @@ typedef struct TmpSymbol_ {
 } TmpSymbol_;
 
 typedef struct Symbol_ {
-  SymbolType_ info;
+  SymbolType_ type;
 
   union {
     StructSymbol_ strct;
@@ -99,6 +115,7 @@ typedef struct Symbol_ {
     FunctionSymbol_ fn;
     ClosureSymbol_ closure;
     TmpSymbol_ tmp;
+    RefSymbol_ ref;
     FieldSymbol_ field;
   };
 
