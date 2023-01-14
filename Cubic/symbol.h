@@ -41,6 +41,10 @@ typedef struct SemanticType_ {
     // How to interpret the type, is it an address, a reference?
     enum ValueKind kind;
 
+    enum ValueRefKind ref_kind;
+
+    enum ValueLifetime lifetime;
+
     // If the value is allocated on the heap, this type will be filled.
     enum ObjType obj;
 
@@ -67,8 +71,10 @@ typedef struct StructSymbol_ {
 typedef struct FieldSymbol_ {
   SemanticType_ sem_type;
   int index;
-
   struct Value_ val;
+  bool has_default_val;
+
+  struct Symbol_* struct_sym;
 } FieldSymbol_;
 
 // Any symbol living on the stack uses this as the base variable.
@@ -130,6 +136,9 @@ bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to);
 
 RuntimeType_ semantictype_toruntime(SemanticType_ semantic_type);
 
+Symbol_* symbol_findmember(Symbol_* strct, Token_ name);
+int symbol_findmember_index(Symbol_* strct, Token_ name);
+
 extern SemanticType_ SemanticType_Unknown;
 extern SemanticType_ SemanticType_Nil;
 
@@ -165,7 +174,8 @@ inline static SemanticType_ semantictype_tmp(ValueType val) {
   return (SemanticType_) {
     .info = {
       .val = val,
-      .kind = KIND_TMP,
+      .kind = KIND_VAL,
+      .lifetime = LIFETIME_TMP,
       .obj = OBJ_TYPE_UNKNOWN
     },
     .name = {0},
@@ -177,7 +187,8 @@ inline static SemanticType_ semantictype_static(ValueType val) {
   return (SemanticType_) {
     .info = {
       .val = val,
-      .kind = KIND_STATIC,
+      .kind = KIND_VAL,
+      .lifetime = LIFETIME_STATIC,
       .obj = OBJ_TYPE_UNKNOWN
     },
       .name = {0},

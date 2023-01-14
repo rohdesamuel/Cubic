@@ -64,4 +64,6 @@ typedef struct Token_ {
   int line;
 } Token_, * Token;
 
+bool token_eq(Token_ a, Token_ b);
+
 #endif  // TOKENS__H

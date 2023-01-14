@@ -38,12 +38,13 @@ MatchStmt ::= 'match' Expr {MatchCase} 'end'
 MatchCase ::= 'case' ('_' | Type | Expr) '=>' Block
 
 // Calling a function
-FunctionCall ::= PrefixExpr FunctionArgs
-FunctionArgs ::= '(' [ExprList] ')'
+FunctionCall ::= PrefixExpr FunctionCallArgs
+FunctionCallArgs ::= '(' FunctionCallArg* ')'
+FunctionCallArg ::= Expr
 
 // Defining a function
 FunctionDef ::= 'function' [Id] FunctionBody 'end'
-FunctionParam ::= (Id | UnionType | Id ':' UnionType) ['=' Expr]
+FunctionParam ::= (Id | UnionType | Id ':' UnionType)
 FunctionParamList ::= FunctionParam {',' FunctionParam}
 FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 
@@ -54,6 +55,9 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 VarDecl ::= ('let' | 'ptr' | 'ref') IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 StructDef ::= 'struct' {StructMemberDecl} 'end'
 StructMemberDecl ::= IdList ':' UnionType ['=' ExprList]
+StructConstructor ::= Id '{' [StructConstructorParamList] '}'
+StructConstructorParam ::= [Id '='] Expr 
+StructConstructorParamList ::= StructConstructorParam {',' StructConstructorParam} [',']
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helpers
@@ -88,7 +92,7 @@ CompositeType ::= 'Set' '[' [UnionType] ']'
 FunctionType ::= '(' [UnionType {',' UnionType } [',' '...']] ')' '->' UnionType
 
 // TODO: Extend with [1..3] syntax.
-Field ::= Expr ':' Expr
+Field ::= Id '=' Expr
 FieldList ::= Field {',' Field} [',']
 
 ArrayValue ::= '[' ExprList ']'
@@ -110,10 +114,11 @@ Expr ::= Primary
     | FunctionDef
     | PrefixExpr
     | Expr BinaryOp Expr
-    | UnaryOp Expr
+    | UnaryOp Var
     | 'await' Expr
     | 'async' Expr
     | AssignmentExpr
+    | StructConstructor
 
 AssignmentExpr ::= VarList '=' ExprList
 

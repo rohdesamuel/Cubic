@@ -108,14 +108,14 @@ static InterpretResult run(VM vm) {
 
 //#define DEBUG_TRACE_EXECUTION
 #ifdef DEBUG_TRACE_EXECUTION
-    printf("\n==== Execution Trace ====");
-    printf("          ");
-    for (Value slot = vm->stack; slot < vm->stack_top; slot++) {
+    //printf("\n==== Execution Trace ====");
+    //printf("          ");
+    /*for (Value slot = vm->stack; slot < vm->stack_top; slot++) {
       printf("[ ");
       value_print(*slot);
       printf(" ]");
-    }
-    printf("\n");
+    }*/
+    //printf("\n");
     disassemble_instruction(frame->chunk, (int)(frame->ip - frame->chunk->code));
 #endif  // DEBUG_TRACE_EXECUTION
 

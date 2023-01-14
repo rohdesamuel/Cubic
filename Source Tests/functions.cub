@@ -11,6 +11,7 @@ end
 
 assert identity(1) == 1
 
+
 function toggle(a : bool) -> bool
   return not a
 end
@@ -58,3 +59,15 @@ do
     i = i - 1
   end
 end
+
+# do
+#   function bar(a: int) -> int
+#     return foo(a)
+#   end
+# 
+#   function foo(a: int) -> int
+#     return a
+#   end
+# 
+#   assert bar(1) == 1
+# end

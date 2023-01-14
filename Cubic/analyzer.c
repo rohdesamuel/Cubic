@@ -20,9 +20,6 @@ Analyzer_* analyzer_;
 
 static void analyze_frame(Frame_* frame);
 static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index);
-inline static bool token_eq(Token_ a, Token_ b) {
-  return memcmp(a.start, b.start, a.length) == 0;
-}
 
 static void do_analysis(AstNode_* node) {
   get_rule(node->cls)->fn(node);
@@ -73,6 +70,8 @@ static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index) {
     var->frame_index = frame_index;
     frame_index += size;
   }
+
+  frame->max_stack_size = frame_index > frame->max_stack_size ? frame_index : frame->max_stack_size;
 
   for (ListNode_* n = scope->children.head; n != NULL; n = n->next) {
     Scope_* s = list_val(n, Scope_*);
@@ -143,17 +142,21 @@ void unary_analysis(AstNode_* n) {
     case TK_AMPERSAND:
     {
       SemanticType_ sem_type = expr->base.sem_type;
-      if (sem_type.info.kind == KIND_UNKNOWN ||
-          sem_type.info.kind == KIND_TMP ||
+      if (expr->expr->base.cls != AST_CLS(AstVarExpr_)) {
+        error(analyzer_, (AstNode_*)expr->expr, "Cannot take address expression");
+      }
+
+      if (sem_type.info.kind == KIND_UNKNOWN ||          
           sem_type.info.kind == KIND_REF ||
-          sem_type.info.kind == KIND_WEAK_REF) {
+          sem_type.info.lifetime == LIFETIME_TMP) {
         error(analyzer_, n, "expression is not assignable");
       }
 
-      if (sem_type.info.kind == KIND_VAL || sem_type.info.kind == KIND_STATIC) {
-        expr->base.sem_type.info.kind = KIND_WEAK_REF;
+      expr->base.sem_type.info.kind = KIND_REF;
+      if (sem_type.info.kind == KIND_VAL) {
+        expr->base.sem_type.info.ref_kind = REF_KIND_WEAK;
       } else {
-        expr->base.sem_type.info.kind = KIND_REF;
+        expr->base.sem_type.info.ref_kind = REF_KIND_STRONG;
       }
       break;
     }
@@ -249,10 +252,10 @@ void binary_analysis(AstNode_* n) {
     }
   }
 
-  if (lsem_type.info.kind == KIND_STATIC && rsem_type.info.kind == KIND_STATIC) {
-    expr->base.sem_type.info.kind = KIND_STATIC;
+  if (lsem_type.info.lifetime == LIFETIME_STATIC && rsem_type.info.lifetime == LIFETIME_STATIC) {
+    expr->base.sem_type.info.lifetime = LIFETIME_STATIC;
   } else {
-    expr->base.sem_type.info.kind = KIND_TMP;
+    expr->base.sem_type.info.lifetime = LIFETIME_TMP;
   }
 }
 
@@ -321,13 +324,15 @@ void var_decl_analysis(AstNode_* n) {
 
   // The type will be KIND_TMP if created from a PRIMARY_EXP. Only change the kind for
   // non-pointer/reference types.
-  if (stmt->sem_type.info.kind == KIND_UNKNOWN || stmt->sem_type.info.kind == KIND_TMP) {
+  if (stmt->sem_type.info.kind == KIND_UNKNOWN) {
     if (stmt->sem_type.info.val == VAL_OBJ) {
       stmt->sem_type.info.kind = KIND_REF;
     } else {
       stmt->sem_type.info.kind = KIND_VAL;
     }
   }
+
+  stmt->sem_type.info.lifetime = LIFETIME_AUTOMATIC;
 
   // TODO: implement tuples (and others) for variable declarations.
   VarSymbol_* var = scope_var(n->scope, &stmt->name);  
@@ -356,15 +361,18 @@ void id_expr_analysis(AstNode_* n) {
             .val = VAL_STRUCT,
             .kind = KIND_UNKNOWN,
             .obj = OBJ_TYPE_UNKNOWN,
+            .sym = sym
           },
           .name = sym->name,
           .sym = sym
         };
         break;
+
       case SYMBOL_TYPE_FN:
         expr->base.sem_type = sym->fn.return_type;
         expr->base.sem_type.sym = sym;
         break;
+
       case SYMBOL_TYPE_VAR:
         expr->base.sem_type = sym->var.sem_type;
         expr->base.sem_type.sym = sym;
@@ -374,6 +382,7 @@ void id_expr_analysis(AstNode_* n) {
         expr->base.sem_type = sym->closure.fn->fn.return_type;
         expr->base.sem_type.sym = sym;
         break;
+
       default:
         error(analyzer_, n, "Unhandled symbol type: %d", sym->type);
         break;
@@ -435,8 +444,9 @@ void function_def_analysis(AstNode_* n) {
   def->base.sem_type = (SemanticType_) {
     .info = {
       .val = fn->return_type.info.val,
-      .kind = KIND_STATIC,
+      .kind = KIND_VAL,
       .obj = OBJ_TYPE_FUNCTION,
+      .lifetime = LIFETIME_STATIC,
     },
     .sym = def->fn_symbol
   };
@@ -458,23 +468,10 @@ void function_param_analysis(AstNode_* n) {
   AstFunctionParam_* param = (AstFunctionParam_*)n;
   
   // TODO: implement parameter type inference.
-  if (semantictype_isunknown(param->type) && !param->opt_expr) {
+  if (semantictype_isunknown(param->type)) {
     error(analyzer_, n, "Parameter type inferrece is unimplemented.");
   }
   
-  if (param->opt_expr) {
-    param->opt_expr->top_sem_type = param->type;
-
-    do_analysis((AstNode_*)param->opt_expr);
-    if (!semantictype_iscoercible(param->type, AS_EXPR(param->opt_expr)->sem_type)) {
-      error(analyzer_, n, "Parameter type is not coercible.");
-    }
-
-    if (semantictype_isunknown(param->type)) {
-      param->type = AS_EXPR(param->opt_expr)->sem_type;
-    }
-  }
-
   Symbol_* s = scope_find(n->scope, &param->name);// &n->scope->frame->fn_symbol->fn.params;
   if (!s) {
     error(analyzer_, n, "Could not find parameter %.*s", param->name.length, param->name.start);
@@ -507,19 +504,20 @@ void function_call_analysis(AstNode_* node) {
   }
 }
 
-void function_args_analysis(AstNode_* node) {
-  AstFunctionArgs_* args = AST_CAST(AstFunctionArgs_, node);
+void function_call_arg_analysis(AstNode_* node) {
+  AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, node);
+  
+  arg->expr->top_sem_type = arg->base.top_sem_type;
+  do_analysis((AstNode_*)arg->expr);
+  arg->base.sem_type = arg->expr->sem_type;
+}
+
+void function_call_args_analysis(AstNode_* node) {
+  AstFunctionCallArgs_* args = AST_CAST(AstFunctionCallArgs_, node);
   FunctionSymbol_* fn_sym = args->fn_sym;
 
   if (fn_sym->params.count > UINT8_MAX) {
     error(analyzer_, node, "Parameter count exceeded maximum of 255.");
-  }
-
-  // TODO: allow for optional arguments
-  if (fn_sym->params.count != args->args.count) {
-    error(analyzer_, node,
-      "Parameter count does not match definition. Expected %d, got %d",
-      fn_sym->params.count, args->args.count);
   }
 
   List_* params = &args->fn_sym->params;
@@ -539,11 +537,19 @@ void function_args_analysis(AstNode_* node) {
     SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
 
     if (param_sem_type.info.val != expr_sem_type.info.val ||
-      (param_sem_type.info.kind == KIND_REF && expr_sem_type.info.kind != KIND_REF && expr_sem_type.info.kind != KIND_WEAK_REF)) {
+      (param_sem_type.info.kind == KIND_REF &&
+        expr_sem_type.info.kind != KIND_REF)) {
       error(analyzer_, n->node, "Expression does not match function parameter type.");
     }
 
     param_node = param_node->next;
+  }
+
+  // TODO: allow for optional arguments
+  if (fn_sym->params.count != args->args.count) {
+    error(analyzer_, node,
+      "Parameter count does not match definition. Expected %d, got %d",
+      fn_sym->params.count, args->args.count);
   }
 }
 
@@ -568,6 +574,15 @@ void ast_struct_def_analysis(AstNode_* node) {
   }
 }
 
+static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
+  switch (expr->base.cls) {
+    case AST_CLS(AstPrimaryExp_):
+      return AST_CAST(AstPrimaryExp_, expr)->value;
+  }
+  
+  assertf(false, "Unimplemented expression type for constant folding: %d", expr->base.cls);
+}
+
 void ast_struct_member_decl_analysis(AstNode_* node) {
   AstStructMemberDecl_* decl = (AstStructMemberDecl_*)node;
   SemanticType_* type = &decl->sem_type;
@@ -590,9 +605,19 @@ void ast_struct_member_decl_analysis(AstNode_* node) {
     expr->top_sem_type.info.kind = KIND_VAL;
     do_analysis((AstNode_*)expr);
 
-    if (expr->sem_type.info.kind != KIND_VAL && expr->sem_type.info.kind != KIND_STATIC && expr->sem_type.info.kind != KIND_TMP) {
+    if (expr->sem_type.info.kind != KIND_VAL &&
+      expr->sem_type.info.lifetime != LIFETIME_STATIC &&
+      expr->sem_type.info.lifetime != LIFETIME_TMP) {
+
       error(analyzer_, node, "struct member field default value must be a value.");
+      return;
     }
+
+    type->info.sym->field.val = fold_constants(node->scope, expr);
+    type->info.sym->field.has_default_val = true;
+  } else {
+    type->info.sym->field.val = NIL_VAL;
+    type->info.sym->field.has_default_val = false;
   }
 }
 
@@ -625,49 +650,73 @@ void ast_dot_expr_analysis(AstNode_* node) {
     }
   }
 
-  if (!found) {
+  if (!found || found->type != SYMBOL_TYPE_FIELD) {
     error(analyzer_, node, "Could not find field '%.*s'", expr->id.length, expr->id.start);
+    return;
   }
 
-  if (found->type == SYMBOL_TYPE_FIELD) {
-    expr->base.sem_type = found->field.sem_type;
-  } else if (found->type == SYMBOL_TYPE_STRUCT) {
-    expr->base.sem_type = found->strct.self_type;
+  expr->base.sem_type = found->field.sem_type;
+  expr->base.sem_type.info.sym = found;
+}
+
+void ast_struct_constructor_analysis(AstNode_* node) {
+  AstStructConstructor_* constructor = (AstStructConstructor_*)node;
+  Symbol_* struct_sym = scope_find(node->scope, &constructor->name);
+  
+  if (!struct_sym) {
+    error(analyzer_, node, "Could not find struct %.*s", constructor->name.length, constructor->name.start);
   } else {
-    error(analyzer_, node, "Unknown type for field %.*s", expr->id.length, expr->id.start);
+    constructor->base.sem_type = struct_sym->strct.self_type;
+    constructor->base.sem_type.sym = struct_sym;
+  }
+
+  for (AstListNode_* n = constructor->fields.head; n != NULL; n = n->next) {
+    AstStructConstructorField_* field = AST_CAST(AstStructConstructorField_, n->node);
+    field->base.top_sem_type = constructor->base.top_sem_type;
+    do_analysis((AstNode_*)field);
   }
 }
 
+void ast_struct_constructor_field_analysis(AstNode_* node) {
+  AstStructConstructorField_* field = (AstStructConstructorField_*)node;
+  field->expr->top_sem_type = field->base.top_sem_type;
+  do_analysis((AstNode_*)field->expr);
+  field->base.sem_type = field->expr->sem_type;
+}
+
 AnalysisRule_ analysis_rules[] = {
-  [AST_CLS(AstProgram_)]          = {program_analysis},
-  [AST_CLS(AstBlock_)]            = {block_analysis},
-  [AST_CLS(AstStmt_)]             = {stmt_analysis},
-  [AST_CLS(AstExpr_)]             = {expr_analysis},
-  [AST_CLS(AstPrintStmt_)]        = {print_analysis},
-  [AST_CLS(AstUnaryExp_)]         = {unary_analysis},
-  [AST_CLS(AstBinaryExp_)]        = {binary_analysis},
-  [AST_CLS(AstPrimaryExp_)]       = {primary_analysis},
-  [AST_CLS(AstReturnStmt_)]       = {return_analysis},
-  [AST_CLS(AstIfStmt_)]           = {if_analysis},
-  [AST_CLS(AstAssertStmt_)]       = {assert_analysis},
-  [AST_CLS(AstVarDeclStmt_)]      = {var_decl_analysis},
-  [AST_CLS(AstVarExpr_)]          = {var_expr_analysis},
-  [AST_CLS(AstIdExpr_)]           = {id_expr_analysis},
-  [AST_CLS(AstAssignmentExpr_)]   = {assignment_expr_analysis},
-  [AST_CLS(AstWhileStmt_)]        = {while_stmt_analysis},
-  [AST_CLS(AstFunctionDef_)]      = {function_def_analysis},
-  [AST_CLS(AstFunctionBody_)]     = {function_body_analysis},
-  [AST_CLS(AstFunctionParam_)]    = {function_param_analysis},
-  [AST_CLS(AstFunctionCall_)]     = {function_call_analysis},
-  [AST_CLS(AstFunctionArgs_)]     = {function_args_analysis},
-  [AST_CLS(AstExpressionStmt_)]   = {expression_statement_analysis},
-  [AST_CLS(AstNoopExpr_)]         = {noop_analysis},
-  [AST_CLS(AstNoopStmt_)]         = {noop_analysis},
-  [AST_CLS(AstCleanUpTemps_)]     = {clean_up_temps_analysis},
-  [AST_CLS(AstTmpDecl_)]          = {ast_tmp_decl_analysis},
-  [AST_CLS(AstStructDef_)]        = {ast_struct_def_analysis},
-  [AST_CLS(AstStructMemberDecl_)] = {ast_struct_member_decl_analysis},
-  [AST_CLS(AstDotExpr_)]          = {ast_dot_expr_analysis},
+  [AST_CLS(AstProgram_)]                = {program_analysis},
+  [AST_CLS(AstBlock_)]                  = {block_analysis},
+  [AST_CLS(AstStmt_)]                   = {stmt_analysis},
+  [AST_CLS(AstExpr_)]                   = {expr_analysis},
+  [AST_CLS(AstPrintStmt_)]              = {print_analysis},
+  [AST_CLS(AstUnaryExp_)]               = {unary_analysis},
+  [AST_CLS(AstBinaryExp_)]              = {binary_analysis},
+  [AST_CLS(AstPrimaryExp_)]             = {primary_analysis},
+  [AST_CLS(AstReturnStmt_)]             = {return_analysis},
+  [AST_CLS(AstIfStmt_)]                 = {if_analysis},
+  [AST_CLS(AstAssertStmt_)]             = {assert_analysis},
+  [AST_CLS(AstVarDeclStmt_)]            = {var_decl_analysis},
+  [AST_CLS(AstVarExpr_)]                = {var_expr_analysis},
+  [AST_CLS(AstIdExpr_)]                 = {id_expr_analysis},
+  [AST_CLS(AstAssignmentExpr_)]         = {assignment_expr_analysis},
+  [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},
+  [AST_CLS(AstFunctionDef_)]            = {function_def_analysis},
+  [AST_CLS(AstFunctionBody_)]           = {function_body_analysis},
+  [AST_CLS(AstFunctionParam_)]          = {function_param_analysis},
+  [AST_CLS(AstFunctionCall_)]           = {function_call_analysis},
+  [AST_CLS(AstFunctionCallArgs_)]       = {function_call_args_analysis},
+  [AST_CLS(AstFunctionCallArg_)]        = {function_call_arg_analysis},
+  [AST_CLS(AstExpressionStmt_)]         = {expression_statement_analysis},
+  [AST_CLS(AstNoopExpr_)]               = {noop_analysis},
+  [AST_CLS(AstNoopStmt_)]               = {noop_analysis},
+  [AST_CLS(AstCleanUpTemps_)]           = {clean_up_temps_analysis},
+  [AST_CLS(AstTmpDecl_)]                = {ast_tmp_decl_analysis},
+  [AST_CLS(AstStructDef_)]              = {ast_struct_def_analysis},
+  [AST_CLS(AstStructMemberDecl_)]       = {ast_struct_member_decl_analysis},
+  [AST_CLS(AstStructConstructor_)]      = {ast_struct_constructor_analysis},
+  [AST_CLS(AstStructConstructorField_)] = {ast_struct_constructor_field_analysis},
+  [AST_CLS(AstDotExpr_)]                = {ast_dot_expr_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.

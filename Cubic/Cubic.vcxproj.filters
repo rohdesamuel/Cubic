@@ -120,6 +120,9 @@
     <ClCompile Include="native_fns.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tokens.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lexer.h">

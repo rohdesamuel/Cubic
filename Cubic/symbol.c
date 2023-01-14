@@ -85,3 +85,28 @@ bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to) {
       from.info.val >= VAL_INT8 && from.info.val <= VAL_INT32 ||
       from.info.val >= VAL_UINT8 && from.info.val <= VAL_UINT32));
 }
+
+Symbol_* symbol_findmember(Symbol_* strct, Token_ name) {
+  for (ListNode_* n = strct->strct.members.head; n != NULL; n = n->next) {
+    Symbol_* field = list_val(n, Symbol_*);
+    Token_ field_name = field->field.sem_type.name;
+    if (field_name.length == name.length && memcmp(field_name.start, name.start, field_name.length) == 0) {
+      return field;
+    }
+  }
+
+  return NULL;
+}
+
+int symbol_findmember_index(Symbol_* strct, Token_ name) {
+  int index = 0;
+  for (ListNode_* n = strct->strct.members.head; n != NULL; n = n->next) {
+    Symbol_* field = list_val(n, Symbol_*);
+    if (token_eq(field->name, name)) {
+      return index;
+    }
+    ++index;
+  }
+
+  return index;
+}

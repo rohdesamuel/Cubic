@@ -26,6 +26,7 @@ static CodeGenRule_* get_rule(int info);
 
 static void emit_return(Chunk_* chunk, int line);
 static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line);
+static int resolve_var(Scope_* scope, AstNode_* expr);
 
 static void code_gen(Chunk_* chunk, AstNode_* node) {
   get_rule(node->cls)->code_gen(chunk, node);
@@ -139,45 +140,46 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
   // If getting the address of a symbol...
   if (exp->op == TK_AMPERSAND) {
     Symbol_* sym = exp->base.sem_type.sym;
+    if (!sym) {
+      sym = exp->base.sem_type.info.sym;
+    }
+
+    ValueKind kind = KIND_UNKNOWN;
     switch (sym->type) {
-
+      case SYMBOL_TYPE_FIELD:
+        kind = sym->field.sem_type.info.kind;
+        break;
       case SYMBOL_TYPE_VAR:
+        kind = sym->var.sem_type.info.kind;
+        break;
+
+      default:
+        assertf(false, "Unimplemented address of for symbol type '%d'", sym->type);
+        break;
+    }
+
+    int index = resolve_var(node->scope, (AstNode_*)exp->expr);
+    switch (kind) {
+      // If the symbol lives on the stack or referencing a static, create a weak reference to it.
+      case KIND_VAL:
+        emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
+        emit_byte(chunk, OP_MAKE_REF, node->line);
+        break;
+
+        // If the symbol is a strong reference, increment the count and get it.
+      case KIND_REF:
       {
-        VarSymbol_* var = &sym->var;
-        switch (var->sem_type.info.kind) {
-          // If the symbol lives on the stack, create a weak reference to it.
-          case KIND_VAL:
-            emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)symbolvar_index(sym), node->line);
-            emit_byte(chunk, OP_MAKE_REF, node->line);
-            break;
-
-          // If the symbol is a strong reference, increment the count and get it.
-          case KIND_REF:
-            emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
-            break;
-
-          // If the symbol is a weak reference, just return the reference.
-          case KIND_WEAK_REF:
-            emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
-            break;
-
-          // If trying to reference a static, then create a weak reference to it to not detroy it.
-          case KIND_STATIC:
-            emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)symbolvar_index(sym), node->line);
-            emit_byte(chunk, OP_MAKE_REF, node->line);
-            break;
-
-          default:
-            assertf(false, "Unimplemented address of for symbol kind '%d'", var->sem_type.info.kind);
-            break;
+        emit_bytes(chunk, OP_GET_VAR, (uint8_t)index, node->line);
+        if (sym->var.sem_type.info.ref_kind == REF_KIND_STRONG) {
+          // TODO: increment reference count.
         }
         break;
       }
 
       default:
-        assertf(false, "Unimplemented address of for symbol type '%d'", sym->type);
+        assertf(false, "Unimplemented address of for symbol kind '%d'", kind);
         break;
-    }    
+    }
   } else {
     code_gen(chunk, (AstNode_*)exp->expr);
     // Emit the operator instruction.
@@ -573,6 +575,33 @@ static int resolve_local(Scope_* scope, Token_* name) {
   return var->frame_index;
 }
 
+static int resolve_var(Scope_* scope, AstNode_* expr) {
+  switch (((AstNode_*)expr)->cls) {
+    case AST_CLS(AstVarExpr_):
+    {
+      AstVarExpr_* var_expr = AST_CAST(AstVarExpr_, expr);
+      return resolve_var(scope, (AstNode_*)var_expr->expr);
+    }
+
+    case AST_CLS(AstIdExpr_):
+    {
+      AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, expr);
+      return resolve_local(scope, &id_expr->name);
+    }
+
+    case AST_CLS(AstDotExpr_):
+    {
+      AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
+      StructSymbol_* struct_sym = &dot_expr->prefix->sem_type.info.sym->strct;
+      int index = symbol_findmember_index(dot_expr->prefix->sem_type.info.sym, dot_expr->id);
+      return resolve_var(scope, (AstNode_*)dot_expr->prefix) + index;
+    }
+
+    default:
+      assertf(false, "resolve_var unimplemented for AST_CLS(%d)", AS_EXPR(expr)->base.cls);
+  }
+}
+
 static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
   int slot = resolve_local(stmt->base.scope, &stmt->name);
@@ -592,8 +621,9 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
     }
 
     if (sem_type.info.val == VAL_STRUCT) {
-      for (int i = 0; i < sem_type.sym->strct.members.count; ++i) {
+      for (int i = sem_type.sym->strct.members.count - 1; i >= 0; --i) {
         emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot + i, node->line);
+        emit_byte(chunk, OP_POP, node->line);
       }
     } else {
       emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
@@ -615,8 +645,7 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
     case SYMBOL_TYPE_VAR:
     {
       VarSymbol_* var = &sym->var;
-      if (expr->base.top_sem_type.info.kind == KIND_VAL && 
-          (var->sem_type.info.kind == KIND_REF || var->sem_type.info.kind == KIND_WEAK_REF)) {
+      if (expr->base.top_sem_type.info.kind == KIND_VAL && var->sem_type.info.kind == KIND_REF) {
         emit_bytes(chunk, OP_GET_REF, (uint8_t)symbolvar_index(sym), node->line);
       } else {
         emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
@@ -640,13 +669,8 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   // TODO: allow for assigning to more than simple variables
   // TODO: allow for assigning to multiple variables.
   AstVarExpr_* var = (AstVarExpr_*)expr->left;
-  assertf(var->expr->base.cls == AST_CLS(AstIdExpr_),
-    "Only assigning to variables is supported at this time.");
-  
 
-  AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, var->expr);
-
-  int slot = resolve_local(node->scope, &id_expr->name);
+  int slot = resolve_var(node->scope, (AstNode_*)var);
   SemanticType_ sem_type = var->base.sem_type;
 
   code_gen(chunk, (AstNode_*)expr->right);
@@ -655,7 +679,7 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
     emit_bytes(chunk, OP_DESTROY_VAR, (uint8_t)slot, node->line);
   }
 
-  if (sem_type.info.kind == KIND_REF || sem_type.info.kind == KIND_WEAK_REF) {
+  if (sem_type.info.kind == KIND_REF) {
     emit_bytes(chunk, OP_SET_REF, (uint8_t)slot, node->line);
   } else {
     emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
@@ -737,40 +761,26 @@ void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   FunctionSymbol_* fn_sym = symbol_ascallable(sym);
   assertf(fn_sym, "Unknown symbol type.");
 
-  if (sym->type == SYMBOL_TYPE_STRUCT) {
-    StructSymbol_* struct_sym = &sym->strct;
-    for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
-      Symbol_* field_sym = list_val(n, Symbol_*);
-      emit_constant(chunk, field_sym->field.val, node->line);
-    }
-  } else {
-    // Push function object to call.
-    code_gen(chunk, (AstNode_*)prefix);
+  // Push function object to call.
+  code_gen(chunk, (AstNode_*)prefix);
 
-    // Push arguments.
-    code_gen(chunk, (AstNode_*)call->args);
+  // Push arguments.
+  code_gen(chunk, (AstNode_*)call->args);
 
-    // Do the call.
-    emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);
-  }
+  // Do the call.
+  emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);
 }
 
 void function_args_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstFunctionArgs_* args = (AstFunctionArgs_*)node;
-  
-  List_* params = &args->fn_sym->params;
-  ListNode_* param_node = params->head;
-
+  AstFunctionCallArgs_* args = (AstFunctionCallArgs_*)node;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-    VarSymbol_* param = &list_val(param_node, Symbol_*)->var;
-    //SemanticType_ param_sem_type = param->sem_type;
-    //SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
-
-
     code_gen(chunk, n->node);
-
-    param_node = param_node->next;
   }
+}
+
+void function_arg_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstFunctionCallArg_* arg = (AstFunctionCallArg_*)node;
+  code_gen(chunk, (AstNode_*)arg->expr);
 }
 
 void noop_code_gen(Chunk_* chunk, AstNode_* node) {}
@@ -795,41 +805,81 @@ void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
   }
 }
 
-void dot_expr_code_gen(Chunk_* chunk, AstNode_* n) {
-  AstDotExpr_* expr = AST_CAST(AstDotExpr_, n);
-  code_gen(chunk, (AstNode_*)expr->prefix);
+void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
+  int index = resolve_var(node->scope, node);
+
+  if (expr->base.top_sem_type.info.kind == KIND_VAL) {
+    emit_bytes(chunk, OP_GET_VAR, (uint8_t)index, node->line);
+  } else {
+    emit_bytes(chunk, OP_GET_REF, (uint8_t)index, node->line);
+  }
+}
+
+void ast_struct_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstStructConstructor_* constructor = (AstStructConstructor_*)node;
+  Symbol_* struct_sym = scope_find(node->scope, &constructor->name);
+  
+  AstListNode_* current_field_node = constructor->fields.head;
+  for (ListNode_* member_node = struct_sym->strct.members.head; member_node != NULL; member_node = member_node->next) {
+    Symbol_* member = list_val(member_node, Symbol_*);
+    FieldSymbol_* field = &member->field;
+    bool found_value = false;
+
+    for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
+      AstStructConstructorField_* constructor_field = AST_CAST(AstStructConstructorField_, field_node->node);      
+      if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
+        code_gen(chunk, field_node->node);
+        found_value = true;
+        current_field_node = field_node->next;
+        break;
+      }
+    }
+
+    if (!found_value) {
+      emit_constant(chunk, field->val, node->line);
+    }
+  }
+}
+
+void ast_struct_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstStructConstructorField_* field = (AstStructConstructorField_*)node;
+  code_gen(chunk, (AstNode_*)field->expr);
 }
 
 CodeGenRule_ code_gen_rules[] = {
-  [AST_CLS(AstProgram_)]          = {program_code_gen},
-  [AST_CLS(AstBlock_)]            = {block_code_gen},
-  [AST_CLS(AstStmt_)]             = {stmt_code_gen},
-  [AST_CLS(AstExpr_)]             = {expr_code_gen},
-  [AST_CLS(AstPrintStmt_)]        = {print_code_gen},
-  [AST_CLS(AstUnaryExp_)]         = {unary_code_gen},
-  [AST_CLS(AstBinaryExp_)]        = {binary_code_gen},
-  [AST_CLS(AstPrimaryExp_)]       = {primary_code_gen},
-  [AST_CLS(AstReturnStmt_)]       = {return_code_gen},
-  [AST_CLS(AstIfStmt_)]           = {if_code_gen},
-  [AST_CLS(AstAssertStmt_)]       = {assert_code_gen},
-  [AST_CLS(AstVarDeclStmt_)]      = {var_decl_code_gen},
-  [AST_CLS(AstVarExpr_)]          = {var_expr_code_gen},
-  [AST_CLS(AstIdExpr_)]           = {id_expr_code_gen},
-  [AST_CLS(AstAssignmentExpr_)]   = {assignment_expr_code_gen},
-  [AST_CLS(AstWhileStmt_)]        = {while_stmt_code_gen},
-  [AST_CLS(AstFunctionDef_)]      = {function_def_code_gen},
-  [AST_CLS(AstFunctionBody_)]     = {function_body_code_gen},
-  [AST_CLS(AstFunctionParam_)]    = {noop_code_gen},
-  [AST_CLS(AstFunctionCall_)]     = {function_call_code_gen},
-  [AST_CLS(AstFunctionArgs_)]     = {function_args_code_gen},
-  [AST_CLS(AstExpressionStmt_)]   = {expression_statement_code_gen},
-  [AST_CLS(AstNoopExpr_)]         = {noop_code_gen},
-  [AST_CLS(AstNoopStmt_)]         = {noop_code_gen},
-  [AST_CLS(AstCleanUpTemps_)]     = {clean_up_temps_code_gen},
-  [AST_CLS(AstTmpDecl_)]          = {tmp_decl_code_gen},
-  [AST_CLS(AstStructDef_)]        = {noop_code_gen},
-  [AST_CLS(AstStructMemberDecl_)] = {noop_code_gen},
-  [AST_CLS(AstDotExpr_)]          = {dot_expr_code_gen},
+  [AST_CLS(AstProgram_)]                = {program_code_gen},
+  [AST_CLS(AstBlock_)]                  = {block_code_gen},
+  [AST_CLS(AstStmt_)]                   = {stmt_code_gen},
+  [AST_CLS(AstExpr_)]                   = {expr_code_gen},
+  [AST_CLS(AstPrintStmt_)]              = {print_code_gen},
+  [AST_CLS(AstUnaryExp_)]               = {unary_code_gen},
+  [AST_CLS(AstBinaryExp_)]              = {binary_code_gen},
+  [AST_CLS(AstPrimaryExp_)]             = {primary_code_gen},
+  [AST_CLS(AstReturnStmt_)]             = {return_code_gen},
+  [AST_CLS(AstIfStmt_)]                 = {if_code_gen},
+  [AST_CLS(AstAssertStmt_)]             = {assert_code_gen},
+  [AST_CLS(AstVarDeclStmt_)]            = {var_decl_code_gen},
+  [AST_CLS(AstVarExpr_)]                = {var_expr_code_gen},
+  [AST_CLS(AstIdExpr_)]                 = {id_expr_code_gen},
+  [AST_CLS(AstAssignmentExpr_)]         = {assignment_expr_code_gen},
+  [AST_CLS(AstWhileStmt_)]              = {while_stmt_code_gen},
+  [AST_CLS(AstFunctionDef_)]            = {function_def_code_gen},
+  [AST_CLS(AstFunctionBody_)]           = {function_body_code_gen},
+  [AST_CLS(AstFunctionParam_)]          = {noop_code_gen},
+  [AST_CLS(AstFunctionCall_)]           = {function_call_code_gen},
+  [AST_CLS(AstFunctionCallArgs_)]       = {function_args_code_gen},
+  [AST_CLS(AstFunctionCallArg_)]        = {function_arg_code_gen},
+  [AST_CLS(AstExpressionStmt_)]         = {expression_statement_code_gen},
+  [AST_CLS(AstNoopExpr_)]               = {noop_code_gen},
+  [AST_CLS(AstNoopStmt_)]               = {noop_code_gen},
+  [AST_CLS(AstCleanUpTemps_)]           = {clean_up_temps_code_gen},
+  [AST_CLS(AstTmpDecl_)]                = {tmp_decl_code_gen},
+  [AST_CLS(AstStructDef_)]              = {noop_code_gen},
+  [AST_CLS(AstStructMemberDecl_)]       = {noop_code_gen},
+  [AST_CLS(AstStructConstructor_)]      = {ast_struct_constructor_code_gen},
+  [AST_CLS(AstStructConstructorField_)] = {ast_struct_constructor_field_code_gen},
+  [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(

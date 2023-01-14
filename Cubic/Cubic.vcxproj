@@ -178,6 +178,7 @@
     <ClCompile Include="scanner.c" />
     <ClCompile Include="symbol.c" />
     <ClCompile Include="symbol_table.c" />
+    <ClCompile Include="tokens.c" />
     <ClCompile Include="value.c" />
     <ClCompile Include="vm.c" />
   </ItemGroup>

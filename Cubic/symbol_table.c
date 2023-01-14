@@ -315,6 +315,7 @@ Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
       .sem_type = type,
       .index = struct_sym->members.count,
       .val = NIL_VAL,
+      .struct_sym = sym,
     },
     .name = name,
     .parent = sym->parent,

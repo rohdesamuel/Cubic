@@ -3,43 +3,67 @@ struct ZeroInit
 end
 
 do
-  let a := ZeroInit(0)
-  print(a.x)
+  let a := ZeroInit{}
+  assert a.x == 0
 
   a.x = 1
   assert a.x == 1
 end
 
-/#
+##########
+
+struct DefaultInit
+  x : int = 2
+end
+
+do
+  let b := DefaultInit{}
+  assert b.x == 2
+end
+
+
 ##########
 
 struct OneMember
-  a : int
+  a : int = 0
 end
 
 do
-  let a := OneMember()
-  a.a = 1
+  let a := OneMember{1}
   assert a.a == 1
 
-  let b := &a.a
-  b = 2
+  a.a = 2
   assert a.a == 2
+
+  let b := &a.a
+  b = 3
+  assert a.a == 3
 end
+
 
 ##########
 
+
 struct TwoMembers
-  a : int
-  b : int
+  a : int = 1
+  b : int = 2
 end
 
 do
-  let a := TwoMembers()
-  a.a = 1
-  a.b = 2
+  let a := TwoMembers{}
   assert a.a == 1
   assert a.b == 2
+end
+
+do
+  let a := TwoMembers{3, 4}
+  assert a.a == 3
+  assert a.b == 4
+
+  a.a = 5
+  a.b = 6
+  assert a.a == 5
+  assert a.b == 6
 
   let b := &a.a
   let c := &a.b
@@ -47,6 +71,56 @@ do
   c = 3
   assert a.a == 2
   assert a.b == 3
+end
+
+##########
+
+struct Vec3
+  x : double
+  y : double
+  z : double
+end
+
+do
+  let vec := Vec3{}
+  assert vec.x == 0.0
+  assert vec.y == 0.0
+  assert vec.z == 0.0
+end
+
+do
+  let vec := Vec3{z=3.0}
+  assert vec.x == 0.0
+  assert vec.y == 0.0
+  assert vec.z == 3.0
+end
+
+do
+  let vec := Vec3{y=2.0, z=3.0}
+  assert vec.x == 0.0
+  assert vec.y == 2.0
+  assert vec.z == 3.0
+end
+
+do
+  let vec := Vec3{x=1.0, y=2.0, z=3.0}
+  assert vec.x == 1.0
+  assert vec.y == 2.0
+  assert vec.z == 3.0
+end
+
+do
+  let vec := Vec3{1.0, 2.0, z=3.0}
+  assert vec.x == 1.0
+  assert vec.y == 2.0
+  assert vec.z == 3.0
+end
+
+##########
+
+struct Tree
+  left : Tree*
+  right : Tree*
 end
 
 ##########
@@ -61,9 +135,9 @@ struct Outer
 end
 
 do
-  let a := Outer(Inner(1, 2))
-  assert a.inner.a == 1
-  assert a.inner.b == 2
+  let outer := Outer{Inner{1, 2}}
+  assert outer.inner.a == 1
+  assert outer.inner.b == 2
 end
 
 ##########
@@ -74,7 +148,7 @@ struct DiffType
 end
 
 do
-  let a := DiffType()
+  let a := DiffType{}
   a.a = 1
   a.b = 2.0
   assert a.a == 1
@@ -89,44 +163,7 @@ struct DiffTypeWithDefaultVals
 end
 
 do
-  let a := DiffTypeWithDefaultVals()
+  let a := DiffTypeWithDefaultVals{}
   assert a.c == 1
   assert a.d == 2.0
 end
-
-##########
-
-struct Vec3
-  x : double
-  y : double
-  z : double
-end
-
-do
-  let vec := Vec3()
-  assert vec.x == 0.0
-  assert vec.y == 0.0
-  assert vec.z == 0.0
-end
-
-do
-  let vec := Vec3(z=3.0)
-  assert vec.x == 0.0
-  assert vec.y == 0.0
-  assert vec.z == 3.0
-end
-
-do
-  let vec := Vec3(y=2.0, z=3.0)
-  assert vec.x == 0.0
-  assert vec.y == 2.0
-  assert vec.z == 3.0
-end
-
-do
-  let vec := Vec3(x=1.0, y=2.0, z=3.0)
-  assert vec.x == 1.0
-  assert vec.y == 2.0
-  assert vec.z == 3.0
-end
-#/

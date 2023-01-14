@@ -78,19 +78,34 @@ typedef enum {
 
   // A named variable that is stored on stack or heap, no ownership.
   KIND_PTR,
-
-  // A named variable is stored on heap, reference counted.
+  
+  // A named variable that is stored on the heap that does not need to be
+  // explicitly dereferenced.
   KIND_REF,
+} ValueKind;
+
+typedef enum {
+  REF_TYPE_UNKNOWN,
 
   // A named variable is stored on stack or heap, not reference counted.
-  KIND_WEAK_REF,
+  REF_KIND_WEAK,
+
+  // A named variable is stored on heap, reference counted.
+  REF_KIND_STRONG,
+} ValueRefKind;
+
+typedef enum {
+  LIFETIME_UNKNOWN,
+
+  // Automatic lifetime (will be destructed without user intervention).
+  LIFETIME_AUTOMATIC,
 
   // An intermediate result and used once (rvalue).
-  KIND_TMP,
+  LIFETIME_TMP,
 
   // Type is a static constant and can be cached for multiple uses.
-  KIND_STATIC,
-} ValueKind;
+  LIFETIME_STATIC,
+} ValueLifetime;
 
 typedef struct RuntimeType_ {
   enum ValueType ty;
