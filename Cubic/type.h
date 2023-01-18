@@ -62,9 +62,7 @@ typedef enum {
   VAL_UINT64,
   VAL_FLOAT,
   VAL_DOUBLE,
-  VAL_REF,
   VAL_OBJ,
-  VAL_PTR,
   VAL_STRUCT,
 
   __VALUE_TYPE_COUNT__,

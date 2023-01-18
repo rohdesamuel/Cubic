@@ -165,18 +165,19 @@ Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
   return ret;
 }
 
-SemanticType_ parse_type(Parser_* parser, Scanner_* scanner) {
+static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
+  Token_ token = parser->previous;
+
   SemanticType_ ret = {
-    .info = {
-      .val = VAL_UNKNOWN,
-      .kind = KIND_UNKNOWN,
-      .obj = OBJ_TYPE_UNKNOWN,
-    },
-    .name = {0},
-    .sym = NULL
+  .info = {
+    .val = VAL_UNKNOWN,
+    .kind = KIND_UNKNOWN,
+    .obj = OBJ_TYPE_UNKNOWN,
+  },
+  .name = {0},
+  .sym = NULL
   };
 
-  Token_ token = parser->current;
   switch (token.type) {
     case TK_BOOL:        ret.info.val = VAL_BOOL; break;
     case TK_INT:         ret.info.val = VAL_INT; break;
@@ -196,8 +197,6 @@ SemanticType_ parse_type(Parser_* parser, Scanner_* scanner) {
     default: break;
   }
 
-  advance(parser, scanner);
-
   if (match(parser, scanner, TK_AMPERSAND)) {
     ret.info.kind = KIND_REF;
     ret.info.ref_kind = REF_KIND_WEAK;
@@ -208,6 +207,11 @@ SemanticType_ parse_type(Parser_* parser, Scanner_* scanner) {
   }
 
   return ret;
+}
+
+static SemanticType_ parse_type(Parser_* parser, Scanner_* scanner) {
+  advance(parser, scanner);
+  return parse_type_expr(parser, scanner);
 }
 
 // Escape edge of the parser state machine from the error state to the initial state.
@@ -644,7 +648,7 @@ static bool check(Parser_* parser, TokenType type) {
 ///////////////////////////////////////////////////////////////////////////////
 static AstNode_* Expr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   //AstExpr_* ret = MAKE_AST_NODE(&parser->allocator, AstExpr_, scope, parser->current.line);
-  AstExpr_* ret = (AstExpr_*)parse_precedence(parser, scanner, PREC_ASSIGNMENT, scope);
+  AstExpr_* ret = (AstExpr_*)parse_precedence(parser, scanner, PREC_NONE, scope);
   ret->top_sem_type = SemanticType_Unknown;
   return (AstNode_*)ret;
 }
@@ -699,6 +703,12 @@ static AstNode_* String(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   expr->base.sem_type.info.obj = OBJ_TYPE_STRING;
   expr->value = OBJ_VAL(objstring_from(parser->previous.start + 1, parser->previous.length - 2));
   return (AstNode_*)expr;
+}
+
+static AstNode_* Type(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstTypeExpr_* type = MAKE_AST_EXPR(&parser->allocator, AstTypeExpr_, scope, parser->previous.line);
+  type->base.sem_type = parse_type_expr(parser, scanner);
+  return (AstNode_*)type;
 }
 
 static AstNode_* grouping(Parser_* parser, Scanner_* scanner, Scope_* scope) {
@@ -758,8 +768,8 @@ static AstNode_* FunctionCallArg(Parser_* parser, Scanner_* scanner, Scope_* sco
   return (AstNode_*)arg;
 }
 
-static AstNode_* StructConstructorField(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstStructConstructorField_* field = MAKE_AST_EXPR(&parser->allocator, AstStructConstructorField_, scope, parser->previous.line);
+static AstNode_* ConstructorField(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstConstructorField_* field = MAKE_AST_EXPR(&parser->allocator, AstConstructorField_, scope, parser->previous.line);
   AstExpr_* field_expr = (AstExpr_*)Expr(parser, scanner, scope);
 
   if (field_expr->base.cls == AST_CLS(AstAssignmentExpr_)) {
@@ -775,8 +785,8 @@ static AstNode_* StructConstructorField(Parser_* parser, Scanner_* scanner, Scop
   return (AstNode_*)field;
 }
 
-static AstNode_* StructConstructor(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstStructConstructor_* constructor = MAKE_AST_EXPR(&parser->allocator, AstStructConstructor_, scope, parser->previous.line);
+static AstNode_* Constructor(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstConstructor_* constructor = MAKE_AST_EXPR(&parser->allocator, AstConstructor_, scope, parser->previous.line);
   astlist_init(&constructor->fields, (MemoryAllocator_*)&parser->allocator);
 
   if (match(parser, scanner, TK_RBRACE)) {
@@ -789,7 +799,7 @@ static AstNode_* StructConstructor(Parser_* parser, Scanner_* scanner, Scope_* s
       break;
     }
 
-    astlist_append(&constructor->fields, StructConstructorField(parser, scanner, scope));
+    astlist_append(&constructor->fields, ConstructorField(parser, scanner, scope));
   } while (match(parser, scanner, TK_COMMA));
 
   consume(parser, scanner, TK_RBRACE, "Expected a '}' to terminate a struct constructor.");
@@ -831,10 +841,15 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       advance(parser, scanner);
       exp = (AstNode_*)var_exp;
     } else if (parser->previous.type == TK_LBRACE) {
-      AstStructConstructor_* new_exp = AST_CAST(AstStructConstructor_, infix_rule(parser, scanner, scope));
-      AstVarExpr_* var_expr = AST_CAST(AstVarExpr_, exp);
-      AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, var_expr->expr);
-      new_exp->name = id_expr->name;
+      AstConstructor_* new_exp = AST_CAST(AstConstructor_, infix_rule(parser, scanner, scope));
+      if (exp->cls == AST_CLS(AstTypeExpr_)) {
+        AstTypeExpr_* type_expr = AST_CAST(AstTypeExpr_, exp);
+        new_exp->base.sem_type = type_expr->base.sem_type;
+      } else if (exp->cls == AST_CLS(AstVarExpr_)) {
+        AstVarExpr_* var_expr = AST_CAST(AstVarExpr_, exp);
+        AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, var_expr->expr);
+        new_exp->base.sem_type.name = id_expr->name;
+      }
       dealloc(&parser->allocator, exp);
       exp = (AstNode_*)new_exp;
     } else {
@@ -864,7 +879,7 @@ ParseRule_ rules[] = {
   [TK_RPAREN]       = {NULL,        NULL,              PREC_NONE},
   [TK_LBRACKET]     = {NULL,        NULL,              PREC_NONE},
   [TK_RBRACKET]     = {NULL,        NULL,              PREC_NONE},
-  [TK_LBRACE]       = {NULL,        StructConstructor, PREC_CALL},
+  [TK_LBRACE]       = {NULL,        Constructor,       PREC_CALL},
   [TK_RBRACE]       = {NULL,        NULL,              PREC_NONE},
   [TK_SEMICOLON]    = {NULL,        NULL,              PREC_NONE},
   [TK_COLON]        = {NULL,        NULL,              PREC_NONE},
@@ -913,6 +928,8 @@ ParseRule_ rules[] = {
   [TK_MATCH]        = {NULL,        NULL,              PREC_NONE},
   [TK_FUNCTION]     = {FunctionDef, NULL,              PREC_FUNCTION},
   [TK_RETURN]       = {NULL,        NULL,              PREC_NONE},
+  [TK_NEW]          = {UnaryOp,     NULL,              PREC_UNARY},
+  [TK_DELETE]       = {UnaryOp,     NULL,              PREC_UNARY},
   [TK_AND]          = {NULL,        BinaryOp,          PREC_AND},
   [TK_OR]           = {NULL,        BinaryOp,          PREC_OR},
   [TK_XOR]          = {NULL,        BinaryOp,          PREC_XOR},
@@ -923,14 +940,14 @@ ParseRule_ rules[] = {
   [TK_LET]          = {NULL,        NULL,              PREC_NONE},
   [TK_NIL]          = {Nil,         NULL,              PREC_NONE},
   [TK_BOOL]         = {NULL,        NULL,              PREC_NONE},
-  [TK_INT]          = {NULL,        NULL,              PREC_NONE},
-  [TK_UINT]         = {NULL,        NULL,              PREC_NONE},
-  [TK_FLOAT]        = {NULL,        NULL,              PREC_NONE},
-  [TK_DOUBLE]       = {NULL,        NULL,              PREC_NONE},
-  [TK_STRING_TYPE]  = {NULL,        NULL,              PREC_NONE},
-  [TK_LIST]         = {NULL,        NULL,              PREC_NONE},
-  [TK_MAP]          = {NULL,        NULL,              PREC_NONE},
-  [TK_SET]          = {NULL,        NULL,              PREC_NONE},
+  [TK_INT]          = {Type,        NULL,              PREC_NONE},
+  [TK_UINT]         = {Type,        NULL,              PREC_NONE},
+  [TK_FLOAT]        = {Type,        NULL,              PREC_NONE},
+  [TK_DOUBLE]       = {Type,        NULL,              PREC_NONE},
+  [TK_STRING_TYPE]  = {Type,        NULL,              PREC_NONE},
+  [TK_LIST]         = {Type,        NULL,              PREC_NONE},
+  [TK_MAP]          = {Type,        NULL,              PREC_NONE},
+  [TK_SET]          = {Type,        NULL,              PREC_NONE},
   [TK_ASYNC]        = {NULL,        NULL,              PREC_NONE},
   [TK_AWAIT]        = {NULL,        NULL,              PREC_NONE},
   [TK_YIELD]        = {NULL,        NULL,              PREC_NONE},

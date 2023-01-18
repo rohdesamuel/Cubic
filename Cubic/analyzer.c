@@ -66,7 +66,7 @@ static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index) {
     }
 
     VarSymbol_* var = &sym->var;
-    int size = var->sem_type.info.val == VAL_STRUCT ? var->sem_type.sym->strct.members.count : 1;
+    int size = var->sem_type.info.val == VAL_STRUCT ? (int)var->sem_type.info.size : 1;
     var->frame_index = frame_index;
     frame_index += size;
   }
@@ -160,6 +160,22 @@ void unary_analysis(AstNode_* n) {
       }
       break;
     }
+
+    case TK_NEW:
+    {
+      SemanticType_* type = &expr->base.sem_type;
+
+      if (type->info.kind == KIND_REF) {
+        error(analyzer_, n, "Cannot create allocate references");
+      }
+
+      type->info.kind = KIND_REF;
+      type->info.ref_kind = REF_KIND_STRONG;
+      type->info.lifetime = LIFETIME_AUTOMATIC;
+
+      break;
+    }
+
     default:
       error(analyzer_, n, "Unknown unary operator");
       break;
@@ -572,6 +588,15 @@ void ast_struct_def_analysis(AstNode_* node) {
   for (AstListNode_* n = def->members.head; n != NULL; n = n->next) {
     do_analysis(n->node);
   }
+
+  Symbol_* struct_sym = def->struct_type.info.sym;
+  if (semantictype_hascycle(&def->struct_type)) {
+    error(analyzer_, node, "struct \"%.*s\" has a cycle", struct_sym->name.length, struct_sym->name.start);
+    return;
+  }
+
+  semantictype_size(&def->struct_type);
+  def->struct_type.info.sym->strct.self_type = def->struct_type;
 }
 
 static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
@@ -585,7 +610,8 @@ static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
 
 void ast_struct_member_decl_analysis(AstNode_* node) {
   AstStructMemberDecl_* decl = (AstStructMemberDecl_*)node;
-  SemanticType_* type = &decl->sem_type;
+  FieldSymbol_* field = &decl->sem_type.info.sym->field;
+  SemanticType_* type = &decl->sem_type.info.sym->field.sem_type;
 
   if (type->info.val == VAL_UNKNOWN) {
     if (type->name.length == 0) {
@@ -596,6 +622,8 @@ void ast_struct_member_decl_analysis(AstNode_* node) {
         error(analyzer_, node,
           "Could not find type '%.*s' in struct member declaration",
           symbolic_type->name.length, symbolic_type->name);
+      } else {
+        *type = symbolic_type->strct.self_type;
       }
     }
   }
@@ -613,12 +641,14 @@ void ast_struct_member_decl_analysis(AstNode_* node) {
       return;
     }
 
-    type->info.sym->field.val = fold_constants(node->scope, expr);
-    type->info.sym->field.has_default_val = true;
+    field->val = fold_constants(node->scope, expr);
+    field->has_default_val = true;
   } else {
-    type->info.sym->field.val = NIL_VAL;
-    type->info.sym->field.has_default_val = false;
+    field->val = NIL_VAL;
+    field->has_default_val = false;
   }
+
+  decl->sem_type = *type;
 }
 
 void ast_dot_expr_analysis(AstNode_* node) {
@@ -627,19 +657,28 @@ void ast_dot_expr_analysis(AstNode_* node) {
   expr->prefix->top_sem_type = expr->base.top_sem_type;
   do_analysis((AstNode_*)expr->prefix);
 
+
   SemanticType_ prefix_type = expr->prefix->sem_type;
-  if (prefix_type.info.val != VAL_STRUCT || !prefix_type.sym || prefix_type.sym->type != SYMBOL_TYPE_VAR) {
+  if (prefix_type.info.val != VAL_STRUCT) {
     error(analyzer_, (AstNode_*)expr->prefix, "Expected struct type for sub-expression.");
     return;
   }
 
-  VarSymbol_* sym = &prefix_type.sym->var;
-
-  if (sym->sem_type.sym->type != SYMBOL_TYPE_STRUCT) {
-    error(analyzer_, node, "Expected struct symbol");
+  if (!prefix_type.sym) {
+    error(analyzer_, (AstNode_*)expr->prefix, "Unknown error: no semantic information for prefix.");
     return;
   }
-  StructSymbol_* struct_sym = &sym->sem_type.sym->strct;
+
+  StructSymbol_* struct_sym = NULL;
+
+  if (prefix_type.sym->type == SYMBOL_TYPE_VAR) {
+    VarSymbol_* sym = &prefix_type.sym->var;
+    struct_sym = &sym->sem_type.sym->strct;
+  } else if (prefix_type.sym->type == SYMBOL_TYPE_STRUCT) {
+    struct_sym = &prefix_type.sym->strct;
+  } else {
+    error(analyzer_, (AstNode_*)expr->prefix, "Unknown error: unexpected symbol type.");
+  }
 
   Symbol_* found = NULL;
   for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
@@ -659,26 +698,30 @@ void ast_dot_expr_analysis(AstNode_* node) {
   expr->base.sem_type.info.sym = found;
 }
 
-void ast_struct_constructor_analysis(AstNode_* node) {
-  AstStructConstructor_* constructor = (AstStructConstructor_*)node;
-  Symbol_* struct_sym = scope_find(node->scope, &constructor->name);
-  
-  if (!struct_sym) {
-    error(analyzer_, node, "Could not find struct %.*s", constructor->name.length, constructor->name.start);
-  } else {
-    constructor->base.sem_type = struct_sym->strct.self_type;
-    constructor->base.sem_type.sym = struct_sym;
+void ast_constructor_analysis(AstNode_* node) {
+  AstConstructor_* constructor = (AstConstructor_*)node;
+
+  SemanticType_* type = &constructor->base.sem_type;
+  if (type->name.start) {
+    Symbol_* struct_sym = scope_find(node->scope, &type->name);
+
+    if (!struct_sym) {
+      error(analyzer_, node, "Could not find struct %.*s", type->name.length, type->name.start);
+    } else {
+      constructor->base.sem_type = struct_sym->strct.self_type;
+      constructor->base.sem_type.sym = struct_sym;
+    }
   }
 
   for (AstListNode_* n = constructor->fields.head; n != NULL; n = n->next) {
-    AstStructConstructorField_* field = AST_CAST(AstStructConstructorField_, n->node);
+    AstConstructorField_* field = AST_CAST(AstConstructorField_, n->node);
     field->base.top_sem_type = constructor->base.top_sem_type;
     do_analysis((AstNode_*)field);
   }
 }
 
-void ast_struct_constructor_field_analysis(AstNode_* node) {
-  AstStructConstructorField_* field = (AstStructConstructorField_*)node;
+void ast_constructor_field_analysis(AstNode_* node) {
+  AstConstructorField_* field = (AstConstructorField_*)node;
   field->expr->top_sem_type = field->base.top_sem_type;
   do_analysis((AstNode_*)field->expr);
   field->base.sem_type = field->expr->sem_type;
@@ -714,9 +757,10 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstTmpDecl_)]                = {ast_tmp_decl_analysis},
   [AST_CLS(AstStructDef_)]              = {ast_struct_def_analysis},
   [AST_CLS(AstStructMemberDecl_)]       = {ast_struct_member_decl_analysis},
-  [AST_CLS(AstStructConstructor_)]      = {ast_struct_constructor_analysis},
-  [AST_CLS(AstStructConstructorField_)] = {ast_struct_constructor_field_analysis},
+  [AST_CLS(AstConstructor_)]            = {ast_constructor_analysis},
+  [AST_CLS(AstConstructorField_)]       = {ast_constructor_field_analysis},
   [AST_CLS(AstDotExpr_)]                = {ast_dot_expr_analysis},
+  [AST_CLS(AstTypeExpr_)]               = {noop_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.

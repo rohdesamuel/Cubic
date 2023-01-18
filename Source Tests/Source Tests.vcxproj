@@ -191,6 +191,7 @@
     <None Include="global_variables.cub" />
     <None Include="for_loops.cub" />
     <None Include="lambdas.cub" />
+    <None Include="memory.cub" />
     <None Include="multiline_comments.cub" />
     <None Include="operators.cub" />
     <None Include="precedence.cub" />

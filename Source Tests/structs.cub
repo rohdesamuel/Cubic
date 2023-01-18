@@ -118,30 +118,6 @@ end
 
 ##########
 
-struct Tree
-  left : Tree*
-  right : Tree*
-end
-
-##########
-
-struct Inner
-  a : int
-  b : int
-end
-
-struct Outer
-  inner : Inner
-end
-
-do
-  let outer := Outer{Inner{1, 2}}
-  assert outer.inner.a == 1
-  assert outer.inner.b == 2
-end
-
-##########
-
 struct DiffType
   a : int
   b : double
@@ -167,3 +143,32 @@ do
   assert a.c == 1
   assert a.d == 2.0
 end
+
+##########
+
+struct Inner
+  a : int
+  b : int
+end
+
+struct Outer
+  inner : Inner
+end
+
+do
+  let outer := Outer{Inner{1, 2}}
+  assert outer.inner.a == 1
+  assert outer.inner.b == 2
+end
+
+/#
+
+##########
+
+struct Tree
+  left : Tree*
+  right : Tree*
+end
+
+
+#/

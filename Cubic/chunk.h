@@ -66,14 +66,20 @@ typedef enum {
   OP_PROLOGUE,
   OP_EPILOGUE,
 
+  OP_ADD_OFFSET,
+  OP_GET_OFFSET,
+  OP_SET_OFFSET,
+
   OP_GET_VAR,
   OP_SET_VAR,
+  OP_NEW_VAR,
   OP_DESTROY_VAR,  // TODO: turn this into a function call. But maybe a VM operation is faster?
  
   OP_MAKE_REF,
   OP_GET_REF,
   OP_SET_REF,
   OP_ADDROF_VAR,
+  OP_ADDROF_REF,
 
   OP_INC_REF,
   OP_DEC_REF,

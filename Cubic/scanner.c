@@ -293,15 +293,19 @@ static TokenType identifier_type(Scanner scanner) {
     case 'c': return check_keyword(scanner, 1, 3, "ase", TK_CASE);
 
 
-    // do, double
+    // delete, do, double
     case 'd':
     {
-      if (length > 1 && scanner->start[1] == 'o') {
-        if (length == 2) {
-          return TK_DO;
-        } else {
-          return check_keyword(scanner, 2, 4, "uble", TK_DOUBLE);
-        }
+      if (length > 1) {
+        switch (scanner->start[1]) {
+          case 'e': return check_keyword(scanner, 2, 4, "lete", TK_DELETE);
+          case 'o':
+            if (length == 2) {
+              return TK_DO;
+            } else {
+              return check_keyword(scanner, 2, 4, "uble", TK_DOUBLE);
+            }
+        }            
       }
       break;
     }
@@ -361,10 +365,11 @@ static TokenType identifier_type(Scanner scanner) {
     // match
     case 'm': return check_keyword(scanner, 1, 4, "atch", TK_MATCH);
 
-    // nil, not
+    // new, nil, not
     case 'n':
       if (length > 1) {
         switch (scanner->start[1]) {
+          case 'e': return check_keyword(scanner, 2, 1, "w", TK_NEW);
           case 'i': return check_keyword(scanner, 2, 1, "l", TK_NIL);
           case 'o': return check_keyword(scanner, 2, 1, "t", TK_NOT);
         }

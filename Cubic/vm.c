@@ -160,6 +160,17 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_NEW_VAR:
+      {
+        uint32_t size = READ_LONG();
+        Value_* new_val = calloc(size, sizeof(Value_));
+        for (int64_t i = (int64_t)size - 1; i >= 0; --i) {
+          new_val[i] = vm_pop(vm);
+        }
+        vm_push(vm, PTR_VAL(new_val));
+        continue;
+      }
+
       case OP_DESTROY_VAR:
       {
         int var_index = READ_BYTE();
@@ -213,6 +224,13 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_ADDROF_REF:
+      {
+        uint8_t slot = READ_BYTE();
+        vm_push(vm, PTR_VAL(frame->slots[slot].as.ref.val));
+        continue;
+      }
+
       case OP_ADDROF_VAR:
       {
         uint8_t slot = READ_BYTE();
@@ -233,6 +251,28 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_ADD_OFFSET:
+      {
+        uint8_t slot = READ_BYTE();
+        Value_* val = (Value_*)vm_pop(vm).as.ptr;
+        vm_push(vm, PTR_VAL(val + slot));
+        continue;
+      }
+
+      case OP_GET_OFFSET:
+      {
+        uint8_t slot = READ_BYTE();
+        Value_* val = (Value_*)vm_pop(vm).as.ptr;
+        vm_push(vm, *(val + slot));
+        continue;
+      }
+
+      case OP_SET_OFFSET:
+      {
+        uint8_t slot = READ_BYTE();
+        continue;
+      }
+
       case OP_GET_REF:
       {
         uint8_t slot = READ_BYTE();
@@ -250,7 +290,6 @@ static InterpretResult run(VM vm) {
 
       case OP_INC_REF:
       {
-
         continue;
       }
 

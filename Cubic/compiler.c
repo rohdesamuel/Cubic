@@ -180,6 +180,13 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
         assertf(false, "Unimplemented address of for symbol kind '%d'", kind);
         break;
     }
+  } else if (exp->op == TK_NEW) {
+    code_gen(chunk, (AstNode_*)exp->expr);
+    emit_byte(chunk, OP_NEW_VAR, node->line);
+    int64_t size = exp->expr->sem_type.info.size;
+    size = size == 0 ? 1 : size;
+    emit_long(chunk, (uint32_t)size, node->line);
+    emit_byte(chunk, OP_MAKE_REF, node->line);
   } else {
     code_gen(chunk, (AstNode_*)exp->expr);
     // Emit the operator instruction.
@@ -602,6 +609,33 @@ static int resolve_var(Scope_* scope, AstNode_* expr) {
   }
 }
 
+static int resolve_var_code_gen(Scope_* scope, AstNode_* expr) {
+  switch (((AstNode_*)expr)->cls) {
+    case AST_CLS(AstVarExpr_):
+    {
+      AstVarExpr_* var_expr = AST_CAST(AstVarExpr_, expr);
+      return resolve_var_code_gen(scope, (AstNode_*)var_expr->expr);
+    }
+
+    case AST_CLS(AstIdExpr_):
+    {
+      AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, expr);
+      return resolve_local(scope, &id_expr->name);
+    }
+
+    case AST_CLS(AstDotExpr_):
+    {
+      AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
+      StructSymbol_* struct_sym = &dot_expr->prefix->sem_type.info.sym->strct;
+      int index = symbol_findmember_index(dot_expr->prefix->sem_type.info.sym, dot_expr->id);
+      return resolve_var_code_gen(scope, (AstNode_*)dot_expr->prefix) + index;
+    }
+
+    default:
+      assertf(false, "resolve_var unimplemented for AST_CLS(%d)", AS_EXPR(expr)->base.cls);
+  }
+}
+
 static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
   int slot = resolve_local(stmt->base.scope, &stmt->name);
@@ -620,10 +654,16 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
       emit_byte(chunk, OP_INC_REF, node->line);
     }
 
+    //emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
+
     if (sem_type.info.val == VAL_STRUCT) {
-      for (int i = sem_type.sym->strct.members.count - 1; i >= 0; --i) {
-        emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot + i, node->line);
-        emit_byte(chunk, OP_POP, node->line);
+      if (sem_type.info.kind == KIND_VAL) {
+        for (int64_t i = sem_type.info.size - 1; i >= 0; --i) {
+          emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot + (uint8_t)i, node->line);
+          emit_byte(chunk, OP_POP, node->line);
+        }
+      } else {
+        emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
       }
     } else {
       emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
@@ -807,43 +847,72 @@ void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
 
 void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
-  int index = resolve_var(node->scope, node);
+  StructSymbol_* struct_sym = NULL;
+  const SemanticType_* type = &expr->prefix->sem_type;
+  if (type->info.sym->type == SYMBOL_TYPE_VAR) {
+    struct_sym = &type->info.sym->var.sem_type.info.sym->strct;
+  } else if (type->info.sym->type == SYMBOL_TYPE_STRUCT) {
+    struct_sym = &type->info.sym->strct;
+  } else if (type->info.sym->type == SYMBOL_TYPE_FIELD) {
+    struct_sym = &type->sym->strct;
+  } else {
+    assertf(false, "Unexpected symbol type %d", type->info.sym->type);
+  }
+
+  int index = resolve_var(node->scope, (AstNode_*)expr->prefix);
+  int field_index = symbol_findmember_index(struct_sym->self_type.sym, expr->id);
+
+  assertf(index + field_index < UINT8_MAX, "Trying to index struct out of bounds.");
+
+  if (expr->prefix->sem_type.info.kind == KIND_REF) {
+    emit_bytes(chunk, OP_ADDROF_REF, (uint8_t)index, node->line);
+  } else {
+    emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
+  }
 
   if (expr->base.top_sem_type.info.kind == KIND_VAL) {
-    emit_bytes(chunk, OP_GET_VAR, (uint8_t)index, node->line);
+    emit_bytes(chunk, OP_GET_OFFSET, (uint8_t)field_index, node->line);
   } else {
-    emit_bytes(chunk, OP_GET_REF, (uint8_t)index, node->line);
+    emit_bytes(chunk, OP_ADD_OFFSET, (uint8_t)field_index, node->line);
   }
 }
 
 void ast_struct_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstStructConstructor_* constructor = (AstStructConstructor_*)node;
-  Symbol_* struct_sym = scope_find(node->scope, &constructor->name);
-  
-  AstListNode_* current_field_node = constructor->fields.head;
-  for (ListNode_* member_node = struct_sym->strct.members.head; member_node != NULL; member_node = member_node->next) {
-    Symbol_* member = list_val(member_node, Symbol_*);
-    FieldSymbol_* field = &member->field;
-    bool found_value = false;
+  AstConstructor_* constructor = (AstConstructor_*)node;
 
-    for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
-      AstStructConstructorField_* constructor_field = AST_CAST(AstStructConstructorField_, field_node->node);      
-      if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
-        code_gen(chunk, field_node->node);
-        found_value = true;
-        current_field_node = field_node->next;
-        break;
+  SemanticType_* type = &constructor->base.sem_type;
+  if (type->name.start) {
+    Symbol_* struct_sym = scope_find(node->scope, &type->name);
+    AstListNode_* current_field_node = constructor->fields.head;
+    for (ListNode_* member_node = struct_sym->strct.members.head; member_node != NULL; member_node = member_node->next) {
+      Symbol_* member = list_val(member_node, Symbol_*);
+      FieldSymbol_* field = &member->field;
+      bool found_value = false;
+
+      for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
+        AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+        if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
+          code_gen(chunk, field_node->node);
+          found_value = true;
+          current_field_node = field_node->next;
+          break;
+        }
+      }
+
+      if (!found_value) {
+        emit_constant(chunk, field->val, node->line);
       }
     }
-
-    if (!found_value) {
-      emit_constant(chunk, field->val, node->line);
+  } else {
+    for (AstListNode_* field_node = constructor->fields.head; field_node != NULL; field_node = field_node->next) {
+      AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+      code_gen(chunk, field_node->node);
     }
   }
 }
 
 void ast_struct_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstStructConstructorField_* field = (AstStructConstructorField_*)node;
+  AstConstructorField_* field = (AstConstructorField_*)node;
   code_gen(chunk, (AstNode_*)field->expr);
 }
 
@@ -877,9 +946,10 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstTmpDecl_)]                = {tmp_decl_code_gen},
   [AST_CLS(AstStructDef_)]              = {noop_code_gen},
   [AST_CLS(AstStructMemberDecl_)]       = {noop_code_gen},
-  [AST_CLS(AstStructConstructor_)]      = {ast_struct_constructor_code_gen},
-  [AST_CLS(AstStructConstructorField_)] = {ast_struct_constructor_field_code_gen},
+  [AST_CLS(AstConstructor_)]            = {ast_struct_constructor_code_gen},
+  [AST_CLS(AstConstructorField_)]       = {ast_struct_constructor_field_code_gen},
   [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
+  [AST_CLS(AstTypeExpr_)]               = {noop_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(

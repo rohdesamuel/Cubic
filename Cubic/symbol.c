@@ -1,6 +1,7 @@
 #include "symbol.h"
 
 #include "object.h"
+#include "map.h"
 
 extern SemanticType_ SemanticType_Unknown = {
   .info = {
@@ -109,4 +110,67 @@ int symbol_findmember_index(Symbol_* strct, Token_ name) {
   }
 
   return index;
+}
+
+static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
+  if (!symbol || symbol->type != SYMBOL_TYPE_STRUCT) {
+    return false;
+  }
+
+  if (hashmap_get_set(seen, symbol->name.start, symbol->name.length, (uintptr_t*)&symbol)) {
+    return true;
+  }
+
+  const StructSymbol_* struct_sym = &symbol->strct;
+  for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
+    Symbol_* field = list_val(n, Symbol_*);
+    if (field->field.sem_type.info.kind != KIND_VAL) {
+      continue;
+    }
+
+    if (semantictype_hascycle_recur(field->field.sem_type.sym, seen)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool semantictype_hascycle(const SemanticType_* type) {
+  if (type->info.val != VAL_STRUCT) {
+    return false;
+  }
+
+  Hashmap* seen = hashmap_create();
+  bool has_cycle = semantictype_hascycle_recur(type->info.sym, seen);
+  hashmap_free(seen);
+
+  return has_cycle;
+}
+
+static size_t semantictype_size_recur(SemanticType_* type) {
+  if (type->info.size > 0) {
+    return type->info.size;
+  }
+
+  StructSymbol_* sym = &type->info.sym->strct;
+
+  size_t ret = 0;
+  for (ListNode_* n = sym->members.head; n != NULL; n = n->next) {
+    FieldSymbol_* field = &list_val(n, Symbol_*)->field;
+    ret += semantictype_size(&field->sem_type);
+  }
+
+  return ret;
+}
+
+size_t semantictype_size(SemanticType_* type) {
+  if (type->info.val != VAL_STRUCT) {
+    return 1;
+  }
+
+  if (type->info.size <= 0) {
+    type->info.size = semantictype_size_recur(type);
+  }
+  return type->info.size;
 }

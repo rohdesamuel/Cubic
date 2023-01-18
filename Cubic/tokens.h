@@ -42,6 +42,7 @@ typedef enum {
   TK_AND, TK_OR, TK_XOR, TK_NOT,
   TK_TRUE, TK_FALSE, TK_PASS,
   TK_LET, TK_NIL,
+  TK_NEW, TK_DELETE,
   TK_ASSERT,
 
   // Types

@@ -298,6 +298,8 @@ Symbol_* scope_addstruct(Scope_* scope, Token_* name) {
   };
   MemoryAllocator_* allocator = scope->allocator;
   s.strct.constructor = alloc_ty(allocator, Symbol_);
+  s.strct.self_type.info.size = -1;
+
   
   list_of(&s.strct.constructor->fn.params, Symbol_*, allocator);
   list_of(&s.strct.members, Symbol_*, allocator);

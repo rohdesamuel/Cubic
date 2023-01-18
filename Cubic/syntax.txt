@@ -55,9 +55,6 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 VarDecl ::= ('let' | 'ptr' | 'ref') IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 StructDef ::= 'struct' {StructMemberDecl} 'end'
 StructMemberDecl ::= IdList ':' UnionType ['=' ExprList]
-StructConstructor ::= Id '{' [StructConstructorParamList] '}'
-StructConstructorParam ::= [Id '='] Expr 
-StructConstructorParamList ::= StructConstructorParam {',' StructConstructorParam} [',']
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helpers
@@ -98,6 +95,10 @@ FieldList ::= Field {',' Field} [',']
 ArrayValue ::= '[' ExprList ']'
 MapValue ::= '{' [FieldList] '}'
 SetValue ::= '{' [ExprList] '}'
+
+Constructor ::= Id '{' [ConstructorParamList] '}'
+ConstructorParam ::= [Id '='] Expr
+ConstructorParamList ::= ConstructorParam {',' ConstructorParam} [',']
 
 ///////////////////////////////////////////////////////////////////////////////
 // Expressions

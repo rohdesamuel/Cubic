@@ -51,6 +51,9 @@ typedef struct SemanticType_ {
     // If the type is user-defined like structs or functions, this will point
     // to the symbol holding more metadata.
     struct Symbol_* sym;
+
+    // The size of this type in memory.
+    int64_t size;
   } info;
 
   // If the type is user-defined, this is the name of the type.
@@ -141,6 +144,9 @@ int symbol_findmember_index(Symbol_* strct, Token_ name);
 
 extern SemanticType_ SemanticType_Unknown;
 extern SemanticType_ SemanticType_Nil;
+
+size_t semantictype_size(SemanticType_* type);
+bool semantictype_hascycle(const SemanticType_* type);
 
 inline static bool semantictype_infoequal(SemanticType_ a, SemanticType_ b) {
   return a.info.val == b.info.val && a.info.kind == b.info.kind && a.info.obj == b.info.obj;
