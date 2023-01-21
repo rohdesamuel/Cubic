@@ -3,7 +3,6 @@ do
   assert a == 1234
 end
 
-/#
 struct Vec3
   x : double
   y : double
@@ -17,6 +16,7 @@ do
   assert a.z == 3
 end
 
+/#
 do
   ref a := new int{1234}
   assert a == 1234

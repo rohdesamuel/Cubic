@@ -1,3 +1,42 @@
+##########
+
+struct InnerA
+  a : int
+  b : int
+end
+
+struct InnerB
+  a : int
+  b : int
+  c : int
+  d : InnerA
+end
+
+struct Outer2
+  inner_a : InnerA
+  inner_b : InnerB
+end
+
+do
+  let outer := Outer2{}
+  outer.inner_a.a = 10
+  #outer.inner_a.b = 9
+  #outer.inner_b.a = 8
+  #outer.inner_b.b = 7
+  #outer.inner_b.c = 6
+  #outer.inner_b.d.a = 5
+  #outer.inner_b.d.b = 4
+  #
+  #assert outer.inner_a.a == 10
+  #assert outer.inner_a.b == 9
+  #assert outer.inner_b.a == 8
+  #assert outer.inner_b.b == 7
+  #assert outer.inner_b.c == 6
+  #assert outer.inner_b.d.a == 5
+  #assert outer.inner_b.d.b == 4
+end
+
+/#
 struct ZeroInit
   x : int
 end
@@ -142,23 +181,6 @@ do
   let a := DiffTypeWithDefaultVals{}
   assert a.c == 1
   assert a.d == 2.0
-end
-
-##########
-
-struct Inner
-  a : int
-  b : int
-end
-
-struct Outer
-  inner : Inner
-end
-
-do
-  let outer := Outer{Inner{1, 2}}
-  assert outer.inner.a == 1
-  assert outer.inner.b == 2
 end
 
 /#

@@ -543,11 +543,10 @@ void function_call_args_analysis(AstNode_* node) {
     SemanticType_ param_sem_type = SemanticType_Unknown;
     if (param->type == SYMBOL_TYPE_VAR) {
       param_sem_type = param->var.sem_type;
-    } else if (param->type == SYMBOL_TYPE_FIELD) {
-      param_sem_type = param->field.sem_type;
     } else {
       error(analyzer_, node, "Encountered unknown parameter type %d.", param->type);
     }
+
     AS_EXPR(n->node)->top_sem_type = param_sem_type;
     do_analysis(n->node);
     SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
@@ -621,7 +620,7 @@ void ast_struct_member_decl_analysis(AstNode_* node) {
       if (!symbolic_type) {
         error(analyzer_, node,
           "Could not find type '%.*s' in struct member declaration",
-          symbolic_type->name.length, symbolic_type->name);
+          type->name.length, type->name.start);
       } else {
         *type = symbolic_type->strct.self_type;
       }

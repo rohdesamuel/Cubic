@@ -43,6 +43,7 @@ typedef struct SemanticType_ {
 
     enum ValueRefKind ref_kind;
 
+    // When to destroy the associated value.
     enum ValueLifetime lifetime;
 
     // If the value is allocated on the heap, this type will be filled.

@@ -191,6 +191,10 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
       // ret.kind = KIND_REF;
       ret.info.obj = OBJ_TYPE_STRING;
       break;
+    case TK_FUNCTION:
+      ret.info.val = VAL_OBJ;
+      ret.info.obj = OBJ_TYPE_FUNCTION;
+      break;
     case TK_ID:
       ret.name = parse_variable(parser, scanner, &token);
       break;

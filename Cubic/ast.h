@@ -68,7 +68,13 @@ typedef struct AstStmt_ {
 typedef struct AstExpr_ {
   AstNode_ base;
   struct AstExpr_* expr;
+
+  // This type is the result of executing this expression.
   struct SemanticType_ sem_type;
+
+  // This type is what the result of this expression should be interpreted as.
+  // For instance, when automatically dereferencing a reference this type is a
+  // value type.
   struct SemanticType_ top_sem_type;
 } AstExpr_;
 

@@ -1,10 +1,6 @@
 function fib_recur(n: int) -> int
-  if n <= 0 then
-    return 0
-  end
-
-  if n == 1 then
-    return 1
+  if n <= 1 then
+    return n
   end
 
   return fib_recur(n - 1) + fib_recur(n - 2)
