@@ -48,7 +48,7 @@ typedef struct Frame_ {
 typedef struct SymbolTable_ {
   ListOf_(Symbol_*) vars;
   ListOf_(Symbol_*) fns;
-  ListOf_(Symbol_*) structs;
+  ListOf_(Symbol_*) classes;
 
   struct SymbolTable_* parent;
   ListOf_(Symbol_) symbol_list_;
@@ -62,7 +62,7 @@ void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope);
 Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope);
-Symbol_* frame_addstruct(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addclass(Frame_* frame, Token_* name, Scope_* scope);
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
 void frame_assignindices(Frame_* frame);
 
@@ -83,7 +83,6 @@ void symboltable_destroy(SymbolTable_** symbol_table);
 Symbol_* scope_find(Scope_* scope, Token_* name);
 VarSymbol_* scope_var(Scope_* scope, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
-StructSymbol_* scope_struct(Scope_* scope, Token_* name);
 
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
@@ -91,6 +90,6 @@ void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
 int symbolvar_index(Symbol_* var);
 int symboltmp_index(Symbol_* tmp);
 
-Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type);
+Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type);
 
 #endif  // SYMBOL_TABLE__H

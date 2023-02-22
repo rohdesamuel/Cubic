@@ -437,7 +437,7 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
           emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
         }        
         break;
-      case SYMBOL_TYPE_STRUCT:
+      case SYMBOL_TYPE_CLASS:
       case SYMBOL_TYPE_FN:  // TODO: how to handle this?
         break;
       default:
@@ -599,7 +599,7 @@ static int resolve_var(Scope_* scope, AstNode_* expr) {
     case AST_CLS(AstDotExpr_):
     {
       AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
-      StructSymbol_* struct_sym = &dot_expr->prefix->sem_type.info.sym->strct;
+      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.info.sym->cls;
       int index = symbol_findmember_index(dot_expr->prefix->sem_type.info.sym, dot_expr->id);
       return resolve_var(scope, (AstNode_*)dot_expr->prefix) + index;
     }
@@ -626,7 +626,7 @@ static int resolve_var_code_gen(Scope_* scope, AstNode_* expr) {
     case AST_CLS(AstDotExpr_):
     {
       AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
-      StructSymbol_* struct_sym = &dot_expr->prefix->sem_type.info.sym->strct;
+      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.info.sym->cls;
       int index = symbol_findmember_index(dot_expr->prefix->sem_type.info.sym, dot_expr->id);
       return resolve_var_code_gen(scope, (AstNode_*)dot_expr->prefix) + index;
     }
@@ -656,7 +656,7 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
 
     //emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
 
-    if (sem_type.info.val == VAL_STRUCT) {
+    if (sem_type.info.val == VAL_CLASS) {
       if (sem_type.info.kind == KIND_VAL) {
         for (int64_t i = sem_type.info.size - 1; i >= 0; --i) {
           emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot + (uint8_t)i, node->line);
@@ -847,20 +847,20 @@ void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
 
 void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
-  StructSymbol_* struct_sym = NULL;
+  ClassSymbol_* cls_sym = NULL;
   const SemanticType_* type = &expr->prefix->sem_type;
   if (type->info.sym->type == SYMBOL_TYPE_VAR) {
-    struct_sym = &type->info.sym->var.sem_type.info.sym->strct;
-  } else if (type->info.sym->type == SYMBOL_TYPE_STRUCT) {
-    struct_sym = &type->info.sym->strct;
+    cls_sym = &type->info.sym->var.sem_type.info.sym->cls;
+  } else if (type->info.sym->type == SYMBOL_TYPE_CLASS) {
+    cls_sym = &type->info.sym->cls;
   } else if (type->info.sym->type == SYMBOL_TYPE_FIELD) {
-    struct_sym = &type->sym->strct;
+    cls_sym = &type->sym->cls;
   } else {
     assertf(false, "Unexpected symbol type %d", type->info.sym->type);
   }
 
   int index = resolve_var(node->scope, (AstNode_*)expr->prefix);
-  int field_index = symbol_findmember_index(struct_sym->self_type.sym, expr->id);
+  int field_index = symbol_findmember_index(cls_sym->self_type.sym, expr->id);
 
   assertf(index + field_index < UINT8_MAX, "Trying to index struct out of bounds.");
 
@@ -877,14 +877,14 @@ void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
-void ast_struct_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
+void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
   AstConstructor_* constructor = (AstConstructor_*)node;
 
   SemanticType_* type = &constructor->base.sem_type;
   if (type->name.start) {
-    Symbol_* struct_sym = scope_find(node->scope, &type->name);
+    Symbol_* cls_sym = scope_find(node->scope, &type->name);
     AstListNode_* current_field_node = constructor->fields.head;
-    for (ListNode_* member_node = struct_sym->strct.members.head; member_node != NULL; member_node = member_node->next) {
+    for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
       Symbol_* member = list_val(member_node, Symbol_*);
       FieldSymbol_* field = &member->field;
       bool found_value = false;
@@ -911,7 +911,7 @@ void ast_struct_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
-void ast_struct_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
+void ast_class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
   AstConstructorField_* field = (AstConstructorField_*)node;
   code_gen(chunk, (AstNode_*)field->expr);
 }
@@ -944,10 +944,10 @@ CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstNoopStmt_)]               = {noop_code_gen},
   [AST_CLS(AstCleanUpTemps_)]           = {clean_up_temps_code_gen},
   [AST_CLS(AstTmpDecl_)]                = {tmp_decl_code_gen},
-  [AST_CLS(AstStructDef_)]              = {noop_code_gen},
-  [AST_CLS(AstStructMemberDecl_)]       = {noop_code_gen},
-  [AST_CLS(AstConstructor_)]            = {ast_struct_constructor_code_gen},
-  [AST_CLS(AstConstructorField_)]       = {ast_struct_constructor_field_code_gen},
+  [AST_CLS(AstClassDef_)]               = {noop_code_gen},
+  [AST_CLS(AstClassMemberDecl_)]        = {noop_code_gen},
+  [AST_CLS(AstConstructor_)]            = {ast_class_constructor_code_gen},
+  [AST_CLS(AstConstructorField_)]       = {ast_class_constructor_field_code_gen},
   [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)]               = {noop_code_gen},
 };

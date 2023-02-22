@@ -11,7 +11,7 @@ static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
 static Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
 static Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type);
 static Symbol_* scope_addfn(Scope_* scope, Token_* name);
-static Symbol_* scope_addstruct(Scope_* scope, Token_* name);
+static Symbol_* scope_addclass(Scope_* scope, Token_* name);
 
 Frame_* frame_root(struct MemoryAllocator_* allocator) {
   Token_ entry_name = {
@@ -90,8 +90,8 @@ Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope) {
   return scope_addfn(scope, name);
 }
 
-Symbol_* frame_addstruct(Frame_* frame, Token_* name, Scope_* scope) {
-  return scope_addstruct(scope, name);
+Symbol_* frame_addclass(Frame_* frame, Token_* name, Scope_* scope) {
+  return scope_addclass(scope, name);
 }
 
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
@@ -289,25 +289,25 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   return scope_add(scope, &s);
 }
 
-Symbol_* scope_addstruct(Scope_* scope, Token_* name) {
+Symbol_* scope_addclass(Scope_* scope, Token_* name) {
   Symbol_ s = (Symbol_){
-    .type = SYMBOL_TYPE_STRUCT,
-    .strct = {0},
+    .type = SYMBOL_TYPE_CLASS,
+    .cls = {0},
     .name = *name,
     .parent = scope,
   };
   MemoryAllocator_* allocator = scope->allocator;
-  s.strct.constructor = alloc_ty(allocator, Symbol_);
-  s.strct.self_type.info.size = -1;
+  s.cls.constructor = alloc_ty(allocator, Symbol_);
+  s.cls.self_type.info.size = -1;
 
   
-  list_of(&s.strct.constructor->fn.params, Symbol_*, allocator);
-  list_of(&s.strct.members, Symbol_*, allocator);
+  list_of(&s.cls.constructor->fn.params, Symbol_*, allocator);
+  list_of(&s.cls.members, Symbol_*, allocator);
   return scope_add(scope, &s);
 }
 
-Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
-  StructSymbol_* struct_sym = &sym->strct;
+Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
+  ClassSymbol_* cls_sym = &sym->cls;
   MemoryAllocator_* allocator = sym->parent->allocator;
 
   Symbol_* field = alloc(allocator, sizeof(Symbol_));
@@ -315,18 +315,18 @@ Symbol_* structsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
     .type = SYMBOL_TYPE_FIELD,
     .field = {
       .sem_type = type,
-      .index = struct_sym->members.count,
+      .index = cls_sym->members.count,
       .val = NIL_VAL,
-      .struct_sym = sym,
+      .cls_sym = sym,
     },
     .name = name,
     .parent = sym->parent,
   };
 
-  list_push(&struct_sym->members, &field);
+  list_push(&cls_sym->members, &field);
 
   
-  struct_sym->constructor->fn.params;
+  cls_sym->constructor->fn.params;
   return field;
 }
 

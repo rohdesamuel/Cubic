@@ -47,8 +47,8 @@ static AstNode_* Block(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* Id(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope);
-static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
-static AstNode_* StructMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionCallArgs(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionCallArg(Parser_* parser, Scanner_* scanner, Scope_* scope);
 
@@ -399,38 +399,38 @@ static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* sco
   return (AstNode_*)stmt;
 }
 
-static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstStructDef_* def = MAKE_AST_NODE(&parser->allocator, AstStructDef_, scope, parser->current.line);
+static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstClassDef_* def = MAKE_AST_NODE(&parser->allocator, AstClassDef_, scope, parser->current.line);
   astlist_init(&def->members, (MemoryAllocator_*)&parser->allocator); 
 
-  consume(parser, scanner, TK_ID, "Struct definition must include a name.");
+  consume(parser, scanner, TK_ID, "Class definition must include a name.");
   def->name = parse_variable(parser, scanner, &parser->previous);
-  def->struct_type = (SemanticType_){
+  def->class_type = (SemanticType_){
     .info = {
-      .val = VAL_STRUCT,
+      .val = VAL_CLASS,
       .kind = KIND_UNKNOWN,
       .obj = OBJ_TYPE_UNKNOWN,
     },
     .name = def->name,
-    .sym = frame_addstruct(scope->frame, &def->name, scope)
+    .sym = frame_addclass(scope->frame, &def->name, scope)
   };
-  def->struct_type.info.sym = def->struct_type.sym;
+  def->class_type.info.sym = def->class_type.sym;
 
-  Symbol_* struct_sym = def->struct_type.sym;
-  Symbol_* constructor = struct_sym->strct.constructor;
+  Symbol_* cls_sym = def->class_type.sym;
+  Symbol_* constructor = cls_sym->cls.constructor;
 
   constructor->fn.obj_fn = objfn_create(constructor);
-  constructor->fn.return_type = def->struct_type;
+  constructor->fn.return_type = def->class_type;
 
-  struct_sym->strct.constructor = constructor;
-  struct_sym->strct.self_type = def->struct_type;
+  cls_sym->cls.constructor = constructor;
+  cls_sym->cls.self_type = def->class_type;
 
   Scope_* struct_scope = scope_createfrom(scope);
   while (check(parser, TK_ID)) {
-    AstStructMemberDecl_* decl = (AstStructMemberDecl_*)StructMemberDecl(parser, scanner, struct_scope);
+    AstClassMemberDecl_* decl = (AstClassMemberDecl_*)ClassMemberDecl(parser, scanner, struct_scope);
     astlist_append(&def->members, (AstNode_*)decl);
 
-    Symbol_* field = structsymbol_addmember(struct_sym, decl->name, decl->sem_type);
+    Symbol_* field = classsymbol_addmember(cls_sym, decl->name, decl->sem_type);
     list_push(&constructor->fn.params, &field);
 
     decl->sem_type.info.sym = field;
@@ -445,10 +445,10 @@ static AstNode_* StructDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   return (AstNode_*)def;
 }
 
-static AstNode_* StructMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstStructMemberDecl_* decl = MAKE_AST_NODE(&parser->allocator, AstStructMemberDecl_, scope, parser->current.line);
+static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstClassMemberDecl_* decl = MAKE_AST_NODE(&parser->allocator, AstClassMemberDecl_, scope, parser->current.line);
   
-  consume(parser, scanner, TK_ID, "Struct definition must include a name.");
+  consume(parser, scanner, TK_ID, "Class definition must include a name.");
   decl->name = parse_variable(parser, scanner, &parser->previous);
 
   consume(parser, scanner, TK_COLON, "Expected a ':' after struct member name.");
@@ -596,10 +596,10 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       break;
     }
 
-    case TK_STRUCT:
+    case TK_CLASS:
     {
       advance(parser, scanner);
-      ret->stmt = StructDef(parser, scanner, scope);
+      ret->stmt = ClassDef(parser, scanner, scope);
       break;
     }
 
@@ -928,7 +928,7 @@ ParseRule_ rules[] = {
   [TK_WHILE]        = {NULL,        NULL,              PREC_NONE},
   [TK_REPEAT]       = {NULL,        NULL,              PREC_NONE},
   [TK_UNTIL]        = {NULL,        NULL,              PREC_NONE},
-  [TK_STRUCT]       = {NULL,        NULL,              PREC_NONE},
+  [TK_CLASS]        = {NULL,        NULL,              PREC_NONE},
   [TK_MATCH]        = {NULL,        NULL,              PREC_NONE},
   [TK_FUNCTION]     = {FunctionDef, NULL,              PREC_FUNCTION},
   [TK_RETURN]       = {NULL,        NULL,              PREC_NONE},

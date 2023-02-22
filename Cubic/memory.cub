@@ -122,19 +122,22 @@ end
 
 do
   # Needs to be manually destroyed
-  ptr a: A = new A
+  ptr a: A = new A{}
   
   # Deletes a
   del a
 
   # Refernce counted
-  ref b: A = new A
+  ref b: A = new A{}
 
   # Decrements b's ref counter
   del b
 
   # Exclusive ownership to pointer
-  # exc c: A = new A
+  # exc c: A = new A{}
+  # let c: A = unique A{}
+  # let c: A = single A{}
+  # let c: A = solo A{}
   # Delete c
   # del c
 
@@ -181,6 +184,19 @@ do
 
   let a := new A from b;
 end
+
+###################
+# USE CASE 8
+#
+# 
+###################
+
+let region := new PageAllocator{}
+
+with region
+  let foo := new Foo{ bar=new Bar{} }
+end
+
 ##################/
 
 struct Vec3
@@ -282,8 +298,8 @@ Equivalent(
 let pos_on_stack := Vec3(1, 2, 3)
 
 # Creates a Vec3 on the heap.
-let pos_on_heap := new Vec3(1, 2, 3)
-ref ref_pos     := new Vec3(1, 2, 3)
+let pos_on_heap := new Vec3{1, 2, 3}
+ref ref_pos     := new Vec3{1, 2, 3}
 
 ref pos_from_ref := &pos_on_heap
 ptr pos_from_ptr := &pos_on_heap
@@ -381,8 +397,8 @@ end
 do
   let x: int = 5
   let y: int* = &x
-  let z: int* = new int (5)
-  let j := new int (5)
+  let z: int* = new int{5}
+  let j := new int{5}
   let w: list[int] = new list[int] 
 end
 
@@ -393,8 +409,8 @@ struct Foo
   a : int
 end
 
-let foo_stack := Foo()
-let foo_heap  := new Foo()
+let foo_stack := Foo{}
+let foo_heap  := new Foo{}
 
 *foo_heap = foo_stack
 
@@ -461,9 +477,462 @@ let c := 'e' + b
          Temp value created here
 
 ########
-let a := Val() + Val() + Val()
+let a := Val{} + Val{} + Val{}
          ^
          Temp value created here
 
-let b := a + Val()
+let b := a + Val{}
          ^ 
+
+######
+# Lifetime (related to ownership)
+#  - when to free memory
+#  - in a GC cycle?
+#  - end of scope?
+#  - zero references?
+# 
+# Region
+#  - Which heap?
+#  - thread local or global?
+#  - allows for custom allocators
+# 
+# Ownership/aliasing?
+#  - can there be multiple names pointing to same place in memory
+# 
+# Reinterpretable
+#  - Can reinterpret the pointer or sub-region as another type (mandatory for custom allocators)
+# 
+# Concurrency
+#  - can it be shared across threads?
+#  - can it be destroyed between threads?
+# 
+# Alignment
+# 
+# Examples
+#  - c++ shared_ptr
+#  - c++ unique_ptr
+######
+
+###### Behavior: out-of-scope
+do
+  let a := new int{}
+  # a is destroyed here
+end
+
+###### Behavior: parent struct is destructed
+do
+  let foo := new Foo{bar=new Bar{}}
+  # foo is destroyed here
+  # foo.bar is destroyed here
+end
+
+###### Behavior: allocated from region
+do
+  let foo := new Foo{} from custom_region
+  # foo is destroyed here
+end
+
+###### Behavior: memory shared between two threads
+do
+  let foo := share Foo{bar=new Bar{}}
+  
+  async take_foo(foo)
+  async take_foo(foo)
+end
+
+
+# Weak references
+# A weak reference is a non-owned reference.
+# Any reference to a stack variable is a weak reference.
+do
+  let a := 0
+  ref b : int& = &a  # A reference to a stack value is a weak reference
+  # OR
+  let b := &a
+end
+
+let a := 0
+let b := &a  # Cannot take reference of value
+
+var a := 0
+let b := &a  # ok to take reference of var
+var b := &a  # what does this mean?
+b = 1
+
+# Strong references
+# A strong reference is a shared reference.
+# A strong reference is reference counted.
+# When the reference count of a strong reference reaches 0, the memory is freed.
+do
+  ref a : Foo& = new Foo{}
+  # OR
+  let b := &a
+end
+
+# Value
+do
+  let a := Foo{}
+end
+
+# Unique value
+do
+  let a : Foo! = new Foo{}
+  # OR
+  let a := new Foo{}
+  let b : int! = 0
+  
+  let c := &b  # Not allowed
+
+  let b := &a  # Not allowed
+  let b := a   # Copies `a` into `b`
+end
+
+# Three lifetimes:
+#   1) Lexical scope
+do
+  let foo := Foo{}
+end
+
+#   2) Unique value
+do
+  let foo := new Foo{}
+  let bar := foo  # Copies foo into bar
+  ref buz := &foo # Not allowed: cannot create a reference to a unique value
+  let foo := &foo # Not allowed: cannot create a reference to a unique value
+end
+
+#   3) Reference counted
+do
+  ref foo := new Foo{}
+end
+
+#   5) Parent ownership
+do
+  let foo := Foo{bar=new Bar{}}
+end
+
+#   6) 
+
+###
+
+struct Foo
+  bar_ref : Bar&
+  bar_unique : Bar!
+  bar_ptr : Bar*
+end
+
+
+
+
+let foo : Foo = Foo{}
+let foo : Foo& = new Foo{}  # Reference counted
+let foo : Foo! = new Foo{}  # Unique reference
+
+do
+  let i := 0
+  let weak_ref_i : int& = &i
+end
+
+let foo : shared[Foo] = new Foo{}
+let foo : unique[Foo] = new Foo{}
+
+Foo~
+Foo!
+Foo@
+Foo#
+Foo$
+Foo%
+Foo^
+Foo&
+Foo*
+
+Foo&&
+
+let foo : Foo! = new Foo{}
+ref foo : Foo& = new Foo{}
+ref foo : Foo& = &other_foo
+
+##############################
+# value
+let foo := Foo{}
+
+# unique value
+let foo : Foo! = new...
+let foo := new...
+
+# ref counted, shared reference
+let foo : Foo& = new...
+ref foo := new...
+ref foo := &other
+
+# weak ref
+let foo : Foo& = &stack_value
+let foo : Foo& = 
+
+# raw ptr
+ptr foo := new...
+ptr foo := &other
+let foo : Foo* = new...
+
+# weak ref, unowned reference
+let foo := &other
+let foo : Foo& = &other
+
+# three common types
+let value := Foo{}
+let unique := new Foo{}
+let weak := &value
+
+
+struct Bar
+  foo: Foo!
+  foo: Foo&
+end
+
+###############################
+# value
+#  - Stack or in-place allocated
+#  - one alias to the value
+#  - destroyed when out of scope
+#  - destroyed when parent is destructed
+let foo := Foo{}
+foo = other_foo  # copies other_foo into foo
+
+# unique reference
+#  - Heap-allocated
+#  - one alias to the value
+#  - destroyed when out of scope
+#  - destroyed when parent is destructed
+#  - cannot be shared between threads or coroutines
+let foo := new Foo{}
+let foo : Foo! = new Foo{}
+foo = &other_foo        # not allowed
+foo = other_foo         # copies other_foo
+other_foo = foo         # copies foo
+let other := &foo       # not allowed
+let other : Foo! = foo  # copies foo
+
+# reference counted
+#  - Heap-allocated
+#  - potentially many aliases to the value
+#  - destroyed when out of scope
+#  - destroyed when parent is destructed
+ref foo := new Foo{}        # makes a new reference counted value
+ref foo := &other_foo       # makes a new reference counted and copies other_foo
+ref foo := other_unique_foo # invalidates other_unique_foo and takes ownership of value
+foo = &other_foo            # removes previous reference and copies other_foo into new reference
+foo = other_foo             # copies other_foo
+
+# pointer
+#  - Stack or heap-allocated
+#  - potentially many aliases to the value
+#  - not destroyed when out of scope
+#  - not destroyed when parent is destructed
+ptr foo := new Foo{}  # makes a new unmanaged piece of memory
+ptr foo := &other_foo # simply an address to another value
+
+# address
+let foo : ptr = &foo 
+
+function fizz(foo: Foo!)
+  ...
+end
+
+class Vec2
+  pub x: float
+  pub owns y: float
+
+  function __new(self, x : float, y : float)
+    self.x = x
+    self.y = y
+  end
+
+  function __add(l: Vec2, r: Vec2) -> Vec2
+    return Vec2{x=l.x + r.x, y=l.x + r.x}
+  end
+
+  function __sub(l: Vec2, r: Vec2) -> Vec2
+    return Vec2{x=l.x - r.x, y=l.x - r.x}
+  end
+end
+
+
+class ListNode
+  prev: ListNode* | nil
+  next: ListNode* | nil
+  val: int
+end
+
+record Vec3
+  x: float
+  y: float
+  z: float
+end
+
+class DoublyLinkedList
+  pub head: ListNode*
+  
+  function __new(self)
+    self.head = new ListNode{}
+  end
+
+  function __del(self)
+    let n := self.head
+    while n != nil do
+      let next := n.next
+      del n
+      n = next
+    end
+  end
+
+  function add(self, val: int)
+    let old := self.head
+    let new := new ListNode{val=val}
+
+    self.head = new
+    new.next = old
+
+    if old != nil then
+      old.prev = new
+    end
+  end
+
+  function pop(self, val: int) -> int | nil
+    if self.head == nil then
+      return nil
+    end
+
+    return self.head.val
+  end
+
+end
+
+
+
+### Simplified
+
+# Value
+let a : int = 0
+
+# Weak-reference:
+#  - references stack variables
+#  - references class variables
+let a : int& = &b
+
+# Strong-reference:
+#  - reference counted
+#  - shared ownership to memory
+let a : int& = new int{}
+
+# Owned strong-reference:
+#  - not reference counted
+#  - unique ownership to memory
+#  - cannot reference
+class Foo
+  pub owns a : int
+end
+
+function foo(a : int&) ... end
+let a : Foo = ...
+
+# Not-allowed.
+foo(a.a)
+
+# Owned shared-reference:
+#  - reference counted
+#  - shared memory
+class Foo
+  pub shares a : int
+end
+
+class Unique[T]
+  pub owns val : T
+end
+
+class Shared[T]
+  pub shares val : T
+end
+
+let unique := Unique[int]{}
+let shared := Shared[Int]{}
+
+print(unique.val)
+print(shared.val)
+
+ref map[ref list]
+
+
+### More Simplified
+
+# Value
+let a : int = 0
+
+# Weak-reference:
+#  - references stack variables
+#  - references class variables
+let a : int& = &b
+
+# Owned fields:
+#  - not reference counted
+#  - cannot alias
+#  - cleaned when owning instance is destroyed
+class Foo
+  pub owns a : int
+  pub owns b : int&
+end
+
+function foo(a : int&) ... end
+let a : Foo = ...
+
+# Not allowed.
+foo(&a.a)
+
+# Not allowed.
+foo(a.b)
+
+# Owned shared-reference:
+#  - reference counted
+#  - shared memory
+class Foo
+  pub shares a : int
+  pub shares b : int&
+end
+
+function foo(a : int&) ... end
+let a : Foo = ...
+
+# OK
+foo(&a.a)
+
+# OK
+foo(a.b)
+
+class Unique[T]
+  pub owns val : T
+
+  pub make() -> Unique[T]
+    return Unique[T]{new int{}}
+  end
+end
+
+class Vec3
+  pub x: float
+  pub y: float
+  pub z: float
+end
+
+type Vec3
+  float, float, float
+end
+
+class Shared[T]
+  pub shares val : T
+end
+
+let unique := Unique[int].make()
+let shared := Shared[int].make()
+
+print(unique.val)
+print(shared.val)
+
+ref map[ref list]

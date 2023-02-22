@@ -43,8 +43,8 @@ typedef struct AstNode_ {
     AST_CLS(AstNoopStmt_),
     AST_CLS(AstCleanUpTemps_),
     AST_CLS(AstTmpDecl_),
-    AST_CLS(AstStructDef_),
-    AST_CLS(AstStructMemberDecl_),
+    AST_CLS(AstClassDef_),
+    AST_CLS(AstClassMemberDecl_),
     AST_CLS(AstConstructor_),
     AST_CLS(AstConstructorField_),
     AST_CLS(AstDotExpr_),
@@ -292,32 +292,32 @@ typedef struct AstFunctionCallArg_ {
   struct Symbol_* field_sym;
 } AstFunctionCallArg_;
 
-// StructDef ::= 'struct' {StructMemberDecl} 'end'
-typedef struct AstStructDef_ {
+// ClassDef ::= 'struct' {ClassMemberDecl} 'end'
+typedef struct AstClassDef_ {
   struct AstNode_ base;
   Token_ name;
   AstList_ members;
 
-  SemanticType_ struct_type;
-} AstStructDef_;
+  SemanticType_ class_type;
+} AstClassDef_;
 
-// StructMemberDecl ::= IdList ':' UnionType ['=' ExprList]
-typedef struct AstStructMemberDecl_ {
+// ClassMemberDecl_ ::= IdList ':' UnionType ['=' ExprList]
+typedef struct AstClassMemberDecl_ {
   struct AstNode_ base;
 
   Token_ name;
   struct SemanticType_ sem_type;
   AstExpr_* opt_expr;
-} AstStructMemberDecl_;
+} AstClassMemberDecl_;
 
-// StructConstructor ::= Id '{' [StructConstructorFieldList] '}'
+// ClassConstructor ::= Id '{' [ClassConstructorFieldList] '}'
 typedef struct AstConstructor_ {
   struct AstExpr_ base;
 
   struct AstList_ fields;
 } AstConstructor_;
 
-// StructConstructorField ::= Id '=' Expr
+// ClassConstructorField ::= Id '=' Expr
 typedef struct AstConstructorField_ {
   struct AstExpr_ base;
   Token_ name;

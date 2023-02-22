@@ -8,7 +8,7 @@ Block ::= {Statement} [ReturnStmt]
 Statement ::= ';'    
     | DeclarationStmt
     | FunctionDef
-    | StructDef
+    | ClassDef
     | BlockStmt
     | IfStmt 
     | ForStmt
@@ -53,8 +53,8 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 ///////////////////////////////////////////////////////////////////////////////
 
 VarDecl ::= ('let' | 'ptr' | 'ref') IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
-StructDef ::= 'struct' {StructMemberDecl} 'end'
-StructMemberDecl ::= IdList ':' UnionType ['=' ExprList]
+ClassDef ::= 'struct' {ClassMemberDecl} 'end'
+ClassMemberDecl ::= IdList ':' UnionType ['=' ExprList]
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helpers
@@ -119,7 +119,7 @@ Expr ::= Primary
     | 'await' Expr
     | 'async' Expr
     | AssignmentExpr
-    | StructConstructor
+    | ClassConstructor
 
 AssignmentExpr ::= VarList '=' ExprList
 

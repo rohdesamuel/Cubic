@@ -87,7 +87,7 @@
     <None Include="closures.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
-    <None Include="structs.cub">
+    <None Include="class.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
     <None Include="references.cub">

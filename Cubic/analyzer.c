@@ -66,7 +66,7 @@ static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index) {
     }
 
     VarSymbol_* var = &sym->var;
-    int size = var->sem_type.info.val == VAL_STRUCT ? (int)var->sem_type.info.size : 1;
+    int size = var->sem_type.info.val == VAL_CLASS ? (int)var->sem_type.info.size : 1;
     var->frame_index = frame_index;
     frame_index += size;
   }
@@ -371,10 +371,10 @@ void id_expr_analysis(AstNode_* n) {
   Symbol_* sym = scope_find(n->scope, &expr->name);
   if (sym) {
     switch (sym->type) {
-      case SYMBOL_TYPE_STRUCT:
+      case SYMBOL_TYPE_CLASS:
         expr->base.sem_type = (SemanticType_){
           .info = {
-            .val = VAL_STRUCT,
+            .val = VAL_CLASS,
             .kind = KIND_UNKNOWN,
             .obj = OBJ_TYPE_UNKNOWN,
             .sym = sym
@@ -581,21 +581,21 @@ void ast_tmp_decl_analysis(AstNode_* n) {
   decl->base.sem_type = decl->expr->sem_type;
 }
 
-void ast_struct_def_analysis(AstNode_* node) {
-  AstStructDef_* def = (AstStructDef_*)node;
+void ast_class_def_analysis(AstNode_* node) {
+  AstClassDef_* def = (AstClassDef_*)node;
 
   for (AstListNode_* n = def->members.head; n != NULL; n = n->next) {
     do_analysis(n->node);
   }
 
-  Symbol_* struct_sym = def->struct_type.info.sym;
-  if (semantictype_hascycle(&def->struct_type)) {
-    error(analyzer_, node, "struct \"%.*s\" has a cycle", struct_sym->name.length, struct_sym->name.start);
+  Symbol_* cls_sym = def->class_type.info.sym;
+  if (semantictype_hascycle(&def->class_type)) {
+    error(analyzer_, node, "struct \"%.*s\" has a cycle", cls_sym->name.length, cls_sym->name.start);
     return;
   }
 
-  semantictype_size(&def->struct_type);
-  def->struct_type.info.sym->strct.self_type = def->struct_type;
+  semantictype_size(&def->class_type);
+  def->class_type.info.sym->cls.self_type = def->class_type;
 }
 
 static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
@@ -607,8 +607,8 @@ static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
   assertf(false, "Unimplemented expression type for constant folding: %d", expr->base.cls);
 }
 
-void ast_struct_member_decl_analysis(AstNode_* node) {
-  AstStructMemberDecl_* decl = (AstStructMemberDecl_*)node;
+void ast_class_member_decl_analysis(AstNode_* node) {
+  AstClassMemberDecl_* decl = (AstClassMemberDecl_*)node;
   FieldSymbol_* field = &decl->sem_type.info.sym->field;
   SemanticType_* type = &decl->sem_type.info.sym->field.sem_type;
 
@@ -622,7 +622,7 @@ void ast_struct_member_decl_analysis(AstNode_* node) {
           "Could not find type '%.*s' in struct member declaration",
           type->name.length, type->name.start);
       } else {
-        *type = symbolic_type->strct.self_type;
+        *type = symbolic_type->cls.self_type;
       }
     }
   }
@@ -658,7 +658,7 @@ void ast_dot_expr_analysis(AstNode_* node) {
 
 
   SemanticType_ prefix_type = expr->prefix->sem_type;
-  if (prefix_type.info.val != VAL_STRUCT) {
+  if (prefix_type.info.val != VAL_CLASS) {
     error(analyzer_, (AstNode_*)expr->prefix, "Expected struct type for sub-expression.");
     return;
   }
@@ -668,19 +668,19 @@ void ast_dot_expr_analysis(AstNode_* node) {
     return;
   }
 
-  StructSymbol_* struct_sym = NULL;
+  ClassSymbol_* cls_sym = NULL;
 
   if (prefix_type.sym->type == SYMBOL_TYPE_VAR) {
     VarSymbol_* sym = &prefix_type.sym->var;
-    struct_sym = &sym->sem_type.sym->strct;
-  } else if (prefix_type.sym->type == SYMBOL_TYPE_STRUCT) {
-    struct_sym = &prefix_type.sym->strct;
+    cls_sym = &sym->sem_type.sym->cls;
+  } else if (prefix_type.sym->type == SYMBOL_TYPE_CLASS) {
+    cls_sym = &prefix_type.sym->cls;
   } else {
     error(analyzer_, (AstNode_*)expr->prefix, "Unknown error: unexpected symbol type.");
   }
 
   Symbol_* found = NULL;
-  for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
+  for (ListNode_* n = cls_sym->members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
     if (token_eq(field->name, expr->id)) {
       found = field;
@@ -702,13 +702,13 @@ void ast_constructor_analysis(AstNode_* node) {
 
   SemanticType_* type = &constructor->base.sem_type;
   if (type->name.start) {
-    Symbol_* struct_sym = scope_find(node->scope, &type->name);
+    Symbol_* cls_sym = scope_find(node->scope, &type->name);
 
-    if (!struct_sym) {
+    if (!cls_sym) {
       error(analyzer_, node, "Could not find struct %.*s", type->name.length, type->name.start);
     } else {
-      constructor->base.sem_type = struct_sym->strct.self_type;
-      constructor->base.sem_type.sym = struct_sym;
+      constructor->base.sem_type = cls_sym->cls.self_type;
+      constructor->base.sem_type.sym = cls_sym;
     }
   }
 
@@ -754,8 +754,8 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstNoopStmt_)]               = {noop_analysis},
   [AST_CLS(AstCleanUpTemps_)]           = {clean_up_temps_analysis},
   [AST_CLS(AstTmpDecl_)]                = {ast_tmp_decl_analysis},
-  [AST_CLS(AstStructDef_)]              = {ast_struct_def_analysis},
-  [AST_CLS(AstStructMemberDecl_)]       = {ast_struct_member_decl_analysis},
+  [AST_CLS(AstClassDef_)]               = {ast_class_def_analysis},
+  [AST_CLS(AstClassMemberDecl_)]        = {ast_class_member_decl_analysis},
   [AST_CLS(AstConstructor_)]            = {ast_constructor_analysis},
   [AST_CLS(AstConstructorField_)]       = {ast_constructor_field_analysis},
   [AST_CLS(AstDotExpr_)]                = {ast_dot_expr_analysis},

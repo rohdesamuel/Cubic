@@ -63,7 +63,7 @@ typedef enum {
   VAL_FLOAT,
   VAL_DOUBLE,
   VAL_OBJ,
-  VAL_STRUCT,
+  VAL_CLASS,
 
   __VALUE_TYPE_COUNT__,
 } ValueType;

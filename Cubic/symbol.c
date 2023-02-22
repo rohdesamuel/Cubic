@@ -35,8 +35,8 @@ FunctionSymbol_* symbol_ascallable(Symbol_* sym) {
       return &sym->closure.fn->fn;
     case SYMBOL_TYPE_VAR:
       return symbol_ascallable(sym->var.sem_type.sym);
-    case SYMBOL_TYPE_STRUCT:
-      return &sym->strct.constructor->fn;
+    case SYMBOL_TYPE_CLASS:
+      return &sym->cls.constructor->fn;
     default:
       assertf(false, "Unhandled symbol type %d in `symbol_ascallable`", sym->type);
   }
@@ -87,8 +87,8 @@ bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to) {
       from.info.val >= VAL_UINT8 && from.info.val <= VAL_UINT32));
 }
 
-Symbol_* symbol_findmember(Symbol_* strct, Token_ name) {
-  for (ListNode_* n = strct->strct.members.head; n != NULL; n = n->next) {
+Symbol_* symbol_findmember(Symbol_* cls, Token_ name) {
+  for (ListNode_* n = cls->cls.members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
     Token_ field_name = field->field.sem_type.name;
     if (field_name.length == name.length && memcmp(field_name.start, name.start, field_name.length) == 0) {
@@ -99,9 +99,9 @@ Symbol_* symbol_findmember(Symbol_* strct, Token_ name) {
   return NULL;
 }
 
-int symbol_findmember_index(Symbol_* strct, Token_ name) {
+int symbol_findmember_index(Symbol_* cls, Token_ name) {
   int index = 0;
-  for (ListNode_* n = strct->strct.members.head; n != NULL; n = n->next) {
+  for (ListNode_* n = cls->cls.members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
     if (token_eq(field->name, name)) {
       return index;
@@ -113,7 +113,7 @@ int symbol_findmember_index(Symbol_* strct, Token_ name) {
 }
 
 static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
-  if (!symbol || symbol->type != SYMBOL_TYPE_STRUCT) {
+  if (!symbol || symbol->type != SYMBOL_TYPE_CLASS) {
     return false;
   }
 
@@ -121,8 +121,8 @@ static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
     return true;
   }
 
-  const StructSymbol_* struct_sym = &symbol->strct;
-  for (ListNode_* n = struct_sym->members.head; n != NULL; n = n->next) {
+  const ClassSymbol_* cls_sym = &symbol->cls;
+  for (ListNode_* n = cls_sym->members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
     if (field->field.sem_type.info.kind != KIND_VAL) {
       continue;
@@ -137,7 +137,7 @@ static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
 }
 
 bool semantictype_hascycle(const SemanticType_* type) {
-  if (type->info.val != VAL_STRUCT) {
+  if (type->info.val != VAL_CLASS) {
     return false;
   }
 
@@ -153,7 +153,7 @@ static size_t semantictype_size_recur(SemanticType_* type) {
     return type->info.size;
   }
 
-  StructSymbol_* sym = &type->info.sym->strct;
+  ClassSymbol_* sym = &type->info.sym->cls;
 
   size_t ret = 0;
   for (ListNode_* n = sym->members.head; n != NULL; n = n->next) {
@@ -165,7 +165,7 @@ static size_t semantictype_size_recur(SemanticType_* type) {
 }
 
 size_t semantictype_size(SemanticType_* type) {
-  if (type->info.val != VAL_STRUCT) {
+  if (type->info.val != VAL_CLASS) {
     return 1;
   }
 

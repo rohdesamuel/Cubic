@@ -18,7 +18,7 @@ typedef enum {
   SYMBOL_TYPE_FN,
 
   // A symbol holding member typing.
-  SYMBOL_TYPE_STRUCT,
+  SYMBOL_TYPE_CLASS,
 
   // A field within a struct.
   SYMBOL_TYPE_FIELD,
@@ -49,7 +49,7 @@ typedef struct SemanticType_ {
     // If the value is allocated on the heap, this type will be filled.
     enum ObjType obj;
 
-    // If the type is user-defined like structs or functions, this will point
+    // If the type is user-defined like classes or functions, this will point
     // to the symbol holding more metadata.
     struct Symbol_* sym;
 
@@ -60,17 +60,17 @@ typedef struct SemanticType_ {
   // If the type is user-defined, this is the name of the type.
   Token_ name;
 
-  struct Symbol_* sym;
+  //struct Symbol_* sym;
 } SemanticType_;
 
 #define MAKE_SEMANTIC_INFO(TYPE) ((SemanticType_){.info = (TYPE), .sym = NULL})
 
-typedef struct StructSymbol_ {
+typedef struct ClassSymbol_ {
   ListOf_(Symbol_*) members;
   struct Symbol_* constructor;
 
   SemanticType_ self_type;
-} StructSymbol_;
+} ClassSymbol_;
 
 typedef struct FieldSymbol_ {
   SemanticType_ sem_type;
@@ -78,7 +78,7 @@ typedef struct FieldSymbol_ {
   struct Value_ val;
   bool has_default_val;
 
-  struct Symbol_* struct_sym;
+  struct Symbol_* cls_sym;
 } FieldSymbol_;
 
 // Any symbol living on the stack uses this as the base variable.
@@ -120,7 +120,7 @@ typedef struct Symbol_ {
   SymbolType_ type;
 
   union {
-    StructSymbol_ strct;
+    ClassSymbol_ cls;
     VarSymbol_ var;
     FunctionSymbol_ fn;
     ClosureSymbol_ closure;
@@ -140,8 +140,8 @@ bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to);
 
 RuntimeType_ semantictype_toruntime(SemanticType_ semantic_type);
 
-Symbol_* symbol_findmember(Symbol_* strct, Token_ name);
-int symbol_findmember_index(Symbol_* strct, Token_ name);
+Symbol_* symbol_findmember(Symbol_* cls, Token_ name);
+int symbol_findmember_index(Symbol_* cls, Token_ name);
 
 extern SemanticType_ SemanticType_Unknown;
 extern SemanticType_ SemanticType_Nil;

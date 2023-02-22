@@ -1,18 +1,18 @@
 ##########
 
-struct InnerA
+class InnerA
   a : int
   b : int
 end
 
-struct InnerB
+class InnerB
   a : int
   b : int
   c : int
   d : InnerA
 end
 
-struct Outer2
+class Outer2
   inner_a : InnerA
   inner_b : InnerB
 end
@@ -36,8 +36,7 @@ do
   #assert outer.inner_b.d.b == 4
 end
 
-/#
-struct ZeroInit
+class ZeroInit
   x : int
 end
 
@@ -51,7 +50,7 @@ end
 
 ##########
 
-struct DefaultInit
+class DefaultInit
   x : int = 2
 end
 
@@ -63,7 +62,7 @@ end
 
 ##########
 
-struct OneMember
+class OneMember
   a : int = 0
 end
 
@@ -83,7 +82,7 @@ end
 ##########
 
 
-struct TwoMembers
+class TwoMembers
   a : int = 1
   b : int = 2
 end
@@ -114,7 +113,7 @@ end
 
 ##########
 
-struct Vec3
+class Vec3
   x : double
   y : double
   z : double
@@ -157,7 +156,7 @@ end
 
 ##########
 
-struct DiffType
+class DiffType
   a : int
   b : double
 end
@@ -172,7 +171,7 @@ end
 
 ##########
 
-struct DiffTypeWithDefaultVals
+class DiffTypeWithDefaultVals
   c : int = 1
   d : double = 2.0
 end
@@ -187,7 +186,7 @@ end
 
 ##########
 
-struct Tree
+class Tree
   left : Tree*
   right : Tree*
 end

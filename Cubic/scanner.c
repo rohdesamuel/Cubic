@@ -289,8 +289,17 @@ static TokenType identifier_type(Scanner scanner) {
     // bool
     case 'b': return check_keyword(scanner, 1, 3, "ool", TK_BOOL);
 
-    // case
-    case 'c': return check_keyword(scanner, 1, 3, "ase", TK_CASE);
+    // case, class
+    case 'c': 
+    {
+      if (length > 1) {
+        switch (scanner->start[1]) {
+        case 'a': return check_keyword(scanner, 2, 2, "se", TK_CASE);
+        case 'l': return check_keyword(scanner, 2, 3, "ass", TK_CLASS);
+        }
+      }
+      break;
+    }
 
 
     // delete, do, double
@@ -401,7 +410,7 @@ static TokenType identifier_type(Scanner scanner) {
       }
       break;
 
-    // step, struct, string
+    // step, string
     case 's':
       if (length > 2) {
         if (scanner->start[1] == 't') {
@@ -409,8 +418,7 @@ static TokenType identifier_type(Scanner scanner) {
             case 'e': return check_keyword(scanner, 3, 1, "p", TK_STEP);
             case 'r':
               if (scanner->current - scanner->start > 3) {
-                switch (scanner->start[3]) {
-                  case 'u': return check_keyword(scanner, 4, 2, "ct", TK_STRUCT);
+                switch (scanner->start[3]) {                  
                   case 'i': return check_keyword(scanner, 4, 2, "ng", TK_STRING_TYPE);
                 }
               }

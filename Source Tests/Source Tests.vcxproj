@@ -200,7 +200,7 @@
     <None Include="local_variables.cub" />
     <None Include="simple_type_inference.cub" />
     <None Include="strings.cub" />
-    <None Include="structs.cub" />
+    <None Include="class.cub" />
     <None Include="while_loops.cub" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
