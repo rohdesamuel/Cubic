@@ -53,13 +53,9 @@ typedef struct SemanticType_ {
   // If the type is user-defined, this is the name of the type.
   Token_ name;
 
-<<<<<<< HEAD
-  //struct Symbol_* sym;
-=======
   // If the type is user-defined like classes or functions, this will point
   // to the symbol holding more metadata.
   struct Symbol_* sym;
->>>>>>> Clean up SemanticType_::sym usage to only be semantic symbols
 } SemanticType_;
 
 #define MAKE_SEMANTIC_INFO(TYPE) ((SemanticType_){.info = (TYPE), .sym = NULL})
@@ -74,13 +70,14 @@ typedef struct ClassSymbol_ {
 typedef struct FieldSymbol_ {
   SemanticType_ sem_type;
   int index;
+  size_t offset;
   struct Value_ val;
   bool has_default_val;
 
   struct Symbol_* cls_sym;
 } FieldSymbol_;
 
-// Any symbol living on the stack uses this as the base variable.
+// Any symbol living on the stack uses this as the offset variable.
 // If the symbol references another symbol, the SemanticType_::sym will be set.
 typedef struct VarSymbol_ {
   SemanticType_ sem_type;
@@ -140,6 +137,7 @@ RuntimeType_ semantictype_toruntime(SemanticType_ semantic_type);
 
 Symbol_* symbol_findmember(Symbol_* cls, Token_ name);
 int symbol_findmember_index(Symbol_* cls, Token_ name);
+size_t symbol_findmember_offset(Symbol_* cls, Token_ name);
 
 extern SemanticType_ SemanticType_Unknown;
 extern SemanticType_ SemanticType_Nil;

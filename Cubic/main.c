@@ -205,7 +205,7 @@ static void run_file(VM vm, const char* path) {
 int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
-  
+
   if (argc == 1) {
     repl(&vm);
   } else if (argc == 2) {

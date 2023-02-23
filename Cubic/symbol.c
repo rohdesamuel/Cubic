@@ -101,6 +101,17 @@ int symbol_findmember_index(Symbol_* cls, Token_ name) {
   return index;
 }
 
+size_t symbol_findmember_offset(Symbol_* cls, Token_ name) {
+  for (ListNode_* n = cls->cls.members.head; n != NULL; n = n->next) {
+    Symbol_* field = list_val(n, Symbol_*);
+    if (token_eq(field->name, name)) {
+      return field->field.offset;
+    }
+  }
+
+  return 0;
+}
+
 static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
   if (!symbol || symbol->type != SYMBOL_TYPE_CLASS) {
     return false;
@@ -147,6 +158,7 @@ static size_t semantictype_size_recur(SemanticType_* type) {
   size_t ret = 0;
   for (ListNode_* n = sym->members.head; n != NULL; n = n->next) {
     FieldSymbol_* field = &list_val(n, Symbol_*)->field;
+    field->offset = ret;
     ret += semantictype_size(&field->sem_type);
   }
 

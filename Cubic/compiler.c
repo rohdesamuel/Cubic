@@ -564,8 +564,8 @@ static int resolve_var(Scope_* scope, AstNode_* expr) {
     {
       AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
       ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.sym->cls;
-      int index = symbol_findmember_index(dot_expr->prefix->sem_type.sym, dot_expr->id);
-      return resolve_var(scope, (AstNode_*)dot_expr->prefix) + index;
+      int offset = (int)symbol_findmember_offset(dot_expr->prefix->sem_type.sym, dot_expr->id);
+      return resolve_var(scope, (AstNode_*)dot_expr->prefix) + offset;
     }
 
     default:
@@ -841,6 +841,21 @@ void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
+void class_default_constructor_code_gen(Chunk_* chunk, Symbol_* cls_sym, int line) {
+  for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
+    Symbol_* member = list_val(member_node, Symbol_*);
+    FieldSymbol_* field = &member->field;
+
+    // TODO: eventually remove this if-statement. This should be better automated. 
+    if (field->sem_type.val == VAL_CLASS) {
+      class_default_constructor_code_gen(chunk, field->sem_type.sym, line);
+    }
+    else {
+      emit_constant(chunk, field->val, line);
+    }    
+  }
+}
+
 void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
   AstConstructor_* constructor = (AstConstructor_*)node;
 
@@ -864,7 +879,13 @@ void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
       }
 
       if (!found_value) {
-        emit_constant(chunk, field->val, node->line);
+
+        // TODO: eventually remove this if-statement. This should be better automated. 
+        if (field->sem_type.val == VAL_CLASS) {
+          class_default_constructor_code_gen(chunk, field->sem_type.sym, node->line);
+        } else {
+          emit_constant(chunk, field->val, node->line);
+        }
       }
     }
   } else {
