@@ -20,20 +20,20 @@ end
 do
   let outer := Outer2{}
   outer.inner_a.a = 10
-  #outer.inner_a.b = 9
-  #outer.inner_b.a = 8
-  #outer.inner_b.b = 7
-  #outer.inner_b.c = 6
-  #outer.inner_b.d.a = 5
-  #outer.inner_b.d.b = 4
-  #
-  #assert outer.inner_a.a == 10
-  #assert outer.inner_a.b == 9
-  #assert outer.inner_b.a == 8
-  #assert outer.inner_b.b == 7
-  #assert outer.inner_b.c == 6
-  #assert outer.inner_b.d.a == 5
-  #assert outer.inner_b.d.b == 4
+  outer.inner_a.b = 9
+  outer.inner_b.a = 8
+  outer.inner_b.b = 7
+  outer.inner_b.c = 6
+  outer.inner_b.d.a = 5
+  outer.inner_b.d.b = 4
+
+  assert outer.inner_a.a == 10
+  assert outer.inner_a.b == 9
+  assert outer.inner_b.a == 8
+  assert outer.inner_b.b == 7
+  assert outer.inner_b.c == 6
+  assert outer.inner_b.d.a == 5
+  assert outer.inner_b.d.b == 4
 end
 
 class ZeroInit

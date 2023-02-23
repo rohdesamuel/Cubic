@@ -139,51 +139,15 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
 
   // If getting the address of a symbol...
   if (exp->op == TK_AMPERSAND) {
-    Symbol_* sym = exp->base.sem_type.sym;
-    if (!sym) {
-      sym = exp->base.sem_type.info.sym;
-    }
-
-    ValueKind kind = KIND_UNKNOWN;
-    switch (sym->type) {
-      case SYMBOL_TYPE_FIELD:
-        kind = sym->field.sem_type.info.kind;
-        break;
-      case SYMBOL_TYPE_VAR:
-        kind = sym->var.sem_type.info.kind;
-        break;
-
-      default:
-        assertf(false, "Unimplemented address of for symbol type '%d'", sym->type);
-        break;
-    }
-
     int index = resolve_var(node->scope, (AstNode_*)exp->expr);
-    switch (kind) {
-      // If the symbol lives on the stack or referencing a static, create a weak reference to it.
-      case KIND_VAL:
-        emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
-        emit_byte(chunk, OP_MAKE_REF, node->line);
-        break;
 
-        // If the symbol is a strong reference, increment the count and get it.
-      case KIND_REF:
-      {
-        emit_bytes(chunk, OP_GET_VAR, (uint8_t)index, node->line);
-        if (sym->var.sem_type.info.ref_kind == REF_KIND_STRONG) {
-          // TODO: increment reference count.
-        }
-        break;
-      }
-
-      default:
-        assertf(false, "Unimplemented address of for symbol kind '%d'", kind);
-        break;
-    }
+    // This assumes the symbol lives on the stack or referencing a static, create a weak reference to it.
+    emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
+    emit_byte(chunk, OP_MAKE_REF, node->line);
   } else if (exp->op == TK_NEW) {
     code_gen(chunk, (AstNode_*)exp->expr);
     emit_byte(chunk, OP_NEW_VAR, node->line);
-    int64_t size = exp->expr->sem_type.info.size;
+    int64_t size = exp->expr->sem_type.size;
     size = size == 0 ? 1 : size;
     emit_long(chunk, (uint32_t)size, node->line);
     emit_byte(chunk, OP_MAKE_REF, node->line);
@@ -433,7 +397,7 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
     Symbol_* var = list_val(n, Symbol_*);
     switch (var->type) {
       case SYMBOL_TYPE_VAR:
-        if (var->var.sem_type.info.val == VAL_OBJ && var->var.sem_type.info.kind == KIND_VAL) {
+        if (var->var.sem_type.val == VAL_OBJ && var->var.sem_type.kind == KIND_VAL) {
           emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
         }        
         break;
@@ -599,8 +563,8 @@ static int resolve_var(Scope_* scope, AstNode_* expr) {
     case AST_CLS(AstDotExpr_):
     {
       AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
-      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.info.sym->cls;
-      int index = symbol_findmember_index(dot_expr->prefix->sem_type.info.sym, dot_expr->id);
+      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.sym->cls;
+      int index = symbol_findmember_index(dot_expr->prefix->sem_type.sym, dot_expr->id);
       return resolve_var(scope, (AstNode_*)dot_expr->prefix) + index;
     }
 
@@ -626,8 +590,8 @@ static int resolve_var_code_gen(Scope_* scope, AstNode_* expr) {
     case AST_CLS(AstDotExpr_):
     {
       AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
-      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.info.sym->cls;
-      int index = symbol_findmember_index(dot_expr->prefix->sem_type.info.sym, dot_expr->id);
+      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.sym->cls;
+      int index = symbol_findmember_index(dot_expr->prefix->sem_type.sym, dot_expr->id);
       return resolve_var_code_gen(scope, (AstNode_*)dot_expr->prefix) + index;
     }
 
@@ -645,20 +609,20 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
   // TODO: allow for multiple expressions.
   if (stmt->expr) {
     code_gen(chunk, (AstNode_*)stmt->expr);
-    if (stmt->expr->sem_type.info.val != stmt->sem_type.info.val &&
+    if (stmt->expr->sem_type.val != stmt->sem_type.val &&
         semantictype_iscoercible(stmt->expr->sem_type, stmt->sem_type)) {
       emit_cast(chunk, semantictype_toruntime(stmt->expr->sem_type), semantictype_toruntime(stmt->sem_type), node->line);
     }
 
-    if (sem_type.info.kind == KIND_REF) {
+    if (sem_type.kind == KIND_REF) {
       emit_byte(chunk, OP_INC_REF, node->line);
     }
 
     //emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
 
-    if (sem_type.info.val == VAL_CLASS) {
-      if (sem_type.info.kind == KIND_VAL) {
-        for (int64_t i = sem_type.info.size - 1; i >= 0; --i) {
+    if (sem_type.val == VAL_CLASS) {
+      if (sem_type.kind == KIND_VAL) {
+        for (int64_t i = sem_type.size - 1; i >= 0; --i) {
           emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot + (uint8_t)i, node->line);
           emit_byte(chunk, OP_POP, node->line);
         }
@@ -685,7 +649,7 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
     case SYMBOL_TYPE_VAR:
     {
       VarSymbol_* var = &sym->var;
-      if (expr->base.top_sem_type.info.kind == KIND_VAL && var->sem_type.info.kind == KIND_REF) {
+      if (expr->base.top_sem_type.kind == KIND_VAL && var->sem_type.kind == KIND_REF) {
         emit_bytes(chunk, OP_GET_REF, (uint8_t)symbolvar_index(sym), node->line);
       } else {
         emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
@@ -715,11 +679,11 @@ static void assignment_expr_code_gen(Chunk_* chunk, AstNode_* node) {
 
   code_gen(chunk, (AstNode_*)expr->right);
 
-  if (sem_type.info.val == VAL_OBJ && sem_type.info.kind == KIND_VAL) {
+  if (sem_type.val == VAL_OBJ && sem_type.kind == KIND_VAL) {
     emit_bytes(chunk, OP_DESTROY_VAR, (uint8_t)slot, node->line);
   }
 
-  if (sem_type.info.kind == KIND_REF) {
+  if (sem_type.kind == KIND_REF) {
     emit_bytes(chunk, OP_SET_REF, (uint8_t)slot, node->line);
   } else {
     emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
@@ -849,14 +813,14 @@ void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
   ClassSymbol_* cls_sym = NULL;
   const SemanticType_* type = &expr->prefix->sem_type;
-  if (type->info.sym->type == SYMBOL_TYPE_VAR) {
-    cls_sym = &type->info.sym->var.sem_type.info.sym->cls;
-  } else if (type->info.sym->type == SYMBOL_TYPE_CLASS) {
-    cls_sym = &type->info.sym->cls;
-  } else if (type->info.sym->type == SYMBOL_TYPE_FIELD) {
+  if (type->sym->type == SYMBOL_TYPE_VAR) {
+    cls_sym = &type->sym->var.sem_type.sym->cls;
+  } else if (type->sym->type == SYMBOL_TYPE_CLASS) {
+    cls_sym = &type->sym->cls;
+  } else if (type->sym->type == SYMBOL_TYPE_FIELD) {
     cls_sym = &type->sym->cls;
   } else {
-    assertf(false, "Unexpected symbol type %d", type->info.sym->type);
+    assertf(false, "Unexpected symbol type %d", type->sym->type);
   }
 
   int index = resolve_var(node->scope, (AstNode_*)expr->prefix);
@@ -864,13 +828,13 @@ void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
 
   assertf(index + field_index < UINT8_MAX, "Trying to index struct out of bounds.");
 
-  if (expr->prefix->sem_type.info.kind == KIND_REF) {
+  if (expr->prefix->sem_type.kind == KIND_REF) {
     emit_bytes(chunk, OP_ADDROF_REF, (uint8_t)index, node->line);
   } else {
     emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
   }
 
-  if (expr->base.top_sem_type.info.kind == KIND_VAL) {
+  if (expr->base.top_sem_type.kind == KIND_VAL) {
     emit_bytes(chunk, OP_GET_OFFSET, (uint8_t)field_index, node->line);
   } else {
     emit_bytes(chunk, OP_ADD_OFFSET, (uint8_t)field_index, node->line);

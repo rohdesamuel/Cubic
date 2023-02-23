@@ -66,7 +66,7 @@ static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index) {
     }
 
     VarSymbol_* var = &sym->var;
-    int size = var->sem_type.info.val == VAL_CLASS ? (int)var->sem_type.info.size : 1;
+    int size = var->sem_type.val == VAL_CLASS ? (int)var->sem_type.size : 1;
     var->frame_index = frame_index;
     frame_index += size;
   }
@@ -110,7 +110,7 @@ void expr_analysis(AstNode_* node) {
 
 void print_analysis(AstNode_* n) {
   AstPrintStmt_* stmt = (AstPrintStmt_*)n;
-  stmt->expr->top_sem_type.info.kind = KIND_VAL;
+  stmt->expr->top_sem_type.kind = KIND_VAL;
   do_analysis((AstNode_*)stmt->expr);
 }
 
@@ -146,17 +146,17 @@ void unary_analysis(AstNode_* n) {
         error(analyzer_, (AstNode_*)expr->expr, "Cannot take address expression");
       }
 
-      if (sem_type.info.kind == KIND_UNKNOWN ||          
-          sem_type.info.kind == KIND_REF ||
-          sem_type.info.lifetime == LIFETIME_TMP) {
-        error(analyzer_, n, "expression is not assignable");
+      if (sem_type.kind == KIND_UNKNOWN ||          
+          sem_type.kind == KIND_REF ||
+          sem_type.lifetime == LIFETIME_TMP) {
+        error(analyzer_, n, "Cannot take address");
       }
 
-      expr->base.sem_type.info.kind = KIND_REF;
-      if (sem_type.info.kind == KIND_VAL) {
-        expr->base.sem_type.info.ref_kind = REF_KIND_WEAK;
+      expr->base.sem_type.kind = KIND_REF;
+      if (sem_type.kind == KIND_VAL) {
+        expr->base.sem_type.ref_kind = REF_KIND_WEAK;
       } else {
-        expr->base.sem_type.info.ref_kind = REF_KIND_STRONG;
+        expr->base.sem_type.ref_kind = REF_KIND_STRONG;
       }
       break;
     }
@@ -165,13 +165,13 @@ void unary_analysis(AstNode_* n) {
     {
       SemanticType_* type = &expr->base.sem_type;
 
-      if (type->info.kind == KIND_REF) {
+      if (type->kind == KIND_REF) {
         error(analyzer_, n, "Cannot create allocate references");
       }
 
-      type->info.kind = KIND_REF;
-      type->info.ref_kind = REF_KIND_STRONG;
-      type->info.lifetime = LIFETIME_AUTOMATIC;
+      type->kind = KIND_REF;
+      type->ref_kind = REF_KIND_STRONG;
+      type->lifetime = LIFETIME_AUTOMATIC;
 
       break;
     }
@@ -259,19 +259,19 @@ void binary_analysis(AstNode_* n) {
   }
 
   if (!IS_TY_UNKNOWN(expected_type)) {
-    if (lsem_type.info.val != expected_type.ty) {
+    if (lsem_type.val != expected_type.ty) {
       error(analyzer_, n, "left-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
 
-    if (rsem_type.info.val != expected_type.ty) {
+    if (rsem_type.val != expected_type.ty) {
       error(analyzer_, n, "right-hand expression does not have expected type of %s.", valuetype_str(expected_type));
     }
   }
 
-  if (lsem_type.info.lifetime == LIFETIME_STATIC && rsem_type.info.lifetime == LIFETIME_STATIC) {
-    expr->base.sem_type.info.lifetime = LIFETIME_STATIC;
+  if (lsem_type.lifetime == LIFETIME_STATIC && rsem_type.lifetime == LIFETIME_STATIC) {
+    expr->base.sem_type.lifetime = LIFETIME_STATIC;
   } else {
-    expr->base.sem_type.info.lifetime = LIFETIME_TMP;
+    expr->base.sem_type.lifetime = LIFETIME_TMP;
   }
 }
 
@@ -283,7 +283,7 @@ void return_analysis(AstNode_* n) {
   stmt->expr->top_sem_type = frame->fn_symbol->fn.return_type;
 
   do_analysis((AstNode_*)stmt->expr);
-  if (AS_EXPR(stmt->expr)->sem_type.info.val != frame->fn_symbol->fn.return_type.info.val) {
+  if (AS_EXPR(stmt->expr)->sem_type.val != frame->fn_symbol->fn.return_type.val) {
     error(analyzer_, n, "Return statement type does not match function type.");
   }
 }
@@ -340,15 +340,15 @@ void var_decl_analysis(AstNode_* n) {
 
   // The type will be KIND_TMP if created from a PRIMARY_EXP. Only change the kind for
   // non-pointer/reference types.
-  if (stmt->sem_type.info.kind == KIND_UNKNOWN) {
-    if (stmt->sem_type.info.val == VAL_OBJ) {
-      stmt->sem_type.info.kind = KIND_REF;
+  if (stmt->sem_type.kind == KIND_UNKNOWN) {
+    if (stmt->sem_type.val == VAL_OBJ) {
+      stmt->sem_type.kind = KIND_REF;
     } else {
-      stmt->sem_type.info.kind = KIND_VAL;
+      stmt->sem_type.kind = KIND_VAL;
     }
   }
 
-  stmt->sem_type.info.lifetime = LIFETIME_AUTOMATIC;
+  stmt->sem_type.lifetime = LIFETIME_AUTOMATIC;
 
   // TODO: implement tuples (and others) for variable declarations.
   VarSymbol_* var = scope_var(n->scope, &stmt->name);  
@@ -373,14 +373,11 @@ void id_expr_analysis(AstNode_* n) {
     switch (sym->type) {
       case SYMBOL_TYPE_CLASS:
         expr->base.sem_type = (SemanticType_){
-          .info = {
-            .val = VAL_CLASS,
-            .kind = KIND_UNKNOWN,
-            .obj = OBJ_TYPE_UNKNOWN,
-            .sym = sym
-          },
+          .val = VAL_CLASS,
+          .kind = KIND_UNKNOWN,
+          .obj = OBJ_TYPE_UNKNOWN,
+          .sym = sym,
           .name = sym->name,
-          .sym = sym
         };
         break;
 
@@ -391,7 +388,6 @@ void id_expr_analysis(AstNode_* n) {
 
       case SYMBOL_TYPE_VAR:
         expr->base.sem_type = sym->var.sem_type;
-        expr->base.sem_type.sym = sym;
         break;
 
       case SYMBOL_TYPE_CLOSURE:
@@ -458,12 +454,10 @@ void function_def_analysis(AstNode_* n) {
   fn->obj_fn = obj_fn;
 
   def->base.sem_type = (SemanticType_) {
-    .info = {
-      .val = fn->return_type.info.val,
-      .kind = KIND_VAL,
-      .obj = OBJ_TYPE_FUNCTION,
-      .lifetime = LIFETIME_STATIC,
-    },
+    .val = fn->return_type.val,
+    .kind = KIND_VAL,
+    .obj = OBJ_TYPE_FUNCTION,
+    .lifetime = LIFETIME_STATIC,
     .sym = def->fn_symbol
   };
 
@@ -551,9 +545,9 @@ void function_call_args_analysis(AstNode_* node) {
     do_analysis(n->node);
     SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
 
-    if (param_sem_type.info.val != expr_sem_type.info.val ||
-      (param_sem_type.info.kind == KIND_REF &&
-        expr_sem_type.info.kind != KIND_REF)) {
+    if (param_sem_type.val != expr_sem_type.val ||
+      (param_sem_type.kind == KIND_REF &&
+        expr_sem_type.kind != KIND_REF)) {
       error(analyzer_, n->node, "Expression does not match function parameter type.");
     }
 
@@ -588,14 +582,14 @@ void ast_class_def_analysis(AstNode_* node) {
     do_analysis(n->node);
   }
 
-  Symbol_* cls_sym = def->class_type.info.sym;
+  Symbol_* cls_sym = def->class_type.sym;
   if (semantictype_hascycle(&def->class_type)) {
     error(analyzer_, node, "struct \"%.*s\" has a cycle", cls_sym->name.length, cls_sym->name.start);
     return;
   }
 
   semantictype_size(&def->class_type);
-  def->class_type.info.sym->cls.self_type = def->class_type;
+  def->class_type.sym->cls.self_type = def->class_type;
 }
 
 static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
@@ -609,10 +603,10 @@ static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
 
 void ast_class_member_decl_analysis(AstNode_* node) {
   AstClassMemberDecl_* decl = (AstClassMemberDecl_*)node;
-  FieldSymbol_* field = &decl->sem_type.info.sym->field;
-  SemanticType_* type = &decl->sem_type.info.sym->field.sem_type;
+  FieldSymbol_* field = &decl->sem_type.sym->field;
+  SemanticType_* type = &decl->sem_type.sym->field.sem_type;
 
-  if (type->info.val == VAL_UNKNOWN) {
+  if (type->val == VAL_UNKNOWN) {
     if (type->name.length == 0) {
       error(analyzer_, node, "Encountered unknown type in struct member declaration");
     } else {
@@ -629,12 +623,12 @@ void ast_class_member_decl_analysis(AstNode_* node) {
 
   if (decl->opt_expr) {
     AstExpr_* expr = decl->opt_expr;
-    expr->top_sem_type.info.kind = KIND_VAL;
+    expr->top_sem_type.kind = KIND_VAL;
     do_analysis((AstNode_*)expr);
 
-    if (expr->sem_type.info.kind != KIND_VAL &&
-      expr->sem_type.info.lifetime != LIFETIME_STATIC &&
-      expr->sem_type.info.lifetime != LIFETIME_TMP) {
+    if (expr->sem_type.kind != KIND_VAL &&
+      expr->sem_type.lifetime != LIFETIME_STATIC &&
+      expr->sem_type.lifetime != LIFETIME_TMP) {
 
       error(analyzer_, node, "struct member field default value must be a value.");
       return;
@@ -658,8 +652,8 @@ void ast_dot_expr_analysis(AstNode_* node) {
 
 
   SemanticType_ prefix_type = expr->prefix->sem_type;
-  if (prefix_type.info.val != VAL_CLASS) {
-    error(analyzer_, (AstNode_*)expr->prefix, "Expected struct type for sub-expression.");
+  if (prefix_type.val != VAL_CLASS) {
+    error(analyzer_, (AstNode_*)expr->prefix, "Expected class type for sub-expression.");
     return;
   }
 
@@ -694,7 +688,6 @@ void ast_dot_expr_analysis(AstNode_* node) {
   }
 
   expr->base.sem_type = found->field.sem_type;
-  expr->base.sem_type.info.sym = found;
 }
 
 void ast_constructor_analysis(AstNode_* node) {

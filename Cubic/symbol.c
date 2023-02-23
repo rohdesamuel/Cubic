@@ -4,23 +4,12 @@
 #include "map.h"
 
 extern SemanticType_ SemanticType_Unknown = {
-  .info = {
-    .val = VAL_UNKNOWN,
-    .kind = KIND_UNKNOWN,
-    .obj = OBJ_TYPE_UNKNOWN,
-  },
-  .name = {0},
-  .sym = NULL,
+  .val = VAL_UNKNOWN,
 };
 
 extern SemanticType_ SemanticType_Nil = {
-  .info = {
-    .val = VAL_NIL,
-    .kind = KIND_VAL,
-    .obj = OBJ_TYPE_UNKNOWN,
-  },
-  .name = {0},
-  .sym = NULL,
+  .val = VAL_NIL,
+  .kind = KIND_VAL,
 };
 
 FunctionSymbol_* symbol_ascallable(Symbol_* sym) {
@@ -54,37 +43,37 @@ Symbol_* symbol_resolveref(Symbol_* sym) {
 
 RuntimeType_ semantictype_toruntime(SemanticType_ semantic_type) {
   return (RuntimeType_){
-    .ty = semantic_type.info.val,
-    .kind = semantic_type.info.kind,
-    .obj = semantic_type.info.obj,
+    .ty = semantic_type.val,
+    .kind = semantic_type.kind,
+    .obj = semantic_type.obj,
   };
 }
 
 bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to) {
   return semantictype_equiv(from, to) ||
     // 64-bit conversion
-    ((to.info.val == VAL_UINT || to.info.val == VAL_UINT64 || to.info.val == VAL_INT || to.info.val == VAL_INT64) &&
-      (from.info.val >= VAL_INT && from.info.val <= VAL_UINT64)) ||
+    ((to.val == VAL_UINT || to.val == VAL_UINT64 || to.val == VAL_INT || to.val == VAL_INT64) &&
+      (from.val >= VAL_INT && from.val <= VAL_UINT64)) ||
 
     // 8-bit conversion
-    ((to.info.val == VAL_UINT8 || to.info.val == VAL_INT8) && (from.info.val == VAL_UINT8 || from.info.val == VAL_INT8)) ||
+    ((to.val == VAL_UINT8 || to.val == VAL_INT8) && (from.val == VAL_UINT8 || from.val == VAL_INT8)) ||
 
     // 16-bit conversion
-    ((to.info.val == VAL_UINT16 || to.info.val == VAL_INT16) && (from.info.val == VAL_UINT8 || from.info.val == VAL_INT8 ||
-      from.info.val == VAL_UINT16 || from.info.val == VAL_INT16)) ||
+    ((to.val == VAL_UINT16 || to.val == VAL_INT16) && (from.val == VAL_UINT8 || from.val == VAL_INT8 ||
+      from.val == VAL_UINT16 || from.val == VAL_INT16)) ||
 
     // 32-bit conversion
-    ((to.info.val == VAL_UINT32 || to.info.val == VAL_INT32) && (from.info.val == VAL_UINT8 || from.info.val == VAL_INT8 ||
-      from.info.val == VAL_UINT16 || from.info.val == VAL_INT16 ||
-      from.info.val == VAL_UINT32 || from.info.val == VAL_INT32)) ||
+    ((to.val == VAL_UINT32 || to.val == VAL_INT32) && (from.val == VAL_UINT8 || from.val == VAL_INT8 ||
+      from.val == VAL_UINT16 || from.val == VAL_INT16 ||
+      from.val == VAL_UINT32 || from.val == VAL_INT32)) ||
 
     // Double conversion
-    (to.info.val == VAL_DOUBLE && (from.info.val >= VAL_INT && from.info.val <= VAL_DOUBLE)) ||
+    (to.val == VAL_DOUBLE && (from.val >= VAL_INT && from.val <= VAL_DOUBLE)) ||
 
     // Float conversion
-    (to.info.val == VAL_FLOAT && (from.info.val == VAL_FLOAT ||
-      from.info.val >= VAL_INT8 && from.info.val <= VAL_INT32 ||
-      from.info.val >= VAL_UINT8 && from.info.val <= VAL_UINT32));
+    (to.val == VAL_FLOAT && (from.val == VAL_FLOAT ||
+      from.val >= VAL_INT8 && from.val <= VAL_INT32 ||
+      from.val >= VAL_UINT8 && from.val <= VAL_UINT32));
 }
 
 Symbol_* symbol_findmember(Symbol_* cls, Token_ name) {
@@ -124,7 +113,7 @@ static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
   const ClassSymbol_* cls_sym = &symbol->cls;
   for (ListNode_* n = cls_sym->members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
-    if (field->field.sem_type.info.kind != KIND_VAL) {
+    if (field->field.sem_type.kind != KIND_VAL) {
       continue;
     }
 
@@ -137,23 +126,23 @@ static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
 }
 
 bool semantictype_hascycle(const SemanticType_* type) {
-  if (type->info.val != VAL_CLASS) {
+  if (type->val != VAL_CLASS) {
     return false;
   }
 
   Hashmap* seen = hashmap_create();
-  bool has_cycle = semantictype_hascycle_recur(type->info.sym, seen);
+  bool has_cycle = semantictype_hascycle_recur(type->sym, seen);
   hashmap_free(seen);
 
   return has_cycle;
 }
 
 static size_t semantictype_size_recur(SemanticType_* type) {
-  if (type->info.size > 0) {
-    return type->info.size;
+  if (type->size > 0) {
+    return type->size;
   }
 
-  ClassSymbol_* sym = &type->info.sym->cls;
+  ClassSymbol_* sym = &type->sym->cls;
 
   size_t ret = 0;
   for (ListNode_* n = sym->members.head; n != NULL; n = n->next) {
@@ -165,12 +154,12 @@ static size_t semantictype_size_recur(SemanticType_* type) {
 }
 
 size_t semantictype_size(SemanticType_* type) {
-  if (type->info.val != VAL_CLASS) {
+  if (type->val != VAL_CLASS) {
     return 1;
   }
 
-  if (type->info.size <= 0) {
-    type->info.size = semantictype_size_recur(type);
+  if (type->size <= 0) {
+    type->size = semantictype_size_recur(type);
   }
-  return type->info.size;
+  return type->size;
 }

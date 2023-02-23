@@ -169,31 +169,29 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
   Token_ token = parser->previous;
 
   SemanticType_ ret = {
-  .info = {
     .val = VAL_UNKNOWN,
     .kind = KIND_UNKNOWN,
     .obj = OBJ_TYPE_UNKNOWN,
-  },
-  .name = {0},
-  .sym = NULL
+    .name = { 0 },
+    .sym = NULL
   };
 
   switch (token.type) {
-    case TK_BOOL:        ret.info.val = VAL_BOOL; break;
-    case TK_INT:         ret.info.val = VAL_INT; break;
-    case TK_UINT:        ret.info.val = VAL_UINT; break;
-    case TK_FLOAT:       ret.info.val = VAL_FLOAT; break;
-    case TK_DOUBLE:      ret.info.val = VAL_DOUBLE; break;
+    case TK_BOOL:        ret.val = VAL_BOOL; break;
+    case TK_INT:         ret.val = VAL_INT; break;
+    case TK_UINT:        ret.val = VAL_UINT; break;
+    case TK_FLOAT:       ret.val = VAL_FLOAT; break;
+    case TK_DOUBLE:      ret.val = VAL_DOUBLE; break;
     case TK_STRING_TYPE:
-      ret.info.val = VAL_OBJ;
+      ret.val = VAL_OBJ;
 
       // TODO: change string types to references
       // ret.kind = KIND_REF;
-      ret.info.obj = OBJ_TYPE_STRING;
+      ret.obj = OBJ_TYPE_STRING;
       break;
     case TK_FUNCTION:
-      ret.info.val = VAL_OBJ;
-      ret.info.obj = OBJ_TYPE_FUNCTION;
+      ret.val = VAL_OBJ;
+      ret.obj = OBJ_TYPE_FUNCTION;
       break;
     case TK_ID:
       ret.name = parse_variable(parser, scanner, &token);
@@ -202,12 +200,12 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
   }
 
   if (match(parser, scanner, TK_AMPERSAND)) {
-    ret.info.kind = KIND_REF;
-    ret.info.ref_kind = REF_KIND_WEAK;
+    ret.kind = KIND_REF;
+    ret.ref_kind = REF_KIND_WEAK;
   } else if (match(parser, scanner, TK_STAR)) {
-    ret.info.kind = KIND_PTR;
+    ret.kind = KIND_PTR;
   } else {
-    ret.info.kind = KIND_VAL;
+    ret.kind = KIND_VAL;
   }
 
   return ret;
@@ -406,15 +404,12 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   consume(parser, scanner, TK_ID, "Class definition must include a name.");
   def->name = parse_variable(parser, scanner, &parser->previous);
   def->class_type = (SemanticType_){
-    .info = {
-      .val = VAL_CLASS,
-      .kind = KIND_UNKNOWN,
-      .obj = OBJ_TYPE_UNKNOWN,
-    },
+    .val = VAL_CLASS,
+    .kind = KIND_UNKNOWN,
+    .obj = OBJ_TYPE_UNKNOWN,
+    .sym = frame_addclass(scope->frame, &def->name, scope),
     .name = def->name,
-    .sym = frame_addclass(scope->frame, &def->name, scope)
   };
-  def->class_type.info.sym = def->class_type.sym;
 
   Symbol_* cls_sym = def->class_type.sym;
   Symbol_* constructor = cls_sym->cls.constructor;
@@ -433,7 +428,7 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
     Symbol_* field = classsymbol_addmember(cls_sym, decl->name, decl->sem_type);
     list_push(&constructor->fn.params, &field);
 
-    decl->sem_type.info.sym = field;
+    decl->sem_type.sym = field;
 
     if (match(parser, scanner, TK_END)) {
       break;
@@ -486,7 +481,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
       if (check(parser, TK_EQUAL)) {
         stmt->sem_type = SemanticType_Unknown;
-        stmt->sem_type.info.kind = KIND_VAL;
+        stmt->sem_type.kind = KIND_VAL;
       } else {
         stmt->sem_type = parse_type(parser, scanner);
 
@@ -704,7 +699,7 @@ static AstNode_* False(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 static AstNode_* String(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(&parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
   expr->base.sem_type = semantictype_static(VAL_OBJ);
-  expr->base.sem_type.info.obj = OBJ_TYPE_STRING;
+  expr->base.sem_type.obj = OBJ_TYPE_STRING;
   expr->value = OBJ_VAL(objstring_from(parser->previous.start + 1, parser->previous.length - 2));
   return (AstNode_*)expr;
 }
@@ -859,7 +854,7 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
     } else {
       AstBinaryExp_* bin_exp = MAKE_AST_EXPR(&parser->allocator, AstBinaryExp_, scope, parser->previous.line);
       bin_exp->base.sem_type = SemanticType_Unknown;
-      bin_exp->base.sem_type.info.lifetime = LIFETIME_TMP;
+      bin_exp->base.sem_type.lifetime = LIFETIME_TMP;
       bin_exp->op = parser->previous.type;
       bin_exp->left = (AstExpr_*)exp;
       bin_exp->right = (AstExpr_*)infix_rule(parser, scanner, scope);

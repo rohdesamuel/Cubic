@@ -298,7 +298,7 @@ Symbol_* scope_addclass(Scope_* scope, Token_* name) {
   };
   MemoryAllocator_* allocator = scope->allocator;
   s.cls.constructor = alloc_ty(allocator, Symbol_);
-  s.cls.self_type.info.size = -1;
+  s.cls.self_type.size = -1;
 
   
   list_of(&s.cls.constructor->fn.params, Symbol_*, allocator);

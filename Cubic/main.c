@@ -205,9 +205,6 @@ static void run_file(VM vm, const char* path) {
 int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
-
-  const char* filename = "D:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\class.cub";
-  run_file(&vm, filename);
   
   if (argc == 1) {
     repl(&vm);

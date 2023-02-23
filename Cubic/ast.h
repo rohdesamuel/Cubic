@@ -191,7 +191,7 @@ typedef struct AstVarExpr_ {
   AstExpr_* expr;
 } AstVarExpr_;
 
-// Var :: = Id
+// Var ::= Id
 typedef struct AstIdExpr_ {
   struct AstExpr_ base;
 
