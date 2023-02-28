@@ -1,16 +1,16 @@
 do
-  let a := new int{1234}
+  ref a := int{1234}
   assert a == 1234
 end
 
-struct Vec3
+class Vec3
   x : double
   y : double
   z : double
 end
 
 do
-  let a := new Vec3{1, 2, 3}
+  ref a := Vec3{1, 2, 3}
   assert a.x == 1
   assert a.y == 2
   assert a.z == 3

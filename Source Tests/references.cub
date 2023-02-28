@@ -1,7 +1,6 @@
-# References can weakly reference stack variables.
 do
   let a := 100
-  let b := &a
+  ref b := a
 
   assert a == 100
   assert b == 100
@@ -12,10 +11,9 @@ do
   assert b == 200
 end
 
-# References can weakly reference stack variables.
 do
   let a : int = 100
-  let b : int& = &a
+  ref b : int = a
 
   assert a == 100
   assert b == 100
@@ -26,10 +24,9 @@ do
   assert b == 200
 end
 
-# References can strongly reference heap variables.
 do
   let a := 'hello'
-  let b := &a
+  ref b := &a
 
   assert a == 'hello'
   assert b == 'hello'
@@ -43,8 +40,8 @@ end
 # Duplicate references.
 do
   let a := 100
-  let b := &a
-  let c := b
+  ref b := &a
+  ref c := b
 
   assert a == 100
   assert b == 100
@@ -75,22 +72,22 @@ end
 
 do
   let a := 1
-  function foo(x : int&) 
+  function foo(ref x : int) 
     x = 100
   end
 
   assert a == 1
-  foo(&a)
+  foo(a)
   assert a == 100
 end
 
 do
   let a := 1
-  function foo(x : int&) -> int&
+  function foo(ref x : int) -> ref int
     return x
   end
 
-  let b := foo(&a)
+  let b := foo(a)
   b = 2
   assert a == 2
 end

@@ -14,7 +14,7 @@ Block* block = malloc(sizeof(Block) + size);
 block->size = size;
 block->memory = (char*)block + sizeof(Block);
 
-struct Block
+class Block
   size: int
 end
 
@@ -22,6 +22,7 @@ let size := 4096
 let block := alloc(sizeof(Block) + size)
 block.size = size
 block.memory = (block as char*) + size
+
 
 ###################
 # USE CASE 2
@@ -41,7 +42,7 @@ mesh->pos   = (char*)mesh + sizeof(Mesh);
 mesh->norms = (char*)mesh + sizeof(Mesh) + num_verts * sizeof(Vec3);
 mesh->uvs   = (char*)mesh + sizeof(Mesh) + num_verts * (sizeof(Vec3) + sizeof(Vec3));
 
-struct Mesh
+class Mesh
 [
     num_pos : int, 
     num_norms : int,
@@ -73,6 +74,10 @@ struct Foo_* foo_create();
 
 struct Foo_* f = foo_create();
 
+function foo_create() -> ref Foo
+  return Foo{}
+end
+
 // free(f)?
 // not free(f)?
 // foo_destroy(f)?
@@ -93,21 +98,22 @@ a.arr = calloc(10, sizeof(int));
 
 free(A);  // leaks a.arr
 
-struct A
+class A
   ref arr: int[]
 end
 
 do
   let a: A
-  a.arr = new int[100]
+  a.arr = int[100]
 
   # `a.arr` is automatically freed here
 end
 
+
 ###################
 # USE CASE 5
 #
-# Allocating objects on the heap
+# Object lifetimes
 ###################
 
 struct A {
@@ -116,34 +122,34 @@ struct A {
 
 A* a = new A;
 
-struct A
+class A
   ...
 end
 
 do
-  # Needs to be manually destroyed
-  ptr a: A = new A{}
-  
-  # Deletes a
-  del a
-
-  # Refernce counted
-  ref b: A = new A{}
-
-  # Decrements b's ref counter
-  del b
-
-  # Exclusive ownership to pointer
-  # exc c: A = new A{}
-  # let c: A = unique A{}
-  # let c: A = single A{}
-  # let c: A = solo A{}
-  # Delete c
-  # del c
-
   # Stack allocated
-  let d: A = A()
+  do
+    let d: A = A{}
+  end  # deallocated here
+
+  do
+    # Reference counted
+    ref b: A = A{}
+
+    # Decrements b's ref counter
+    # del b  
+  end  # reference count reaches zero, so deallocated
+
+  do
+    # Needs to be manually destroyed
+    # Heap allocated
+    ptr a: A = new A{}
+  
+    # Deletes a
+    del a
+  end
 end
+
 
 ###################
 # USE CASE 6
@@ -157,48 +163,54 @@ struct A {
 
 A* a = new A;
 
-struct A
+class A
   ...
 end
 
 do
-  let b := PageAllocator()
+  let b := new PageAllocator()
 
-  let a := new A from b;
+  let a := with b new A{}
 end
+
 
 ###################
 # USE CASE 7
 #
-# Allocating strings
-###################
-
-char* a = new A;
-
-struct A
-  ...
-end
-
-do
-  let b := PageAllocator()
-
-  let a := new A from b;
-end
-
-###################
-# USE CASE 8
-#
-# 
+# Allocating from an arena
 ###################
 
 let region := new PageAllocator{}
 
-with region
+with region do
   let foo := new Foo{ bar=new Bar{} }
 end
 
-##################/
 
+###################
+# USE CASE 8
+#
+# Deferred allocation
+###################
+
+# Not allowed!
+# ref a : int
+
+# Needs to be an optional
+ref a? : int
+
+# OK! Always initialized
+if x then
+  a = 1
+else
+  a = 2
+end
+
+
+
+
+##################/
+## Stream of consciousness thoughts
 struct Vec3
   x: int
   y: int
@@ -907,14 +919,6 @@ foo(&a.a)
 # OK
 foo(a.b)
 
-class Unique[T]
-  pub owns val : T
-
-  pub make() -> Unique[T]
-    return Unique[T]{new int{}}
-  end
-end
-
 class Vec3
   pub x: float
   pub y: float
@@ -925,14 +929,114 @@ type Vec3
   float, float, float
 end
 
-class Shared[T]
-  pub shares val : T
+#########
+
+Component Pos : Vec3
+Component Vel : Vec3
+Component Textures : List[Vec3]
+
+let e := Entity{}
+e[Pos] = {}
+e[Vel] = {}
+
+###### Doesn't allow for parallel updating...
+# forall pos: Pos, vel: Vel do
+#   pos = pos + vel
+# end
+#
+# forall e: Entity, pos: Pos, vel: Vel do
+#   pos = pos + vel
+#   print('updated ' + e)
+# end
+
+# or maybe...
+# get only even entities
+forall e: Entity, pos: Pos, vel: Vel where e % 2 == 0 do
+  pos = pos + vel
+  print('updated ' + e)
 end
 
-let unique := Unique[int].make()
-let shared := Shared[int].make()
+# get only odd entities
+forall e: Entity, pos: Pos, vel: Vel where e % 2 == 1 do
+  pos = pos + vel
+  print('updated ' + e)
+end
 
-print(unique.val)
-print(shared.val)
+let entities := [...]
+let results : iterator[Entity, Pos, Vel] =
+    from e: Entity, pos: Pos, vel: Vel
+    in entities
+    where e < 100
 
-ref map[ref list]
+for e, pos, vel in results do
+  pos = pos + vel
+end
+
+
+
+########## more more simplified
+# Value
+let a : int = 0
+
+# Weak-reference:
+#  - acts like non-null pointer
+#  - does not free memory when out of scope
+weak a : int = b
+
+# Strong-reference:
+#  - reference counted
+ref a : int = b
+
+# Optional reference:
+# optional<int&> a;
+ref a? : int = nil
+
+a ?? print(a)
+
+if ?a then
+  print(a)
+end
+
+
+
+# Reference to an optional
+# optional<int>& a;
+ref a : int?
+
+# List of references:
+let a : List[ref int]
+
+# Reference to a list of references
+ref a : List[ref int]
+
+# Optional reference to a list of references
+ref a? : List[ref int]
+
+# Optional reference to a list of optional references
+ref a? : List[ref? int]
+
+class Foo
+  weak a : int
+  ref b : int
+end
+
+# OK
+do
+  ref foo? : Foo
+  if something then
+    foo = Foo{1}
+  else
+    foo = Foo{2}
+  end
+end
+
+# BAD
+do
+  ref foo : Foo
+  if something then
+    foo = Foo{1}
+  else
+    foo = Foo{2}
+  end
+end
+

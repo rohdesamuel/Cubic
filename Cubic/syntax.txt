@@ -52,9 +52,9 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 // Declarations
 ///////////////////////////////////////////////////////////////////////////////
 
-VarDecl ::= ('let' | 'ptr' | 'ref') IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
+VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 ClassDef ::= 'struct' {ClassMemberDecl} 'end'
-ClassMemberDecl ::= IdList ':' UnionType ['=' ExprList]
+ClassMemberDecl ::= [pub] [(owns | shares)] IdList ':' UnionType ['=' ExprList]
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helpers
@@ -96,9 +96,10 @@ ArrayValue ::= '[' ExprList ']'
 MapValue ::= '{' [FieldList] '}'
 SetValue ::= '{' [ExprList] '}'
 
-Constructor ::= Id '{' [ConstructorParamList] '}'
-ConstructorParam ::= [Id '='] Expr
-ConstructorParamList ::= ConstructorParam {',' ConstructorParam} [',']
+// TODO: Make the Id optional and add type inference for this case.
+ClassConstructor ::= Id '{' [ClassConstructorParamList] '}'
+ClassConstructorParam ::= [Id '='] Expr
+ClassConstructorParamList ::= ClassConstructorParam {',' ClassConstructorParam} [',']
 
 ///////////////////////////////////////////////////////////////////////////////
 // Expressions

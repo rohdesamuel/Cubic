@@ -77,7 +77,7 @@ typedef struct FieldSymbol_ {
   struct Symbol_* cls_sym;
 } FieldSymbol_;
 
-// Any symbol living on the stack uses this as the offset variable.
+// Any symbol living on the stack uses this as the base variable.
 // If the symbol references another symbol, the SemanticType_::sym will be set.
 typedef struct VarSymbol_ {
   SemanticType_ sem_type;

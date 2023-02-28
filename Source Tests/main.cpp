@@ -107,7 +107,7 @@ UTEST_F(MyTestFixture, references) {
 }
 
 UTEST_F(MyTestFixture, classes) {
-  auto output = run_file(exedir, "class.cub");
+  auto output = run_file(exedir, "classes.cub");
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }

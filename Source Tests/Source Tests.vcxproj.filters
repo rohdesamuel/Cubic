@@ -87,13 +87,16 @@
     <None Include="closures.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
-    <None Include="class.cub">
+    <None Include="classes.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
     <None Include="references.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
     <None Include="memory.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="optionals.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
   </ItemGroup>

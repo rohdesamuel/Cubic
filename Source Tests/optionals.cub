@@ -1,0 +1,27 @@
+do
+  let opt_int? : int
+  assert opt_int is nil
+
+  opt_int = 1
+  assert opt_int is not nil
+end
+
+do
+  let opt_int? : int
+
+  opt_int = opt_int ?? 1
+  assert opt_int == 1
+
+  opt_int = opt_int ?? 2
+  assert opt_int == 1
+end
+
+do
+  let opt_int? : int
+
+  opt_int ??= 1
+  assert opt_int == 1
+
+  opt_int ??= 2
+  assert opt_int == 1
+end
