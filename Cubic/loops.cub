@@ -23,7 +23,7 @@ for x in 1..10 step 2 do
   print(x)
 end
 
-let x := 0
+val x := 0
 while x < 10 do
   # Prints 0 through 9, inclusive
   print(x)

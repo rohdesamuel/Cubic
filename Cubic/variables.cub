@@ -1,7 +1,7 @@
-let x := 1
-let y : int = 1
-let z : int | nil = 1
-let i : int
+val x := 1
+val y : int = 1
+val z : int | nil = 1
+val i : int
 
 
 

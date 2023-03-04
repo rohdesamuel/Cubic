@@ -83,7 +83,7 @@ typedef enum {
 } ValueKind;
 
 typedef enum {
-  REF_TYPE_UNKNOWN,
+  REF_KIND_UNKNOWN,
 
   // A named variable is stored on stack or heap, not reference counted.
   REF_KIND_WEAK,

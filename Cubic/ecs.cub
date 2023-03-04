@@ -38,7 +38,7 @@ component Velocity
   z : float
 end
 
-let ball : entity = Position + Velocity
+val ball : entity = Position + Velocity
 
 for e, p, v in entity with Position, Velocity do
   print('Updating entity {}', e)

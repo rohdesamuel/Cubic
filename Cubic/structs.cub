@@ -57,7 +57,7 @@ end
 
 do
   a: Baz = (1, 2, 3)
-  let x, y, z := a
+  val x, y, z := a
   print(x, y, z)
 end
 

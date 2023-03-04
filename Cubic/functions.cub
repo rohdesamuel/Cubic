@@ -17,7 +17,7 @@ function variadic(args: ...)
 end
 
 function typed_variadic(args: ...int)
-  let result := 0
+  val result := 0
   for arg in args
     result += arg
 
@@ -35,12 +35,12 @@ function coroutine()
 end
 
 function loadfile()
-  let f := open("some/file")
+  val f := open("some/file")
   return f.read()
 end
 
 function some_filecoroutine()
-  let file_contents := async loadfile()
+  val file_contents := async loadfile()
 
   # Suspends this coroutine until file_contents is filled.
   await file_contents
@@ -52,5 +52,5 @@ simple_print('Hello, world!')
 
 closure('Hello, world!')()
 
-let lambda := function() print('Hello, World!')
+val lambda := function() print('Hello, World!')
 lambda()

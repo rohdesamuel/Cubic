@@ -614,9 +614,9 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
       emit_cast(chunk, semantictype_toruntime(stmt->expr->sem_type), semantictype_toruntime(stmt->sem_type), node->line);
     }
 
-    if (sem_type.kind == KIND_REF) {
-      emit_byte(chunk, OP_INC_REF, node->line);
-    }
+    // if (sem_type.kind == KIND_REF) {
+    //   emit_byte(chunk, OP_INC_REF, node->line);
+    // }
 
     //emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
 
@@ -651,6 +651,13 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
       VarSymbol_* var = &sym->var;
       if (expr->base.top_sem_type.kind == KIND_VAL && var->sem_type.kind == KIND_REF) {
         emit_bytes(chunk, OP_GET_REF, (uint8_t)symbolvar_index(sym), node->line);
+      } else if (expr->base.top_sem_type.kind == KIND_REF && var->sem_type.kind == KIND_VAL) {
+        if (expr->base.sem_type.ref_kind == REF_KIND_WEAK) {
+          emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)symbolvar_index(sym), node->line);
+          emit_byte(chunk, OP_MAKE_REF, node->line);
+        } else {
+          assertf(false, "Unsupported reference operation");
+        }
       } else {
         emit_bytes(chunk, OP_GET_VAR, (uint8_t)symbolvar_index(sym), node->line);
       }

@@ -143,13 +143,15 @@ void unary_analysis(AstNode_* n) {
     {
       SemanticType_ sem_type = expr->base.sem_type;
       if (expr->expr->base.cls != AST_CLS(AstVarExpr_)) {
-        error(analyzer_, (AstNode_*)expr->expr, "Cannot take address expression");
+        error(analyzer_, (AstNode_*)expr->expr, "Cannot take address of expression");
       }
 
-      if (sem_type.kind == KIND_UNKNOWN ||          
-          sem_type.kind == KIND_REF ||
-          sem_type.lifetime == LIFETIME_TMP) {
+      if (sem_type.kind == KIND_UNKNOWN) {
         error(analyzer_, n, "Cannot take address");
+      } else if (sem_type.kind == KIND_REF) {
+        error(analyzer_, n, "Cannot take address of reference.");
+      } else if (sem_type.lifetime == LIFETIME_TMP) {
+        error(analyzer_, n, "Cannot take address of temporary");
       }
 
       expr->base.sem_type.kind = KIND_REF;
@@ -325,10 +327,8 @@ void assert_analysis(AstNode_* n) {
 
 void var_decl_analysis(AstNode_* n) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)n;
-  if (!semantictype_isunknown(stmt->sem_type)) {
-    stmt->expr->top_sem_type = stmt->sem_type;
-  }
 
+  stmt->expr->top_sem_type = stmt->sem_type;
   if (stmt->expr) {
     do_analysis((AstNode_*)stmt->expr);
   }
@@ -388,6 +388,10 @@ void id_expr_analysis(AstNode_* n) {
 
       case SYMBOL_TYPE_VAR:
         expr->base.sem_type = sym->var.sem_type;
+        if (expr->base.top_sem_type.kind == KIND_REF) {
+          expr->base.sem_type.kind = KIND_REF;
+          expr->base.sem_type.ref_kind = REF_KIND_WEAK;
+        }
         break;
 
       case SYMBOL_TYPE_CLOSURE:
@@ -407,7 +411,6 @@ void id_expr_analysis(AstNode_* n) {
 
 void assignment_expr_analysis(AstNode_* n) {
   AstAssignmentExpr_* expr = (AstAssignmentExpr_*)n;
-  
 
   // TODO: allow for deconstructing tuples in assignments (and other types).
   expr->right->top_sem_type = expr->base.top_sem_type;

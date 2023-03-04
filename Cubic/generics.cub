@@ -2,7 +2,7 @@ component Iterable
 
 
 function sum(nums: T) with [T is Iterable] -> int do
-  let accum := 0
+  val accum := 0
   for x in nums do
     accum += x
   end
@@ -22,8 +22,8 @@ struct Mesh
   uvs: vec3[num_uvs]
 end
 
-let mesh := new Mesh with [num_pos=1, num_norms=1, num_uvs=1]
-# let mesh := new Mesh with [1, 1, 1]
+val mesh := new Mesh with [num_pos=1, num_norms=1, num_uvs=1]
+# val mesh := new Mesh with [1, 1, 1]
 
 assert mesh.num_verts == 3
 

@@ -10,10 +10,10 @@ assert '' + 'hello' == 'hello'
 assert 'hello' + '' == 'hello'
 
 # Test string typed variables.
-let a: string = 'hi'
-let b: string = 'hi'
-let c: string = 'hello'
-let d: string = ''
+val a: string = 'hi'
+val b: string = 'hi'
+val c: string = 'hello'
+val d: string = ''
 
 assert a == 'hi'
 assert a == b

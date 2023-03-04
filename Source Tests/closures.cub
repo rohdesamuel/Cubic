@@ -1,4 +1,4 @@
-let closed := 1
+val closed := 1
 function add_closed(x : int) -> int
   return closed + x
 end

@@ -16,7 +16,7 @@ typedef enum {
   TK_DOT, TK_COMMA,
   TK_PLUS, TK_MINUS,
   TK_AMPERSAND, TK_PIPE, TK_HAT, TK_TILDE,
-  TK_STAR, TK_PERCENT,
+  TK_STAR, TK_PERCENT, TK_QUESTION,
 
   // Multi-character tokens.
   TK_BANG, TK_BANG_EQUAL,
@@ -26,6 +26,7 @@ typedef enum {
   TK_ARROW, TK_FAT_ARROW,
   TK_SLASH, TK_DOUBLE_SLASH,
   TK_DOUBLE_DOT, TK_TRIPLE_DOT,
+  TK_QQ, TK_QQE,
 
   // Literals.
   TK_STRING, TK_INTEGER, TK_NUMBER,
@@ -41,8 +42,8 @@ typedef enum {
   TK_PRINT,  // TODO: Remove the print keyword and replace with a function call.
   TK_AND, TK_OR, TK_XOR, TK_NOT,
   TK_TRUE, TK_FALSE, TK_PASS,
-  TK_LET, TK_NIL,
-  TK_NEW, TK_DELETE,
+  TK_VAL, TK_VAR, TK_REF, TK_NIL,
+  TK_NEW, TK_DEL,
   TK_ASSERT,
 
   // Types

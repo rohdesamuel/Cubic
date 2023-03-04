@@ -1,11 +1,11 @@
 # Static array.
-let a: int[2] = [1, 2]
+val a: int[2] = [1, 2]
 assert a[0] == 1
 assert a[1] == 2
 assert a == [1, 2]
 
 # Static array, size determined by array.
-let b: int[] = [1, 2]
+val b: int[] = [1, 2]
 assert b[0] == 1
 assert b[1] == 2
 assert b == [1, 2]
@@ -13,8 +13,8 @@ assert a == b
 assert b == a
 
 # Static array, runtime size, initialized to 0.
-let n: int = 2
-let c: float[n] = [1, 2]
+val n: int = 2
+val c: float[n] = [1, 2]
 assert c[0] == 1
 assert c[1] == 2
 assert c == [1, 2]
@@ -23,7 +23,7 @@ assert c == b
 assert b == c
 
 # Multi-dimensional arrays
-let d: int[int[2]] = [[1,2], [3, 4]]
+val d: int[int[2]] = [[1,2], [3, 4]]
 assert d[0][0] == 1
 assert d[0][1] == 2
 assert d[1][0] == 3
@@ -33,7 +33,7 @@ assert d[0] == a
 assert a == d[0]
 
 # Declarations
-let e: int[2]
+val e: int[2]
 e = [1, 2]
 
 assert e[0] == 1
@@ -42,13 +42,13 @@ assert e == a
 assert a == e
 
 # Generic lists
-let f: list[int] = [1, 2]
+val f: list[int] = [1, 2]
 assert f[0] == 1
 assert f[1] == 2
 assert f == a
 assert a == f
 
-let g: list[int] = []
+val g: list[int] = []
 
 assert f != g
 
@@ -60,6 +60,6 @@ assert g[1] == 2
 
 assert f == g
 
-let i: list[int] = f
+val i: list[int] = f
 assert i == g
 assert g == i

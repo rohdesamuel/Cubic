@@ -1,5 +1,5 @@
 do
-  let opt_int? : int
+  val opt_int? : int
   assert opt_int is nil
 
   opt_int = 1
@@ -7,7 +7,7 @@ do
 end
 
 do
-  let opt_int? : int
+  val opt_int? : int
 
   opt_int = opt_int ?? 1
   assert opt_int == 1
@@ -17,7 +17,7 @@ do
 end
 
 do
-  let opt_int? : int
+  val opt_int? : int
 
   opt_int ??= 1
   assert opt_int == 1

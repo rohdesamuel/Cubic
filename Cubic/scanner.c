@@ -68,9 +68,30 @@ Token_ scanner_scan(Scanner scanner) {
     case '%': return make_token(scanner, TK_PERCENT);
 
     // Multi-character tokens.
+    // !, !=
     case '!':
       return make_token(scanner,
         match(scanner, '=') ? TK_BANG_EQUAL : TK_BANG);
+
+    // ?, ??, ??=
+    case '?':
+    {
+      char c1 = peek(scanner);
+      if (c1 != '?') {
+        return make_token(scanner, TK_QUESTION);
+      }
+      advance(scanner);
+
+      char c2 = peek(scanner);
+      advance(scanner);
+      if (c2 == '=') {
+        return make_token(scanner, TK_QQE);
+      } else {
+        return make_token(scanner, TK_QQ);
+      }
+    }
+
+    // ==, =>
     case '=':
     {
       char c = peek(scanner);
@@ -80,6 +101,8 @@ Token_ scanner_scan(Scanner scanner) {
       }
       return make_token(scanner, TK_EQUAL);
     }
+
+    // <, <=, <<
     case '<':
     {
       char c = peek(scanner);
@@ -89,6 +112,8 @@ Token_ scanner_scan(Scanner scanner) {
       }
       return make_token(scanner, TK_LT);
     }
+
+    // >, >=, >>
     case '>':
     {
       char c = peek(scanner);
@@ -98,12 +123,18 @@ Token_ scanner_scan(Scanner scanner) {
       }
       return make_token(scanner, TK_GT);
     }
+    
+    // -, ->
     case '-':
       return make_token(scanner,
         match(scanner, '>') ? TK_ARROW : TK_MINUS);
+
+    // /, //
     case '/':
       return make_token(scanner,
         match(scanner, '/') ? TK_DOUBLE_SLASH : TK_SLASH);
+
+    // ., .., ...
     case '.':
     {
       // Match numbers that start with a '.' and without a number before it.
@@ -121,7 +152,11 @@ Token_ scanner_scan(Scanner scanner) {
         }
       }
     }
+
+    // '
     case '\'': return match_string(scanner, '\'');
+
+    // "
     case '"': return match_string(scanner, '"');
   }  
 
@@ -302,12 +337,12 @@ static TokenType identifier_type(Scanner scanner) {
     }
 
 
-    // delete, do, double
+    // del, do, double
     case 'd':
     {
       if (length > 1) {
         switch (scanner->start[1]) {
-          case 'e': return check_keyword(scanner, 2, 4, "lete", TK_DELETE);
+          case 'e': return check_keyword(scanner, 2, 1, "l", TK_DEL);
           case 'o':
             if (length == 2) {
               return TK_DO;
@@ -368,9 +403,6 @@ static TokenType identifier_type(Scanner scanner) {
       break;
     }
 
-    // let
-    case 'l': return check_keyword(scanner, 1, 2, "et", TK_LET);
-
     // match
     case 'm': return check_keyword(scanner, 1, 4, "atch", TK_MATCH);
 
@@ -398,11 +430,15 @@ static TokenType identifier_type(Scanner scanner) {
       }
       break;
 
-    // repeat, return
+    // ref, repeat, return
     case 'r':
       if (length > 2) {
         if (scanner->start[1] == 'e') {
-          switch (scanner->start[2]) {
+          if (length == 3 && scanner->start[2] == 'f') {
+            return TK_REF;
+          }
+
+          switch (scanner->start[2]) {              
               case 'p': return check_keyword(scanner, 3, 3, "eat", TK_REPEAT);
               case 't': return check_keyword(scanner, 3, 3, "urn", TK_RETURN);
           }
@@ -444,6 +480,19 @@ static TokenType identifier_type(Scanner scanner) {
           // TODO: match integer width
           case 'i': return check_keyword(scanner, 2, 2, "nt", TK_UINT);
           case 'n': return check_keyword(scanner, 2, 3, "til", TK_UNTIL);
+        }
+      }
+      break;
+
+    // val, var
+    case 'v':
+      if (length != 3 && scanner->start[1] != 'a') {
+        if (scanner->start[2] == 'l') {
+          return TK_VAL;
+        }
+
+        if (scanner->start[2] == 'r') {
+          return TK_VAR;
         }
       }
       break;

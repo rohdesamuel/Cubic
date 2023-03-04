@@ -176,6 +176,12 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
     .sym = NULL
   };
 
+  if (token.type == TK_REF) {
+    ret.kind = KIND_REF;
+    advance(parser, scanner);
+    token = parser->previous;
+  }  
+
   switch (token.type) {
     case TK_BOOL:        ret.val = VAL_BOOL; break;
     case TK_INT:         ret.val = VAL_INT; break;
@@ -199,15 +205,6 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
     default: break;
   }
 
-  if (match(parser, scanner, TK_AMPERSAND)) {
-    ret.kind = KIND_REF;
-    ret.ref_kind = REF_KIND_WEAK;
-  } else if (match(parser, scanner, TK_STAR)) {
-    ret.kind = KIND_PTR;
-  } else {
-    ret.kind = KIND_VAL;
-  }
-
   return ret;
 }
 
@@ -224,7 +221,8 @@ void synchronize(Parser_* parser, Scanner_* scanner) {
   while (parser->current.type != TK_EOF) {
     switch (parser->current.type) {
       case TK_DO:
-      case TK_LET:
+      case TK_VAL:
+      case TK_REF:
       case TK_END:
       case TK_WHILE:
       case TK_ASSERT:
@@ -303,13 +301,23 @@ static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs, Scope_
 
 static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstFunctionParam_* param = MAKE_AST_NODE(&parser->allocator, AstFunctionParam_, scope, parser->current.line);
+  param->type = SemanticType_Unknown;
+
+  bool is_ref = false;
+  if (match(parser, scanner, TK_REF)) {
+    is_ref = true;    
+  }
 
   consume(parser, scanner, TK_ID, "Expecting parameter name");
   param->name = parse_variable(parser, scanner, &parser->previous);
 
-  param->type = SemanticType_Unknown;
   if (match(parser, scanner, TK_COLON)) {
     param->type = parse_type(parser, scanner);
+  }
+
+  if (is_ref) {
+    param->type.kind = KIND_REF;
+    param->type.ref_kind = REF_KIND_UNKNOWN;
   }
 
   frame_addparam(scope->frame, &param->name);
@@ -456,6 +464,42 @@ static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* sco
   return (AstNode_*)decl;
 }
 
+static AstNode_* VarDecl(Parser_* parser, Scanner_* scanner, Scope_* scope, TokenType decl_token) {  
+  AstVarDeclStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstVarDeclStmt_, scope, parser->current.line);
+  consume(parser, scanner, TK_ID, "Expected variable name.");
+  stmt->name = parse_variable(parser, scanner, &parser->previous);
+
+  consume(parser, scanner, TK_COLON, "Expected a ':' for a variable declaration.");
+
+  if (check(parser, TK_EQUAL)) {
+    stmt->sem_type = SemanticType_Unknown;
+    stmt->sem_type.kind = KIND_VAL;
+  } else {
+    stmt->sem_type = parse_type(parser, scanner);
+
+    // TODO: Add object and custom types.
+    assertf(!semantictype_isunknown(stmt->sem_type), "Unknown type");
+  }
+
+  if (decl_token == TK_VAL) {
+    stmt->sem_type.kind = KIND_VAL;
+    stmt->sem_type.ref_kind = REF_KIND_UNKNOWN;
+  } else if (decl_token == TK_REF) {
+    stmt->sem_type.kind = KIND_REF;
+    stmt->sem_type.ref_kind = REF_KIND_UNKNOWN;
+  }
+
+  if (match(parser, scanner, TK_EQUAL)) {
+    stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
+  } else if (semantictype_isunknown(stmt->sem_type)) {
+    error_at_current(parser, "Expected an expression for a deduced type variable.");
+  }
+
+  frame_addvar(scope->frame, &stmt->name, scope);
+
+  return (AstNode_*)stmt;
+}
+
 static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   TokenType tk = parser->current.type;
   MemoryAllocator_* allocator = (MemoryAllocator_*)&parser->allocator;
@@ -470,34 +514,17 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       break;
     }
 
-    case TK_LET:
+    case TK_VAL:
     {
       advance(parser, scanner);
-      AstVarDeclStmt_* stmt = MAKE_AST_STMT(&parser->allocator, AstVarDeclStmt_, scope, parser->current.line);
-      consume(parser, scanner, TK_ID, "Expected variable name.");
-      stmt->name = parse_variable(parser, scanner, &parser->previous);
-      
-      consume(parser, scanner, TK_COLON, "Expected a ':' for a variable declaration.");
+      ret->stmt = (AstNode_*)VarDecl(parser, scanner, scope, TK_VAL);
+      break;
+    }
 
-      if (check(parser, TK_EQUAL)) {
-        stmt->sem_type = SemanticType_Unknown;
-        stmt->sem_type.kind = KIND_VAL;
-      } else {
-        stmt->sem_type = parse_type(parser, scanner);
-
-        // TODO: Add object and custom types.
-        assertf(!semantictype_isunknown(stmt->sem_type), "Unknown type");
-      }
-
-      if (match(parser, scanner, TK_EQUAL)) {
-        stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
-      } else if (semantictype_isunknown(stmt->sem_type)) {
-        error_at_current(parser, "Expected an expression for a deduced type variable.");
-      }
-
-      frame_addvar(scope->frame, &stmt->name, scope);
-
-      ret->stmt = (AstNode_*)stmt;
+    case TK_REF:
+    {
+      advance(parser, scanner);
+      ret->stmt = (AstNode_*)VarDecl(parser, scanner, scope, TK_REF);
       break;
     }
 
@@ -928,7 +955,7 @@ ParseRule_ rules[] = {
   [TK_FUNCTION]     = {FunctionDef, NULL,              PREC_FUNCTION},
   [TK_RETURN]       = {NULL,        NULL,              PREC_NONE},
   [TK_NEW]          = {UnaryOp,     NULL,              PREC_UNARY},
-  [TK_DELETE]       = {UnaryOp,     NULL,              PREC_UNARY},
+  [TK_DEL]          = {UnaryOp,     NULL,              PREC_UNARY},
   [TK_AND]          = {NULL,        BinaryOp,          PREC_AND},
   [TK_OR]           = {NULL,        BinaryOp,          PREC_OR},
   [TK_XOR]          = {NULL,        BinaryOp,          PREC_XOR},
@@ -936,7 +963,8 @@ ParseRule_ rules[] = {
   [TK_TRUE]         = {True,        NULL,              PREC_NONE},
   [TK_FALSE]        = {False,       NULL,              PREC_NONE},
   [TK_PASS]         = {NULL,        NULL,              PREC_NONE},
-  [TK_LET]          = {NULL,        NULL,              PREC_NONE},
+  [TK_VAL]          = {NULL,        NULL,              PREC_NONE},
+  [TK_REF]          = {NULL,        NULL,              PREC_NONE},
   [TK_NIL]          = {Nil,         NULL,              PREC_NONE},
   [TK_BOOL]         = {NULL,        NULL,              PREC_NONE},
   [TK_INT]          = {Type,        NULL,              PREC_NONE},

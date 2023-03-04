@@ -11,7 +11,7 @@ match typeof(arg)
 
 end
 
-let x : int | float
+val x : int | float
 
 match x do:
   case int =>

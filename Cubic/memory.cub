@@ -18,8 +18,8 @@ class Block
   size: int
 end
 
-let size := 4096
-let block := alloc(sizeof(Block) + size)
+val size := 4096
+val block := alloc(sizeof(Block) + size)
 block.size = size
 block.memory = (block as char*) + size
 
@@ -60,8 +60,8 @@ struct Mesh with [num_verts: int]
   uvs: vec3[num_verts]
 end
 
-let num_verts := 100
-let mesh := new Mesh with [num_verts=num_verts]
+val num_verts := 100
+val mesh := new Mesh with [num_verts=num_verts]
 
 
 ###################
@@ -103,7 +103,7 @@ class A
 end
 
 do
-  let a: A
+  val a: A
   a.arr = int[100]
 
   # `a.arr` is automatically freed here
@@ -129,7 +129,7 @@ end
 do
   # Stack allocated
   do
-    let d: A = A{}
+    val d: A = A{}
   end  # deallocated here
 
   do
@@ -168,9 +168,9 @@ class A
 end
 
 do
-  let b := new PageAllocator()
+  val b := new PageAllocator()
 
-  let a := with b new A{}
+  val a := with b new A{}
 end
 
 
@@ -180,10 +180,10 @@ end
 # Allocating from an arena
 ###################
 
-let region := new PageAllocator{}
+val region := new PageAllocator{}
 
 with region do
-  let foo := new Foo{ bar=new Bar{} }
+  val foo := new Foo{ bar=new Bar{} }
 end
 
 
@@ -229,17 +229,17 @@ end
 
 
 do
-  let b: Body = Body(pos=new Vec3(0, 0, 0), vel=new Vec3(0, 0, 0))
+  val b: Body = Body(pos=new Vec3(0, 0, 0), vel=new Vec3(0, 0, 0))
 
-  let b_ptr: Body*  = &b
-  let b_shd: Body&  = &b # ERROR: cannot create shared pointer to stack var
-  let b_unq: Body!  = &b # ERROR: cannot create unique pointer to stack var
+  val b_ptr: Body*  = &b
+  val b_shd: Body&  = &b # ERROR: cannot create shared pointer to stack var
+  val b_unq: Body!  = &b # ERROR: cannot create unique pointer to stack var
 end
 
 # & := address of operator
 # * := dereferencing operator
 
-let name: type = assignee
+val name: type = assignee
 type    , assignee, method
 ---     , ---     , copies value
 ---     , *       , ERROR: non-pointer cannot take value of pointer
@@ -983,9 +983,13 @@ let a : int = 0
 #  - does not free memory when out of scope
 weak a : int = b
 
-# Strong-reference:
-#  - reference counted
-ref a : int = b
+# Reference:
+#  - can be weak or strong reference
+#  - if pointing to stack, then weak otherwise, strong
+#  - cannot re-assign memory pointed to by reference meaning, a weak reference
+#    will stay weak.
+ref a : int = b  # weak reference
+ref a : int = 1  # strong reference
 
 # Optional reference:
 # optional<int&> a;
@@ -1040,3 +1044,108 @@ do
   end
 end
 
+do
+  ref b? : int = 1  # reference counted heap allocation
+  do
+    let a := 100
+    b = a
+    print(b)  # prints 100
+    b = 10
+    print(a)  # prints 100
+    print(b)  # prints 10
+  end
+  print(b)  # prints what?
+end
+
+do
+  let a := 100
+  ref b := &a
+  print(b)  # prints 100
+  b = 10
+  print(a)  # prints 10
+  print(b)  # prints 10
+end
+
+do
+  weak b? : int
+  do
+    let a := 100
+    b = a
+    print(b)  # prints 100
+    b = 10
+    print(a)  # prints 10
+  end
+  print(b)  # Uh-oh!
+end
+
+
+## This isn't good, because it mixes the semantics of weak and strong references as one.
+let a := 0  # value a == 0
+
+# Weak references?
+ref b := &a # b references a
+ref c := b  # c references a
+
+# Strong references?
+ref d := 0  # d references heap value 
+ref e := d  # e references same heap value as d
+
+class Foo
+  ref a? : int
+end
+
+let escaped : Foo = Foo{}
+
+function foo(ref x: int)
+  # If x is a weak reference or value, copy the value
+  # If x is a strong reference, copy the address, increment ref count
+  escaped.a = x
+end
+
+
+#### Super-duper simplified
+
+val a := 0   # a stack allocated value
+var b := 0   # a reference counted object
+ref c := &a  # a weak reference
+ref d := &b  # a weak reference
+
+val escape_val : int
+var escape_var : int
+ref escape_ref : int
+
+function foo(x : int)
+  escape_val = x
+  escape_var = x
+  escape_ref = x
+end
+
+function val_foo(val x : int)
+  escape_val = x  # copy x
+  escape_var = x  # copy x
+  escape_ref = x  # get address of x (oops)
+end
+
+function var_foo(var x : int)
+  escape_val = x  # copy x
+  escape_var = x  # reference x
+  escape_ref = x  # get address of x (ok)
+end
+
+function ref_foo(ref x : int)
+  escape_val = x  # copy x
+  escape_var = x  # copy x
+  escape_ref = x
+end
+
+# to = from
+# to,  from,  operation
+# val  val    copy
+# val  var    copy
+# val  ref    copy
+# var  val    copy
+# var  var    inc ref count
+# var  ref    copy
+# ref  val    addrof
+# ref  var    get pointer
+# ref  ref    get pointer

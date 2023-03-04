@@ -1,12 +1,12 @@
-let a := 1
+val a := 1
 assert a == 1
 
-let b := a
+val b := a
 assert a == b
 assert b == 1
 
-let c := 1.0
+val c := 1.0
 assert c == 1.0
 
-let d := true
+val d := true
 assert d

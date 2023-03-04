@@ -20,12 +20,12 @@ assert toggle(true) == false
 assert toggle(toggle(true)) == true
 
 function add_one(a : int) -> int
-  let b := a + 1
+  val b := a + 1
   return b
 end
 
 do
-  let a := 0
+  val a := 0
   a = add_one(a)
   assert a == 1
 end
@@ -53,7 +53,7 @@ assert recur(3) == 6
 assert recur(4) == 10
 
 do
-  let i := 10
+  val i := 10
   while i > 0 do
     assert identity(1) == 1
     i = i - 1

@@ -20,7 +20,7 @@ Statement ::= ';'
     | AssertStmt
     | ExpressionStmt
 
-DeclarationStmt ::= VarDecl
+DeclarationStmt ::= LetDecl | RefDecl
 BlockStmt ::= 'do' Block 'end'
 IfStmt ::= 'if' Expr 'then' Block {'elif' Expr 'then' Block} ['else' Block] 'end'
 ForStmt ::= 'for' Id 'in' Expr {'and' Expr} ['step' Expr] 'do' Block 'end'
@@ -44,7 +44,7 @@ FunctionCallArg ::= Expr
 
 // Defining a function
 FunctionDef ::= 'function' [Id] FunctionBody 'end'
-FunctionParam ::= (Id | UnionType | Id ':' UnionType)
+FunctionParam ::= ['ref'] (Id | UnionType | Id ':' UnionType)
 FunctionParamList ::= FunctionParam {',' FunctionParam}
 FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 
@@ -52,7 +52,9 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 // Declarations
 ///////////////////////////////////////////////////////////////////////////////
 
-VarDecl ::= 'let' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
+VarDecl ::= IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
+ValDecl ::= 'val' VarDecl
+RefDecl ::= 'ref' VarDecl
 ClassDef ::= 'struct' {ClassMemberDecl} 'end'
 ClassMemberDecl ::= [pub] [(owns | shares)] IdList ':' UnionType ['=' ExprList]
 
@@ -68,7 +70,7 @@ ExprList ::= Expr {',' Expr}
 ///////////////////////////////////////////////////////////////////////////////
 // Typing Information
 ///////////////////////////////////////////////////////////////////////////////
-Type ::= (Id | PrimitiveType | CompositeType | FunctionType | 'nil') [ArrayFieldList]
+Type ::= ['ref'] (Id | PrimitiveType | CompositeType | FunctionType | 'nil') [ArrayFieldList]
 UnionType ::= Type {'|' Type}
 
 ArrayFieldDecl ::= '[' [(Number | '..')] ']'
@@ -85,7 +87,7 @@ CompositeType ::= 'Set' '[' [UnionType] ']'
     | 'List' '[' [UnionType] ']'
 
 // Declaring a function, e.g.
-//   let sum : function (int, int) -> int
+//   val sum : function (int, int) -> int
 FunctionType ::= '(' [UnionType {',' UnionType } [',' '...']] ')' '->' UnionType
 
 // TODO: Extend with [1..3] syntax.

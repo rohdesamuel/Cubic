@@ -2,10 +2,10 @@
 print([1..5])
 
 # Creates an iterator starting from 1
-let it := 1..
+val it := 1..
 
 # Creates an iterator that always returns 0
-let it := ..0
+val it := ..0
 
 # Prints [0]
 print([0..0])
@@ -17,7 +17,7 @@ print([-3..0])
 print([0..1])
 
 # Prints [0, 1]
-let n := 2
+val n := 2
 print([0..n-1])
 
 # Prints 0, 1, .., n
