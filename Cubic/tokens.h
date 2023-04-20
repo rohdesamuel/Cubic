@@ -36,7 +36,7 @@ typedef enum {
   TK_IF, TK_THEN, TK_ELIF, TK_ELSE,
   TK_FOR, TK_IN, TK_STEP, TK_WHILE,
   TK_REPEAT, TK_UNTIL,
-  TK_CLASS,
+  TK_CLASS, TK_IS,
   TK_MATCH, TK_CASE,
   TK_FUNCTION, TK_RETURN,
   TK_PRINT,  // TODO: Remove the print keyword and replace with a function call.

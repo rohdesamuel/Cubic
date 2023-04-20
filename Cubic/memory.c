@@ -4,6 +4,14 @@
 
 #include "memory.h"
 
+void* alloc_(struct MemoryAllocator_* allocator, size_t size) {
+  return allocator->allocate(allocator, size);
+}
+
+void dealloc_(struct MemoryAllocator_* allocator, void* ptr) {
+  allocator->deallocate(allocator, ptr);
+}
+
 void* reallocate(void* pointer, size_t old_size, size_t new_size) {
   if (new_size == 0) {
     free(pointer);

@@ -7,6 +7,7 @@
 #include "tokens.h"
 #include "value.h"
 #include "object.h"
+#include "tac.h"
 
 typedef struct Value_ Value_;
 
@@ -69,8 +70,13 @@ typedef struct ClassSymbol_ {
 
 typedef struct FieldSymbol_ {
   SemanticType_ sem_type;
+
+  // Field index in the containing class.
   int index;
+
+  // Byte offset into the outer-most class.
   size_t offset;
+
   struct Value_ val;
   bool has_default_val;
 
@@ -87,6 +93,8 @@ typedef struct VarSymbol_ {
 
   // Incrementing index from 0 in local scope.  
   int scope_index;
+
+  Location_ location;
 } VarSymbol_;
 
 typedef struct RefSymbol_ {

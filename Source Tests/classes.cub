@@ -73,11 +73,23 @@ do
   a.a = 2
   assert a.a == 2
 
-  val b := &a.a
+  ref b := &a.a
   b = 3
   assert a.a == 3
 end
 
+##########
+
+class OneMemberForRef
+  a : int = 0
+end
+
+do
+  val a := OneMember{1}
+  ref b := &a.a
+  b = 3
+  assert a.a == 3
+end
 
 ##########
 

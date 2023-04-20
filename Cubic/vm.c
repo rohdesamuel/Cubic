@@ -89,6 +89,10 @@ static InterpretResult run(VM vm) {
     (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
 #define READ_LONG() \
     (frame->ip += 4, (uint32_t)((frame->ip[-4] << 24) | (frame->ip[-3] << 16) | (frame->ip[-2] << 8) | frame->ip[-1]))
+#define READ_LONGLONG() \
+    (frame->ip += 8, (uint64_t)(((uint64_t)frame->ip[-8] << 56) | ((uint64_t)frame->ip[-7] << 48) | ((uint64_t)frame->ip[-6] << 40) | ((uint64_t)frame->ip[-5] << 32) | \
+                                ((uint64_t)frame->ip[-4] << 24) | ((uint64_t)frame->ip[-3] << 16) | ((uint64_t)frame->ip[-2] <<  8) | (uint64_t)frame->ip[-1]))
+
 #define READ_CONSTANT() (frame->chunk->constants.values[READ_BYTE()])
 #define BINARY_OP(op) \
     do { \
@@ -123,11 +127,53 @@ static InterpretResult run(VM vm) {
     switch (instruction = READ_BYTE()) {
       case OP_CONSTANT:
       {
+        uint8_t dst = READ_BYTE();
         Value_ constant = READ_CONSTANT();
-        vm_push(vm, constant);
+        frame->slots[dst] = constant;
         continue;
       }
 
+      case OP_RETURN:
+      {
+        Value_ result = vm_pop(vm);
+        if (--vm->frame_count == 0) {
+          vm_pop(vm);
+          return INTERPRET_OK;
+        }
+
+        vm->stack_top = frame->slots;
+        vm_push(vm, result);
+        frame = &vm->frames[vm->frame_count - 1];
+        continue;
+      }
+
+      case OP_MOVE:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst] = frame->slots[src];
+        continue;
+      }
+
+      case OP_ADD:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t l   = READ_BYTE();
+        uint8_t r   = READ_BYTE();
+        frame->slots[dst].as.u = frame->slots[l].as.u + frame->slots[r].as.u;
+        continue;
+      }
+
+      case OP_PRINT:
+      {
+        uint8_t slot = READ_BYTE();
+        RuntimeType_ t = type_fromint(READ_LONG());
+
+        value_print(frame->slots[slot], t);
+        printf("\n");
+        continue;
+      }
+#if 0
       case OP_NIL:
         vm_push(vm, NIL_VAL);
         continue;
@@ -179,6 +225,13 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_ALLOC_PTR:
+      {
+        uint32_t size = READ_LONG();
+        vm_push(vm, PTR_VAL(calloc(size, sizeof(Value_))));
+        continue;
+      }
+
       case OP_CAST:
       {
         Value_ expr_val = vm_pop(vm);
@@ -227,7 +280,7 @@ static InterpretResult run(VM vm) {
       case OP_ADDROF_REF:
       {
         uint8_t slot = READ_BYTE();
-        vm_push(vm, PTR_VAL(frame->slots[slot].as.ref.val));
+        vm_push(vm, PTR_VAL(frame->slots[slot].as.ref.pval));
         continue;
       }
 
@@ -240,14 +293,33 @@ static InterpretResult run(VM vm) {
 
       case OP_MAKE_REF:
       {
-        Value_ addr = vm_pop(vm);
+        Value_ loc = vm_pop(vm);
         Value_ ret = {
           .as.ref = {
-            .val = (Value_*)addr.as.ptr,
+            .pval = (Value_*)loc.as.ptr,
             .count = calloc(1, sizeof(int))
           },
         };
         vm_push(vm, ret);
+        continue;
+      }
+
+      case OP_DEREF_PTR:
+      {
+        uint8_t slot = READ_BYTE();
+        vm_push(vm, *(Value_*)vm_pop(vm).as.ptr);
+        continue;
+      }
+
+      case OP_STACK_TOP:
+      {
+        vm_push(vm, PTR_VAL(vm->stack_top - 1));
+        continue;
+      }
+      
+      case OP_REF_PTR:
+      {
+        vm_push(vm, PTR_VAL(vm_pop(vm).as.ref.pval));
         continue;
       }
 
@@ -270,13 +342,16 @@ static InterpretResult run(VM vm) {
       case OP_SET_OFFSET:
       {
         uint8_t slot = READ_BYTE();
+        Value_* base = (Value_*)READ_LONGLONG();
+        Value_ val = vm_pop(vm);
+        *(base + slot) = val;
         continue;
       }
 
       case OP_GET_REF:
       {
         uint8_t slot = READ_BYTE();
-        vm_push(vm, *frame->slots[slot].as.ref.val);
+        vm_push(vm, *frame->slots[slot].as.ref.pval);
         continue;
       }
 
@@ -284,7 +359,7 @@ static InterpretResult run(VM vm) {
       {
         uint8_t slot = READ_BYTE();
         Value_ val = vm_peek(vm, 0);
-        *frame->slots[slot].as.ref.val = val;
+        *frame->slots[slot].as.ref.pval = val;
         continue;
       }
 
@@ -616,30 +691,6 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_RETURN:
-      {
-        Value_ result = vm_pop(vm);        
-        if (--vm->frame_count == 0) {
-          vm_pop(vm);
-          return INTERPRET_OK;
-        }
-
-        vm->stack_top = frame->slots;
-        vm_push(vm, result);
-        frame = &vm->frames[vm->frame_count - 1];
-        continue;
-      }
-
-      case OP_PRINT:
-      {
-        Value_ v = vm_pop(vm);
-        RuntimeType_ t = type_fromint(READ_LONG());
-
-        value_print(v, t);
-        printf("\n");
-        continue;
-      }
-
       case OP_ASSERT:
       {
         Value_ assert_val = vm_pop(vm);
@@ -674,6 +725,7 @@ static InterpretResult run(VM vm) {
       }
 
       case OP_POP: vm_pop(vm); continue;
+#endif
     }
   }
 

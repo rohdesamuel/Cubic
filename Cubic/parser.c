@@ -4,6 +4,7 @@
 #include "object.h"
 
 #include <memory.h>
+#include <stdarg.h>
 #include <string.h>
 
 #pragma warning(3 : 4062)
@@ -59,9 +60,8 @@ static bool check(Parser_* parser, TokenType type);
 
 static ParseRule_* get_rule(TokenType type);
 
-static void error_at_current(Parser_* parser, const char* message);
-static void error(Parser_* parser, const char* message);
-static void error_at(Parser_* parser, Token_* token, const char* message);
+static void error_at_current(Parser_* parser, const char* message, ...);
+static void error(Parser_* parser, const char* message, ...);
 static bool block_follow(Parser_* parser, Scanner_* scanner, bool withuntil);
 static void statement_list(Parser_* parser, Scanner_* scanner, AstList_* statements, Scope_* scope);
 
@@ -192,7 +192,7 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
       ret.val = VAL_OBJ;
 
       // TODO: change string types to references
-      // ret.kind = KIND_REF;
+      // ret.kind = KIND_VAR;
       ret.obj = OBJ_TYPE_STRING;
       break;
     case TK_FUNCTION:
@@ -222,6 +222,7 @@ void synchronize(Parser_* parser, Scanner_* scanner) {
     switch (parser->current.type) {
       case TK_DO:
       case TK_VAL:
+      case TK_VAR:
       case TK_REF:
       case TK_END:
       case TK_WHILE:
@@ -411,26 +412,32 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
   consume(parser, scanner, TK_ID, "Class definition must include a name.");
   def->name = parse_variable(parser, scanner, &parser->previous);
+  Symbol_* cls_sym = frame_addclass(scope->frame, &def->name, scope);
+
+  consume(parser, scanner, TK_IS, "Expected 'is' after class name.");
+  if (!cls_sym) {
+    error(parser, "class '%.*s already defined.'", def->name.length, def->name.start);
+    return NULL;
+  }
+
   def->class_type = (SemanticType_){
     .val = VAL_CLASS,
     .kind = KIND_UNKNOWN,
     .obj = OBJ_TYPE_UNKNOWN,
-    .sym = frame_addclass(scope->frame, &def->name, scope),
+    .sym = cls_sym,
     .name = def->name,
   };
 
-  Symbol_* cls_sym = def->class_type.sym;
   Symbol_* constructor = cls_sym->cls.constructor;
-
   constructor->fn.obj_fn = objfn_create(constructor);
   constructor->fn.return_type = def->class_type;
 
   cls_sym->cls.constructor = constructor;
   cls_sym->cls.self_type = def->class_type;
 
-  Scope_* struct_scope = scope_createfrom(scope);
+  Scope_* class_scope = scope_createfrom(scope);
   while (check(parser, TK_ID)) {
-    AstClassMemberDecl_* decl = (AstClassMemberDecl_*)ClassMemberDecl(parser, scanner, struct_scope);
+    AstClassMemberDecl_* decl = (AstClassMemberDecl_*)ClassMemberDecl(parser, scanner, class_scope);
     astlist_append(&def->members, (AstNode_*)decl);
 
     Symbol_* field = classsymbol_addmember(cls_sym, decl->name, decl->sem_type);
@@ -450,12 +457,20 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
 static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstClassMemberDecl_* decl = MAKE_AST_NODE(&parser->allocator, AstClassMemberDecl_, scope, parser->current.line);
-  
+
+  ValueKind kind = KIND_VAL;
+  if (match(parser, scanner, TK_VAR)) {
+    kind = KIND_VAL;
+  } else if (match(parser, scanner, TK_REF)) {
+    kind = TK_REF;
+  }
+
   consume(parser, scanner, TK_ID, "Class definition must include a name.");
   decl->name = parse_variable(parser, scanner, &parser->previous);
 
-  consume(parser, scanner, TK_COLON, "Expected a ':' after struct member name.");
+  consume(parser, scanner, TK_COLON, "Expected a ':' after class member name.");
   decl->sem_type = parse_type(parser, scanner);
+  decl->sem_type.kind = kind;
 
   if (match(parser, scanner, TK_EQUAL)) {
     decl->opt_expr = (AstExpr_*)Expr(parser, scanner, scope);
@@ -486,7 +501,10 @@ static AstNode_* VarDecl(Parser_* parser, Scanner_* scanner, Scope_* scope, Toke
     stmt->sem_type.ref_kind = REF_KIND_UNKNOWN;
   } else if (decl_token == TK_REF) {
     stmt->sem_type.kind = KIND_REF;
-    stmt->sem_type.ref_kind = REF_KIND_UNKNOWN;
+    stmt->sem_type.ref_kind = REF_KIND_WEAK;
+  } else if (decl_token == TK_VAR) {
+    stmt->sem_type.kind = KIND_VAR;
+    stmt->sem_type.ref_kind = REF_KIND_STRONG;
   }
 
   if (match(parser, scanner, TK_EQUAL)) {
@@ -495,7 +513,9 @@ static AstNode_* VarDecl(Parser_* parser, Scanner_* scanner, Scope_* scope, Toke
     error_at_current(parser, "Expected an expression for a deduced type variable.");
   }
 
-  frame_addvar(scope->frame, &stmt->name, scope);
+  if (!frame_addvar(scope->frame, &stmt->name, scope)) {
+    error(parser, "variable '%.*s' already declared.", stmt->name.length, stmt->name.start);
+  }
 
   return (AstNode_*)stmt;
 }
@@ -518,6 +538,13 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
     {
       advance(parser, scanner);
       ret->stmt = (AstNode_*)VarDecl(parser, scanner, scope, TK_VAL);
+      break;
+    }
+
+    case TK_VAR:
+    {
+      advance(parser, scanner);
+      ret->stmt = (AstNode_*)VarDecl(parser, scanner, scope, TK_VAR);
       break;
     }
 
@@ -990,27 +1017,35 @@ static ParseRule_* get_rule(TokenType type) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static void error_at_current(Parser_* parser, const char* message) {
-  error_at(parser, &parser->current, message);
-}
-
-static void error(Parser_* parser, const char* message) {
-  error_at(parser, &parser->previous, message);
-}
-
-static void error_at(Parser_* parser, Token_* token, const char* message) {
+static void error_at(Parser_* parser, Token_* token, const char* const message, va_list argp) {
   if (parser->panic_mode) return;
   parser->panic_mode = true;
   fprintf(stderr, "[line %d] Error", token->line);
 
   if (token->type == TK_EOF) {
     fprintf(stderr, " at end");
-  } else if (token->type == TK_ERR) {
-    // Nothing.
-  } else {
-    fprintf(stderr, " at '%.*s'", token->length, token->start);
   }
-
-  fprintf(stderr, ": %s\n", message);
+  else if (token->type == TK_ERR) {
+    // Nothing.
+  }
+  else {
+    fprintf(stderr, " at '%.*s': ", token->length, token->start);
+  }
+  vfprintf(stderr, message, argp);
+  fprintf(stderr, "\n");
   parser->had_error = true;
+}
+
+static void error_at_current(Parser_* parser, const char* message, ...) {
+  va_list argp;
+  va_start(argp, message);
+  error_at(parser, &parser->current, message, argp);
+  va_end(argp);
+}
+
+static void error(Parser_* parser, const char* message, ...) {
+  va_list argp;
+  va_start(argp, message);
+  error_at(parser, &parser->previous, message, argp);
+  va_end(argp);
 }

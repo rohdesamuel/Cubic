@@ -155,11 +155,7 @@ void unary_analysis(AstNode_* n) {
       }
 
       expr->base.sem_type.kind = KIND_REF;
-      if (sem_type.kind == KIND_VAL) {
-        expr->base.sem_type.ref_kind = REF_KIND_WEAK;
-      } else {
-        expr->base.sem_type.ref_kind = REF_KIND_STRONG;
-      }
+      expr->base.sem_type.ref_kind = REF_KIND_WEAK;
       break;
     }
 
@@ -167,11 +163,11 @@ void unary_analysis(AstNode_* n) {
     {
       SemanticType_* type = &expr->base.sem_type;
 
-      if (type->kind == KIND_REF) {
+      if (type->kind == KIND_VAR || type->kind == KIND_REF) {
         error(analyzer_, n, "Cannot create allocate references");
       }
 
-      type->kind = KIND_REF;
+      type->kind = KIND_VAR;
       type->ref_kind = REF_KIND_STRONG;
       type->lifetime = LIFETIME_AUTOMATIC;
 
@@ -319,7 +315,6 @@ void assert_analysis(AstNode_* n) {
   AstAssertStmt_* stmt = (AstAssertStmt_*)n;
   stmt->expr->top_sem_type = semantictype_frominfo(VAL_BOOL, KIND_VAL, OBJ_TYPE_UNKNOWN);
   do_analysis((AstNode_*)stmt->expr);
-
   if (!semantictype_isabool(AS_EXPR(stmt->expr)->sem_type)) {
     error(analyzer_, n, "assert expression must have a boolean type.");
   }
@@ -328,21 +323,28 @@ void assert_analysis(AstNode_* n) {
 void var_decl_analysis(AstNode_* n) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)n;
 
-  stmt->expr->top_sem_type = stmt->sem_type;
   if (stmt->expr) {
+    stmt->expr->top_sem_type = stmt->sem_type;
     do_analysis((AstNode_*)stmt->expr);
   }
 
   if (semantictype_isunknown(stmt->sem_type)) {
     assertf(stmt->expr, "type deduced variable must have an expression");
+    ValueKind kind = stmt->sem_type.kind;
+    ValueRefKind ref_kind = stmt->sem_type.ref_kind;
+
     stmt->sem_type = AS_EXPR(stmt->expr)->sem_type;
+    if (kind == KIND_VAR) {
+      stmt->sem_type.kind = kind;
+      stmt->sem_type.ref_kind = ref_kind;
+    }
   }
 
   // The type will be KIND_TMP if created from a PRIMARY_EXP. Only change the kind for
   // non-pointer/reference types.
   if (stmt->sem_type.kind == KIND_UNKNOWN) {
     if (stmt->sem_type.val == VAL_OBJ) {
-      stmt->sem_type.kind = KIND_REF;
+      stmt->sem_type.kind = KIND_VAR;
     } else {
       stmt->sem_type.kind = KIND_VAL;
     }
@@ -388,10 +390,10 @@ void id_expr_analysis(AstNode_* n) {
 
       case SYMBOL_TYPE_VAR:
         expr->base.sem_type = sym->var.sem_type;
-        if (expr->base.top_sem_type.kind == KIND_REF) {
-          expr->base.sem_type.kind = KIND_REF;
+        /*if (expr->base.top_sem_type.kind == KIND_VAR) {
+          expr->base.sem_type.kind = KIND_VAR;
           expr->base.sem_type.ref_kind = REF_KIND_WEAK;
-        }
+        }*/
         break;
 
       case SYMBOL_TYPE_CLOSURE:
@@ -549,8 +551,8 @@ void function_call_args_analysis(AstNode_* node) {
     SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
 
     if (param_sem_type.val != expr_sem_type.val ||
-      (param_sem_type.kind == KIND_REF &&
-        expr_sem_type.kind != KIND_REF)) {
+      (param_sem_type.kind == KIND_VAR &&
+        expr_sem_type.kind != KIND_VAR)) {
       error(analyzer_, n->node, "Expression does not match function parameter type.");
     }
 
@@ -701,7 +703,7 @@ void ast_constructor_analysis(AstNode_* node) {
     Symbol_* cls_sym = scope_find(node->scope, &type->name);
 
     if (!cls_sym) {
-      error(analyzer_, node, "Could not find struct %.*s", type->name.length, type->name.start);
+      error(analyzer_, node, "Could not find class %.*s", type->name.length, type->name.start);
     } else {
       constructor->base.sem_type = cls_sym->cls.self_type;
       constructor->base.sem_type.sym = cls_sym;

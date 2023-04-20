@@ -11,10 +11,10 @@
 // #define DEBUG_TRACE_EXECUTION
 
 #define expectf(cond, ...) \
-do { if (!(cond)) fprintf(stderr, __VA_ARGS__); }  while(0)
+do { if (!(cond)) fprintf(stderr, __VA_ARGS__); __debugbreak(); }  while(0)
 
 #define assertf(cond, ...) \
-do { if (!(cond)) { fprintf(stderr, __VA_ARGS__); exit(1); } }  while(0)
+do { if (!(cond)) { fprintf(stderr, __VA_ARGS__); __debugbreak(); exit(1); } }  while(0)
 
 #define CTASTR2(pre,post) pre ## post
 #define CTASTR(pre,post) CTASTR2(pre,post)

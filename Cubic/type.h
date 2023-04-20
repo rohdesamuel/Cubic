@@ -73,13 +73,16 @@ typedef enum {
 
   // A named variable that is stored on stack or in a struct.
   KIND_VAL,
-
-  // A named variable that is stored on stack or heap, no ownership.
-  KIND_PTR,
   
   // A named variable that is stored on the heap that does not need to be
   // explicitly dereferenced.
+  KIND_VAR,
+
+  // Non-null pointer that does not need to be dereferenced.
   KIND_REF,
+
+  // A named variable that is stored on stack or heap, no ownership.
+  KIND_PTR,
 } ValueKind;
 
 typedef enum {

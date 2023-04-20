@@ -398,6 +398,7 @@ static TokenType identifier_type(Scanner scanner) {
             }
             break;
           }
+          case 's': return TK_IS;
         }
       }
       break;
@@ -484,9 +485,9 @@ static TokenType identifier_type(Scanner scanner) {
       }
       break;
 
-    // val, var
+    // pval, var
     case 'v':
-      if (length != 3 && scanner->start[1] != 'a') {
+      if (length == 3 && scanner->start[1] == 'a') {
         if (scanner->start[2] == 'l') {
           return TK_VAL;
         }

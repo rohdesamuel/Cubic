@@ -131,7 +131,7 @@ typedef struct AstPrintStmt_ {
   struct AstExpr_* expr;
 } AstPrintStmt_;
 
-// VarDecl ::= 'val' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
+// VarDecl ::= 'pval' IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 typedef struct AstVarDeclStmt_ {
   AstNode_ base;
 

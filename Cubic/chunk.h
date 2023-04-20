@@ -4,91 +4,96 @@
 #include "common.h"
 #include "value.h"
 
+#define OPCODE_LIST(OPCODE) \
+    OPCODE(OP_NOP)  \
+    OPCODE(OP_NIL)  \
+    OPCODE(OP_TRUE)  \
+    OPCODE(OP_FALSE)  \
+    OPCODE(OP_LOAD)  \
+    OPCODE(OP_STORE)  \
+    OPCODE(OP_MOVE)  \
+    OPCODE(OP_MOVEA)  \
+    OPCODE(OP_MOVED)  \
+    OPCODE(OP_CONSTANT)  \
+    OPCODE(OP_CONSTANT_LONG)  \
+    OPCODE(OP_OBJ_EQ)  \
+    OPCODE(OP_EQ)  \
+    OPCODE(OP_LT)  \
+    OPCODE(OP_LTE)  \
+    OPCODE(OP_CMP)  \
+    OPCODE(OP_ICMP)  \
+    OPCODE(OP_FCMP)  \
+    OPCODE(OP_ADD)  \
+    OPCODE(OP_SUB)  \
+    OPCODE(OP_MUL)  \
+    OPCODE(OP_DIV)  \
+    OPCODE(OP_IMUL)  \
+    OPCODE(OP_IDIV)  \
+    OPCODE(OP_FADD)  \
+    OPCODE(OP_FSUB)  \
+    OPCODE(OP_FMUL)  \
+    OPCODE(OP_FDIV)  \
+    OPCODE(OP_CONCAT)  \
+    OPCODE(OP_CAST)  \
+    OPCODE(OP_MOD)  \
+    OPCODE(OP_IMOD)  \
+    OPCODE(OP_BITWISE_AND)  \
+    OPCODE(OP_BITWISE_OR)  \
+    OPCODE(OP_BITWISE_XOR)  \
+    OPCODE(OP_BITWISE_NOT)  \
+    OPCODE(OP_LSHIFT)  \
+    OPCODE(OP_RSHIFT)  \
+    OPCODE(OP_AND)  \
+    OPCODE(OP_OR)  \
+    OPCODE(OP_XOR)  \
+    OPCODE(OP_NOT)  \
+    OPCODE(OP_NEG)  \
+    OPCODE(OP_FNEG)  \
+    OPCODE(OP_RETURN)  \
+    OPCODE(OP_POP)  \
+    OPCODE(OP_JMP)  \
+    OPCODE(OP_JMP_IF_FALSE)  \
+    OPCODE(OP_LOOP)  \
+    OPCODE(OP_CALL)  \
+    OPCODE(OP_PROLOGUE)  \
+    OPCODE(OP_EPILOGUE)  \
+    OPCODE(OP_ADD_OFFSET)  \
+    OPCODE(OP_GET_OFFSET)  \
+    OPCODE(OP_SET_OFFSET)  \
+    OPCODE(OP_GET_VAR)  \
+    OPCODE(OP_SET_VAR)  \
+    OPCODE(OP_NEW_VAR)  \
+    OPCODE(OP_DESTROY_VAR)  \
+    OPCODE(OP_ALLOC_PTR)  \
+    OPCODE(OP_DEREF_PTR)  \
+    OPCODE(OP_REF_PTR)  \
+    OPCODE(OP_COPY_REF)  \
+    OPCODE(OP_COPY_VAL)  \
+    OPCODE(OP_COPY)  \
+    OPCODE(OP_MAKE_REF)  \
+    OPCODE(OP_GET_REF)  \
+    OPCODE(OP_SET_REF)  \
+    OPCODE(OP_STACK_TOP)  \
+    OPCODE(OP_ADDROF_VAR)  \
+    OPCODE(OP_ADDROF_REF)  \
+    OPCODE(OP_INC_REF)  \
+    OPCODE(OP_DEC_REF)  \
+    OPCODE(OP_PRINT)  \
+    OPCODE(OP_ASSERT)  \
+    OPCODE(__OP_CODE_COUNT_)
+
+#define GENERATE_ENUM(ENUM) ENUM,
+#define GENERATE_STRING(STRING) #STRING,
+
 typedef enum {
-  OP_NOP,
-  OP_NIL,
-  OP_TRUE,
-  OP_FALSE,  
-  
-  OP_CONSTANT,
-  OP_CONSTANT_LONG,  // Unimplemented.
-
-  OP_OBJ_EQ,
-  OP_EQ,
-  OP_LT,
-  OP_LTE,
-
-  OP_CMP,
-  OP_ICMP,
-  OP_FCMP,
-
-  OP_ADD,
-  OP_SUB,
-  OP_MUL,
-  OP_DIV,
-  OP_IMUL,
-  OP_IDIV,
-
-  OP_FADD,
-  OP_FSUB,
-  OP_FMUL,
-  OP_FDIV,
-
-  OP_CONCAT,
-
-  OP_CAST,
-
-  OP_MOD,
-  OP_IMOD,
-
-  OP_BITWISE_AND,
-  OP_BITWISE_OR,
-  OP_BITWISE_XOR,
-  OP_BITWISE_NOT,
-  OP_LSHIFT,
-  OP_RSHIFT,
-
-  OP_AND,
-  OP_OR,
-  OP_XOR,
-  OP_NOT,
-
-  OP_NEG,
-  OP_FNEG,
-  OP_RETURN,
-  
-  OP_POP,
-  OP_JMP,
-  OP_JMP_IF_FALSE,
-  OP_LOOP,
-  OP_CALL,
-
-  OP_PROLOGUE,
-  OP_EPILOGUE,
-
-  OP_ADD_OFFSET,
-  OP_GET_OFFSET,
-  OP_SET_OFFSET,
-
-  OP_GET_VAR,
-  OP_SET_VAR,
-  OP_NEW_VAR,
-  OP_DESTROY_VAR,  // TODO: turn this into a function call. But maybe a VM operation is faster?
- 
-  OP_MAKE_REF,
-  OP_GET_REF,
-  OP_SET_REF,
-  OP_ADDROF_VAR,
-  OP_ADDROF_REF,
-
-  OP_INC_REF,
-  OP_DEC_REF,
-
-  OP_PRINT,
-  OP_ASSERT,
-
-  __OP_CODE_COUNT__
+  OPCODE_LIST(GENERATE_ENUM)
 } OpCode;
+
+static const char* OPCODE_STRING[] = {
+  OPCODE_LIST(GENERATE_STRING)
+};
+
+#define OPCODE_STR(OPCODE)  (OPCODE_STRING[(OPCODE)])
 
 typedef struct Chunk_ {
   int count;

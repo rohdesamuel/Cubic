@@ -15,9 +15,12 @@
 
 void* reallocate(void* pointer, size_t old_size, size_t new_size);
 
-#define alloc_ty(allocator, ty) ((struct MemoryAllocator_*)(allocator))->allocate((struct MemoryAllocator_*)(allocator), (sizeof(ty)))
-#define alloc(allocator, size)  ((struct MemoryAllocator_*)(allocator))->allocate((struct MemoryAllocator_*)(allocator), (size))
-#define dealloc(allocator, ptr) ((struct MemoryAllocator_*)(allocator))->deallocate((struct MemoryAllocator_*)(allocator), (ptr))
+#define alloc_ty(allocator, ty) alloc_((struct MemoryAllocator_*)(allocator), sizeof(ty))
+#define alloc(allocator, size)  alloc_((struct MemoryAllocator_*)(allocator), size)
+#define dealloc(allocator, ptr) dealloc_((struct MemoryAllocator_*)(allocator), ptr)
+
+void* alloc_(struct MemoryAllocator_* allocator, size_t size);
+void dealloc_(struct MemoryAllocator_* allocator, void* ptr);
 
 typedef struct ListNode_ {
   struct ListNode_* next;

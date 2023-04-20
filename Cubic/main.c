@@ -13,7 +13,7 @@
 /*
 const char* code = R"
 
-[val | mut | ref | ptr] name : type = expression
+[pval | mut | ref | ptr] name : type = expression
 
 TYPE_EXPRESSION = mut? [ref | ptr] 
 
@@ -206,8 +206,8 @@ int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
   
-  const char* filename = "D:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\references.cub";
-  run_file(&vm, filename);
+  //const char* filename = "D:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\vars.cub";
+  //run_file(&vm, filename);
 
   if (argc == 1) {
     repl(&vm);

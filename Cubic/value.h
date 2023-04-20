@@ -35,6 +35,7 @@
 #define IS_DOUBLE(value)       ((value).info.ty == VAL_DOUBLE)
 #define IS_OBJ(value)          ((value).info.ty == VAL_OBJ)
 #define IS_VAL(value)          ((value).info.kind == KIND_VAL)
+#define IS_VAR(value)          ((value).info.kind == KIND_VAR)
 #define IS_PTR(value)          ((value).info.kind == KIND_PTR)
 #define IS_REF(value)          ((value).info.kind == KIND_REF)
 
@@ -58,7 +59,7 @@
 #define PTR_VAL(PTR)           ((Value_){{.ptr = ((uintptr_t)(PTR))}})
 
 typedef struct Ref_ {
-  struct Value_* val;
+  struct Value_* pval;
   int* count;
 } Ref_;
 
@@ -87,8 +88,13 @@ typedef struct Value_ {
     struct Obj_* obj;
   } as;
 } Value_;
-
 typedef Value_* Value;
+
+typedef struct TypedValue_ {
+  Value_ val;
+  RuntimeType_ ty;
+} TypedValue_;
+
 
 typedef struct ValueArray_ {
   int capacity;

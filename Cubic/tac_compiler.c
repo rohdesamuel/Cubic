@@ -1,216 +1,688 @@
-#include "compiler.h"
-
+#include "tac_compiler.h"
 #include "common.h"
-#include "object.h"
-#include "debug.h"
-#include "scanner.h"
-#include "parser.h"
-#include "analyzer.h"
 #include "ast.h"
 #include "symbol_table.h"
-#include "tac_compiler.h"
 
-#include <assert.h>
-#include <string.h>
-#include <stdio.h>
-
-typedef void (*CodeGenFn)(Chunk_*, AstNode_*);
+typedef Location_(*CodeGenFn)(TacChunk_*, AstNode_*);
 
 typedef struct CodeGenRule_ {
   CodeGenFn code_gen;
 } CodeGenRule_;
 
-Compiler_* current_compiler;
+static void emit_return(TacChunk_* chunk, int line);
 
-static void end_compiler(Parser_* parser, Chunk_* chunk);
+#define OP_LOC(LOCATION) ((Operand_){.arg_type = TAC_ARG_LOC, .loc = (LOCATION)})
+#define OP_LOC_INDEX(INDEX) ((Operand_){.arg_type = TAC_ARG_LOC, .loc = (Location_){.index = (INDEX)}})
+#define OP_VAL(TYPE, VAL) ((Operand_){.arg_type = TAC_ARG_LOC, .opt_type = (TYPE), .val = (VAL)}})
+
+static Location_ EMPTY_LOC = { .index = -1 };
+static Operand_ EMPTY_OPERAND = { 0 };
+
 static CodeGenRule_* get_rule(int info);
-
-static void emit_return(Chunk_* chunk, int line);
-static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line);
-static int resolve_var(Scope_* scope, AstNode_* expr);
-static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk);
-
-static void code_gen(Chunk_* chunk, AstNode_* node) {
-  get_rule(node->cls)->code_gen(chunk, node);
+static Location_ code_gen(TacChunk_* chunk, AstNode_* node) {
+  return get_rule(node->cls)->code_gen(chunk, node);
 }
 
-static void compiler_init(Compiler_* compiler) {
-  compiler->locals_count = 0;
-  compiler->locals_capacity = UINT8_MAX + 1;
-  compiler->scope_depth = 0;
-  current_compiler = compiler;
+void tac_compiler_init(TacCompiler_* compiler) {
+  *compiler = (TacCompiler_){ 0 };
+  pageallocator_init(&compiler->allocator, 4096);
 }
 
-bool compile(const char* source, Chunk_* chunk) {
-  Parser_ parser;
-  Scanner_ scanner;
-  TacCompiler_ tac_compiler;
-  Compiler_ compiler;
-  Analyzer_ analyzer;
-  
-  scanner_init(&scanner, source);
-  parser_init(&parser);
-  analyzer_init(&analyzer);
-  tac_compiler_init(&tac_compiler);
-  compiler_init(&compiler);
-
-  AstNode_* root = parse(&parser, &scanner, analyzer.scope, source);
-
-  if (!parser.had_error) {
-    analyze(&analyzer, (AstProgram_*)root);
-  }
-
-  if (!parser.had_error && !analyzer.had_error) {
-    tac_compiler_compile(&tac_compiler, root);
-    codegen_tac(chunk, &tac_compiler.chunk);
-  }
-  
-  end_compiler(&parser, chunk);
-  tac_compiler_clear(&tac_compiler);
-  analyzer_clear(&analyzer);
-  parser_clear(&parser);
-  return !parser.had_error && !analyzer.had_error;
-}
-
-static void end_compiler(Parser_* parser, Chunk_* chunk) {
-  emit_return(chunk, parser->current.line);
-  current_compiler = NULL;
-
-#ifdef DEBUG_PRINT_CODE
-  if (!parser->had_error) {
-    chunk_disassemble(current_chunk(), "code");
-  }
-#endif  
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-static uint8_t make_constant(Chunk_* chunk, Value_ value) {
-  int constant = chunk_addconstant(chunk, value);
-
-  // TODO: add in OP_CONSTANT_LONG support
-  if (constant > UINT8_MAX) {
-    // error("Too many constants in one chunk.");
-    return 0;
-  }
-
-  return (uint8_t)constant;
-}
-
-static void emit_byte(Chunk_* chunk, uint8_t byte, int line) {
-  chunk_write(chunk, byte, line);
-}
-
-static void emit_bytes(Chunk_* chunk, uint8_t byte1, uint8_t byte2, int line) {
-  emit_byte(chunk, byte1, line);
-  emit_byte(chunk, byte2, line);
-}
-
-static void emit_short(Chunk_* chunk, uint16_t s, int line) {
-  emit_byte(chunk, (s & 0xFF00) >> 8, line);
-  emit_byte(chunk, s & 0x00FF, line);
-}
-
-static void emit_long(Chunk_* chunk, uint32_t s, int line) {
-  emit_byte(chunk, (s & 0xFF000000) >> 24, line);
-  emit_byte(chunk, (s & 0x00FF0000) >> 16, line);
-  emit_byte(chunk, (s & 0x0000FF00) >> 8, line);
-  emit_byte(chunk, s  & 0x000000FF, line);
-}
-
-static void emit_longlong(Chunk_* chunk, uint64_t s, int line) {
-  emit_byte(chunk, (uint8_t)((s & 0xFF00000000000000ll) >> 56), line);
-  emit_byte(chunk, (uint8_t)((s & 0x00FF000000000000ll) >> 48), line);
-  emit_byte(chunk, (uint8_t)((s & 0x0000FF0000000000ll) >> 40), line);
-  emit_byte(chunk, (uint8_t)((s & 0x000000FF00000000ll) >> 32), line);
-  emit_byte(chunk, (uint8_t)((s & 0x00000000FF000000ll) >> 24), line);
-  emit_byte(chunk, (uint8_t)((s & 0x0000000000FF0000ll) >> 16), line);
-  emit_byte(chunk, (uint8_t)((s & 0x000000000000FF00ll) >>  8), line);
-  emit_byte(chunk, (uint8_t)(s & 0x00000000000000FFll), line);
-}
-
-static int emit_jmp(Chunk_* chunk, uint8_t byte, int line) {
-  emit_byte(chunk, byte, line);
-  emit_byte(chunk, OP_NOP, line);
-  emit_byte(chunk, OP_NOP, line);
-  return chunk->count - 2;
-}
-
-static void emit_return(Chunk_* chunk, int line) {
-  emit_byte(chunk, OP_RETURN, line);
-}
-
-static void emit_constant(Chunk_* chunk, Location_ loc, Value_ value, int line) {
-  emit_byte(chunk, OP_CONSTANT, line);
-  emit_byte(chunk, loc.index, line);
-  emit_byte(chunk, make_constant(chunk, value), line);
-}
-
-static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line) {
-  emit_byte(chunk, OP_CAST, line);
-  emit_long(chunk, type_toint(from), line);
-  emit_long(chunk, type_toint(to), line);
-}
-
-void emit_class_get_field(Chunk_* chunk, int index, int field_index, ValueKind expr_kind, ValueKind eval_kind, int line) {
-  assertf(index + field_index < UINT8_MAX, "Trying to index struct out of bounds.");
-
-  if (expr_kind == KIND_REF) {
-    emit_bytes(chunk, OP_ADDROF_REF, (uint8_t)index, line);
+void location_print(const Location_* loc) {
+  if (loc->token.start) {
+    printf("%.*s", loc->token.length, loc->token.start);
   } else {
-    emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, line);
-  }
-
-  if (eval_kind == KIND_VAL) {
-    emit_bytes(chunk, OP_GET_OFFSET, (uint8_t)field_index, line);
-  } else {
-    emit_bytes(chunk, OP_ADD_OFFSET, (uint8_t)field_index, line);
+    printf("_t%d", loc->index);
   }
 }
 
-static void print_gen(Chunk_* chunk, Tac_* tac) {
-  emit_byte(chunk, OP_PRINT, tac->line);
-  emit_byte(chunk, tac->arg_l.loc.index, tac->line);
-  emit_long(chunk, type_toint(tac->arg_l.opt_type), tac->line);
+void opcode_print(OpCode op) {
+  printf(" %s ", OPCODE_STR(op));
 }
 
-static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
-  for (int i = 0; i < tac_chunk->count; ++i) {
-    Tac_* tac = tac_chunk->code + i;
-    int line = tac->line;
+void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
+  code_gen(&compiler->chunk, root);
+  emit_return(&compiler->chunk, 0);
+
+  TacChunk_* chunk = &compiler->chunk;
+  for (int i = 0; i < chunk->count; ++i) {
+    Tac_* tac = chunk->code + i;
+    Location_* dst = &tac->dst;
+    Operand_* arg_l = &tac->arg_l;
+    Operand_* arg_r = &tac->arg_r;
+    Location_* loc_l = &arg_l->loc;
+    Location_* loc_r = &arg_r->loc;
+
+    if (tac->label) {
+      printf("%s:", tac->label);
+    }
+
+    if (tac->dst.token.start) {
+      printf("  %.*s <- ", tac->dst.token.length, tac->dst.token.start);
+    } else if (!is_loc_empty(tac->dst)) {
+      printf("  _t%d <- ", tac->dst.index);
+    } else {
+      printf(" ");
+    }
+
     switch (tac->op) {
       case OP_CONSTANT:
-        emit_constant(chunk, tac->dst, tac->arg_l.val, tac->line);
+        value_print(tac->arg_l.val, tac->arg_l.opt_type);
         break;
 
       case OP_PRINT:
-        print_gen(chunk, tac);
+        opcode_print(tac->op);
+        location_print(loc_l);
+        break;
+
+      case OP_RETURN:
+        opcode_print(tac->op);
         break;
 
       case OP_MOVE:
-        emit_byte(chunk, OP_MOVE, line);
-        emit_byte(chunk, tac->dst.index, line);
-        emit_byte(chunk, tac->arg_l.loc.index, line);
+        location_print(loc_l);
         break;
 
-      case OP_LOAD:
-        //emit_byte(chunk, OP_LOAD, line);
-        //emit_byte(chunk, tac->dst, line);
-        //emit_byte(chunk, tac->arg_l, line);
-        //emit_byte(chunk, tac->arg_r, line);
-        break;
-
-      case OP_ADD:
-        emit_byte(chunk, OP_ADD, line);
-        emit_byte(chunk, tac->dst.index, line);
-        emit_byte(chunk, tac->arg_l.loc.index, line);
-        emit_byte(chunk, tac->arg_r.loc.index, line);
-        break;
+      default:
+        location_print(loc_l);
+        opcode_print(tac->op);
+        location_print(loc_r);
     }
+    printf("\n");
   }
 }
 
-static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
+void tac_compiler_clear(TacCompiler_* compiler) {
+  pageallocator_deinit(&compiler->allocator);
+}
+
+static inline void tac_chunk_reserve(TacChunk_* chunk, int count) {
+  if (chunk->capacity < chunk->count + count) {
+    int old_capacity = chunk->capacity;
+    chunk->capacity = GROW_CAPACITY(old_capacity);
+    chunk->code = GROW_ARRAY(Tac_, chunk->code,
+      old_capacity, chunk->capacity);
+    chunk->lines = GROW_ARRAY(int, chunk->lines,
+      old_capacity, chunk->capacity);
+  }
+}
+
+static void tac_chunk_init(TacChunk_* chunk) {
+  chunk->count = 0;
+  chunk->capacity = 0;
+  chunk->code = NULL;
+  chunk->lines = NULL;
+}
+
+static void tac_chunk_free(TacChunk_* chunk) {
+  FREE_ARRAY(int, chunk->lines, chunk->capacity);
+  FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+  tac_chunk_init(chunk);
+}
+
+static Location_ tac_alloc_temp(TacChunk_* chunk) {
+  Location_ ret;
+  memset(&ret, 0, sizeof(Location_));
+  ret.index = chunk->slot_index++;
+  return ret;
+}
+
+static Tac_* tac_chunk_write(TacChunk_* chunk, Tac_* code, int line) {
+  tac_chunk_reserve(chunk, 1);
+
+  chunk->code[chunk->count] = *code;
+  chunk->lines[chunk->count] = line;
+  chunk->count++;
+
+  return chunk->code + chunk->count - 1;
+}
+
+static Location_ tac_chunk_writeconstant(TacChunk_* chunk, TypedValue_ value, int line) {  
+  Tac_ tac = {
+    .op = OP_CONSTANT,
+    .dst = tac_alloc_temp(chunk),
+    .arg_l.opt_type = value.ty,
+    .arg_l.val = value.val,
+  };
+  tac_chunk_write(chunk, &tac, line);
+  return tac.dst;
+}
+
+static Location_ emit_constant(TacChunk_* chunk, TypedValue_ value, int line) {
+  return tac_chunk_writeconstant(chunk, value, line);
+}
+
+
+//static void emit_cast(TacChunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line);
+static int resolve_var(Scope_* scope, AstNode_* expr);
+
+
+static Location_ unary_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstUnaryExp_* exp = (AstUnaryExp_*)node;
+  code_gen(chunk, (AstNode_*)exp->expr);
+  return EMPTY_LOC;
+}
+
+static Tac_* emit_tac(TacChunk_* chunk, OpCode op, Location_ dst, Operand_ arg_l, Operand_ arg_r, int line) {
+  Tac_ tac = { 0 };
+  tac.op = op;
+  tac.dst = dst;
+  tac.arg_l = arg_l;
+  tac.arg_r = arg_r;
+  tac.line = line;
+
+  return tac_chunk_write(chunk, &tac, line);
+}
+
+static void emit_return(TacChunk_* chunk, int line) {
+  emit_tac(chunk, OP_RETURN, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, line);
+}
+
+static Tac_* emit_label(TacChunk_* chunk, const char* label, int line) {
+  Tac_ tac = { 0 };
+  tac.label = label;
+
+  return tac_chunk_write(chunk, &tac, line);
+}
+
+static Tac_* emit_jmp(TacChunk_* chunk, const char* label, int line) {
+  Tac_ tac = { 0 };
+  tac.op = OP_JMP;
+  tac.label = label;
+
+  return tac_chunk_write(chunk, &tac, line);
+}
+
+static Location_ emit_add(TacChunk_* chunk, Location_ l, Location_ r, RuntimeType_ ltype, RuntimeType_ rtype, int line) {
+  if (ltype.ty != rtype.ty) {
+    //emit_cast(chunk, rtype, ltype, line);
+  }
+
+  Location_ dest = tac_alloc_temp(chunk);
+
+  if (ISA_TY_UINT(ltype) || ISA_TY_INT(ltype)) {
+    emit_tac(chunk, OP_ADD, dest, (Operand_) { .loc=l }, (Operand_) { .loc = r }, line);
+  } else if (ISA_TY_REAL(ltype)) {
+    //emit_byte(chunk, OP_FADD, line);
+  } else if (IS_TY_OBJ(ltype, OBJ_TYPE_STRING)) {
+    //emit_byte(chunk, OP_CONCAT, line);
+  }
+
+  return dest;
+}
+
+#if 0
+
+static void emit_sub(TacChunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l) || ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_SUB, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FSUB, line);
+  }
+}
+
+static void emit_mul(TacChunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l)) {
+    emit_byte(chunk, OP_MUL, line);
+  } else if (ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_IMUL, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FMUL, line);
+  }
+}
+
+static void emit_div(TacChunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l)) {
+    emit_byte(chunk, OP_DIV, line);
+  } else if (ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_IDIV, line);
+  } else if (ISA_TY_REAL(l)) {
+    emit_byte(chunk, OP_FDIV, line);
+  }
+}
+
+static void emit_mod(TacChunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
+  if (l.ty != r.ty) {
+    emit_cast(chunk, r, l, line);
+  }
+
+  if (ISA_TY_UINT(l)) {
+    emit_byte(chunk, OP_MOD, line);
+  } else if (ISA_TY_INT(l)) {
+    emit_byte(chunk, OP_IMOD, line);
+  }
+}
+
+static void emit_neg(Chunk_* chunk, RuntimeType_ t, int line) {
+  if (ISA_TY_REAL(t)) {
+    emit_byte(chunk, OP_FNEG, line);
+  } else {
+    emit_byte(chunk, OP_NEG, line);
+  }
+}
+
+#endif
+
+static Location_ binary_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstBinaryExp_* exp = (AstBinaryExp_*)node;
+  AstExpr_* l = AS_EXPR(exp->left);
+  AstExpr_* r = AS_EXPR(exp->right);
+
+  RuntimeType_ ltype = semantictype_toruntime(l->sem_type);
+  RuntimeType_ rtype = semantictype_toruntime(r->sem_type);
+
+  Location_ l_loc = code_gen(chunk, (AstNode_*)l);
+  Location_ r_loc = code_gen(chunk, (AstNode_*)r);
+
+  switch (exp->op) {
+    case TK_PLUS:          return emit_add(chunk, l_loc, r_loc, ltype, rtype, node->line); break;
+  }
+
+  return EMPTY_LOC;
+}
+
+static Location_ primary_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstPrimaryExp_* exp = (AstPrimaryExp_*)node;
+  RuntimeType_ info = semantictype_toruntime(exp->base.sem_type);
+  
+  TypedValue_ v = { 0 };
+
+  if (IS_TY_NIL(info)) {
+    v = (TypedValue_){ NIL_VAL, NIL_TY };
+  } else if (IS_TY_BOOL(info)) {
+    v = (TypedValue_){ exp->value.as.b ? TRUE_VAL : FALSE_VAL, BOOL_TY };
+  } else {
+    v = (TypedValue_){ exp->value, semantictype_toruntime(exp->base.sem_type)};
+  }
+  return emit_constant(chunk, v, node->line);
+}
+
+static Location_ print_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstPrintStmt_* stmt = (AstPrintStmt_*)node;
+  Location_ loc = code_gen(chunk, (AstNode_*)stmt->expr);
+  assertf(!is_loc_empty(loc), "Encountered empty destination address");
+
+  Operand_ op_l = {
+    .opt_type = semantictype_toruntime(stmt->expr->sem_type),
+    .loc = loc
+  };
+  emit_tac(chunk, OP_PRINT, EMPTY_LOC, op_l, EMPTY_OPERAND, node->line);
+
+  return EMPTY_LOC;
+}
+
+static Location_ program_code_gen(TacChunk_* chunk, AstNode_* node) {
+  Frame_* frame = node->scope->frame;
+
+  AstProgram_* program = (AstProgram_*)node;
+  code_gen(chunk, (AstNode_*)program->block);
+
+  return EMPTY_LOC;
+}
+
+static Location_ stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstStmt_* stmt = (AstStmt_*)node;
+  code_gen(chunk, stmt->stmt);
+  code_gen(chunk, stmt->cleanup);
+
+  return EMPTY_LOC;
+}
+
+static Location_ expr_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstExpr_* expr = (AstExpr_*)node;
+  return code_gen(chunk, (AstNode_*)expr->expr);
+}
+
+static void begin_scope(TacChunk_* chunk, AstBlock_* block) {
+}
+
+static void end_scope(TacChunk_* chunk, AstBlock_* block) {
+}
+
+static Location_ block_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstBlock_* block = (AstBlock_*)node;
+  begin_scope(chunk, block);
+  for (AstListNode_* n = block->statements.head; n != NULL; n = n->next) {
+    code_gen(chunk, n->node);
+  }
+  end_scope(chunk, block);
+  return EMPTY_LOC;
+}
+
+static Location_ return_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstReturnStmt_* stmt = (AstReturnStmt_*)node;
+  if (stmt->expr) {
+    code_gen(chunk, (AstNode_*)stmt->expr);
+  }
+  //emit_return(chunk, node->line);
+  return EMPTY_LOC;
+}
+
+static Location_ if_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstIfStmt_* stmt = (AstIfStmt_*)node;
+
+  // if `condition_expr`
+  code_gen(chunk, (AstNode_*)stmt->condition_expr);
+  code_gen(chunk, stmt->if_stmt);
+
+  // elif true then ...
+  AstListNode_* elif_e = stmt->elif_exprs.head;
+  AstListNode_* elif_s = stmt->elif_stmts.head;
+  while (elif_e != NULL && elif_s != NULL) {
+    AstNode_* elif_expr = elif_e->node;
+    AstNode_* elif_stmt = elif_s->node;
+
+    code_gen(chunk, elif_expr);
+    code_gen(chunk, elif_stmt);
+  }
+
+  // else
+  if (stmt->else_stmt) {
+    code_gen(chunk, stmt->else_stmt);
+  }
+  return EMPTY_LOC;
+}
+
+static Location_ assert_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstAssertStmt_* stmt = (AstAssertStmt_*)node;
+  code_gen(chunk, (AstNode_*)stmt->expr);
+  return EMPTY_LOC;
+}
+
+static int resolve_local(Scope_* scope, Token_* name) {
+  VarSymbol_* var = scope_var(scope, name);
+  assertf(var, "Could not find var %.*s", name->length, name->start);
+  if (!var) return -1;
+
+  return var->frame_index;
+}
+
+static int resolve_var(Scope_* scope, AstNode_* expr) {
+  switch (((AstNode_*)expr)->cls) {
+    case AST_CLS(AstVarExpr_):
+    {
+      AstVarExpr_* var_expr = AST_CAST(AstVarExpr_, expr);
+      return resolve_var(scope, (AstNode_*)var_expr->expr);
+    }
+
+    case AST_CLS(AstIdExpr_):
+    {
+      AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, expr);
+      return resolve_local(scope, &id_expr->name);
+    }
+
+    case AST_CLS(AstDotExpr_):
+    {
+      AstDotExpr_* dot_expr = AST_CAST(AstDotExpr_, expr);
+      ClassSymbol_* cls_sym = &dot_expr->prefix->sem_type.sym->cls;
+      int offset = (int)symbol_findmember_offset(dot_expr->prefix->sem_type.sym, dot_expr->id);
+      return resolve_var(scope, (AstNode_*)dot_expr->prefix) + offset;
+    }
+
+    default:
+      assertf(false, "resolve_var unimplemented for AST_CLS(%d)", AS_EXPR(expr)->base.cls);
+  }
+}
+
+static Location_ var_decl_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
+
+  Location_ dst = tac_alloc_temp(chunk);
+  dst.token = stmt->name;
+
+  Symbol_* sym = scope_find(node->scope, &stmt->name);
+  sym->var.location = dst;
+
+  // TODO: allow for multiple expressions.
+  if (stmt->expr) {
+    Location_ expr_loc = code_gen(chunk, (AstNode_*)stmt->expr);
+    emit_tac(chunk, OP_MOVE, dst, OP_LOC(expr_loc), EMPTY_OPERAND, node->line);
+  }
+  return dst;
+}
+
+static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstVarExpr_* expr = (AstVarExpr_*)node;
+  return code_gen(chunk, (AstNode_*)expr->expr);
+}
+
+// Get the specified variable.
+static Location_ id_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstIdExpr_* expr = (AstIdExpr_*)node;
+
+  Symbol_* sym = scope_find(node->scope, &expr->name);
+
+  switch (sym->type) {
+    case SYMBOL_TYPE_VAR:
+      return sym->var.location;
+#if 0
+    case SYMBOL_TYPE_FN:
+      return sym->fn.obj_fn->constant_index;
+    case SYMBOL_TYPE_CLOSURE:
+      emit_bytes(chunk, OP_GET_VAR, (uint8_t)(sym->closure.frame_index), node->line);
+      break;
+#endif
+  }
+
+  return EMPTY_LOC;
+}
+
+// Set the specified variable.
+static Location_ assignment_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstAssignmentExpr_* expr = (AstAssignmentExpr_*)node;
+  Location_ dst = code_gen(chunk, (AstNode_*)expr->left);
+  Location_ src = code_gen(chunk, (AstNode_*)expr->right);
+  emit_tac(chunk, OP_MOVE, dst, OP_LOC(src), EMPTY_OPERAND, node->line);
+  return dst;
+}
+
+static Location_ while_stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstWhileStmt_* stmt = (AstWhileStmt_*)node;
+
+  // if `condition_expr`
+  code_gen(chunk, (AstNode_*)stmt->condition_expr);
+
+  // if true then ...
+  code_gen(chunk, stmt->block_stmt);
+  return EMPTY_LOC;
+}
+
+static Location_ expression_statement_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstExpressionStmt_* stmt = (AstExpressionStmt_*)node;
+  code_gen(chunk, (AstNode_*)stmt->expr);
+  return EMPTY_LOC;
+}
+
+static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
+  /*AstFunctionDef_* def = (AstFunctionDef_*)node;
+  FunctionSymbol_* fn = &def->fn_symbol->fn;
+  ObjFunction_* obj_fn = fn->obj_fn;
+  obj_fn->constant_index = make_constant(chunk, OBJ_VAL(obj_fn));
+
+  Chunk_* fn_chunk = malloc(sizeof(Chunk_));
+  obj_fn->chunk = fn_chunk;
+
+  chunk_init(fn_chunk);
+
+  code_gen(fn_chunk, (AstNode_*)def->body);
+  */
+  return EMPTY_LOC;
+}
+
+static Location_ function_body_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstFunctionBody_* body = (AstFunctionBody_*)node;
+  code_gen(chunk, body->stmt);
+
+  for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
+    code_gen(chunk, n->node);
+  }
+  return EMPTY_LOC;
+}
+
+static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstFunctionCall_* call = (AstFunctionCall_*)node;
+  AstExpr_* prefix = call->prefix;
+  Symbol_* sym = prefix->sem_type.sym;
+
+  FunctionSymbol_* fn_sym = symbol_ascallable(sym);
+  assertf(fn_sym, "Unknown symbol type.");
+
+  // Push function object to call.
+  code_gen(chunk, (AstNode_*)prefix);
+
+  // Push arguments.
+  code_gen(chunk, (AstNode_*)call->args);
+  return EMPTY_LOC;
+}
+
+static Location_ function_args_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstFunctionCallArgs_* args = (AstFunctionCallArgs_*)node;
+  for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
+    code_gen(chunk, n->node);
+  }
+  return EMPTY_LOC;
+}
+
+static Location_ function_arg_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstFunctionCallArg_* arg = (AstFunctionCallArg_*)node;
+  code_gen(chunk, (AstNode_*)arg->expr);
+  return EMPTY_LOC;
+}
+
+static Location_ noop_code_gen(TacChunk_* chunk, AstNode_* node) { return EMPTY_LOC; }
+
+static Location_ clean_up_temps_code_gen(TacChunk_* chunk, AstNode_* node) {
+  return EMPTY_LOC;
+}
+
+static Location_ tmp_decl_code_gen(TacChunk_* chunk, AstNode_* n) {
+  AstTmpDecl_* decl = (AstTmpDecl_*)n;
+  int tmp_index = chunk->slot_index;
+  Location_ ret = code_gen(chunk, (AstNode_*)decl->expr);
+  chunk->slot_index = tmp_index;
+  return ret;
+}
+
+static Location_ dot_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
+  code_gen(chunk, (AstNode_*)expr->prefix);
+
+  return EMPTY_LOC;
+}
+
+static Location_ class_default_constructor_code_gen(TacChunk_* chunk, Symbol_* cls_sym, int line) {
+  return EMPTY_LOC;
+}
+
+static Location_ ast_class_constructor_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstConstructor_* constructor = (AstConstructor_*)node;
+
+  SemanticType_* type = &constructor->base.sem_type;
+  if (type->name.start) {
+    Symbol_* cls_sym = scope_find(node->scope, &type->name);
+    AstListNode_* current_field_node = constructor->fields.head;
+    for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
+      Symbol_* member = list_val(member_node, Symbol_*);
+      FieldSymbol_* field = &member->field;
+      bool found_value = false;
+
+      for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
+        AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+        if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
+          code_gen(chunk, field_node->node);
+          found_value = true;
+          current_field_node = field_node->next;
+          break;
+        }
+      }
+
+      if (!found_value) {
+
+        // TODO: eventually remove this if-statement. This should be better automated. 
+        if (field->sem_type.val == VAL_CLASS) {
+          class_default_constructor_code_gen(chunk, field->sem_type.sym, node->line);
+        } else {
+          //emit_constant(chunk, field->val, node->line);
+        }
+      }
+    }
+  } else {
+    for (AstListNode_* field_node = constructor->fields.head; field_node != NULL; field_node = field_node->next) {
+      AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+      code_gen(chunk, field_node->node);
+    }
+  }
+  return EMPTY_LOC;
+}
+
+static Location_ ast_class_constructor_field_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstConstructorField_* field = (AstConstructorField_*)node;
+  code_gen(chunk, (AstNode_*)field->expr);
+  return EMPTY_LOC;
+}
+
+static CodeGenRule_ code_gen_rules[] = {
+  [AST_CLS(AstProgram_)] = {program_code_gen},
+  [AST_CLS(AstBlock_)] = {block_code_gen},
+  [AST_CLS(AstStmt_)] = {stmt_code_gen},
+  [AST_CLS(AstExpr_)] = {expr_code_gen},
+  [AST_CLS(AstPrintStmt_)] = {print_code_gen},
+  [AST_CLS(AstUnaryExp_)] = {unary_code_gen},
+  [AST_CLS(AstBinaryExp_)] = {binary_code_gen},
+  [AST_CLS(AstPrimaryExp_)] = {primary_code_gen},
+  [AST_CLS(AstReturnStmt_)] = {return_code_gen},
+  [AST_CLS(AstIfStmt_)] = {if_code_gen},
+  [AST_CLS(AstAssertStmt_)] = {assert_code_gen},
+  [AST_CLS(AstVarDeclStmt_)] = {var_decl_code_gen},
+  [AST_CLS(AstVarExpr_)] = {var_expr_code_gen},
+  [AST_CLS(AstIdExpr_)] = {id_expr_code_gen},
+  [AST_CLS(AstAssignmentExpr_)] = {assignment_expr_code_gen},
+  [AST_CLS(AstWhileStmt_)] = {while_stmt_code_gen},
+  [AST_CLS(AstFunctionDef_)] = {function_def_code_gen},
+  [AST_CLS(AstFunctionBody_)] = {function_body_code_gen},
+  [AST_CLS(AstFunctionParam_)] = {noop_code_gen},
+  [AST_CLS(AstFunctionCall_)] = {function_call_code_gen},
+  [AST_CLS(AstFunctionCallArgs_)] = {function_args_code_gen},
+  [AST_CLS(AstFunctionCallArg_)] = {function_arg_code_gen},
+  [AST_CLS(AstExpressionStmt_)] = {expression_statement_code_gen},
+  [AST_CLS(AstNoopExpr_)] = {noop_code_gen},
+  [AST_CLS(AstNoopStmt_)] = {noop_code_gen},
+  [AST_CLS(AstCleanUpTemps_)] = {clean_up_temps_code_gen},
+  [AST_CLS(AstTmpDecl_)] = {tmp_decl_code_gen},
+  [AST_CLS(AstClassDef_)] = {noop_code_gen},
+  [AST_CLS(AstClassMemberDecl_)] = {noop_code_gen},
+  [AST_CLS(AstConstructor_)] = {ast_class_constructor_code_gen},
+  [AST_CLS(AstConstructorField_)] = {ast_class_constructor_field_code_gen},
+  [AST_CLS(AstDotExpr_)] = {dot_expr_code_gen},
+  [AST_CLS(AstTypeExpr_)] = {noop_code_gen},
+};
+
+// Static assert to make sure that all node types are accounted for.
+STATIC_ASSERT(
+  sizeof(code_gen_rules) / sizeof(CodeGenRule_) == __AST_NODE_COUNT__,
+  CHECK_CODE_GEN_COUNT);
+
+static CodeGenRule_* get_rule(int info) {
+  CodeGenRule_* ret = &code_gen_rules[info];
+  assertf(ret->code_gen, "Could not find code gen rule for AST class: %d", info);
+  return ret;
+}
+
+#if 0
+
+static void unary_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstUnaryExp_* exp = (AstUnaryExp_*)node;
 
   // If getting the address of a symbol...
@@ -221,7 +693,7 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
       // This assumes the symbol lives on the stack or referencing a static, create a weak reference to it.
       emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
       emit_byte(chunk, OP_MAKE_REF, node->line);
-    } else if (exp->expr->sem_type.kind == KIND_VAR){
+    } else if (exp->expr->sem_type.kind == KIND_VAR) {
       emit_bytes(chunk, OP_ADDROF_REF, (uint8_t)index, node->line);
     }
   } else if (exp->op == TK_NEW) {
@@ -242,16 +714,47 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
-static void emit_add(Chunk_* chunk, RuntimeType_ l, RuntimeType_ r, int line) {
-  if (l.ty != r.ty) {
-    emit_cast(chunk, r, l, line);
+static Tac_* emit_tac(TacChunk_* chunk, OpCode op, int dst, Operand_ src_a, Operand_ src_b, const Token_* token) {
+  Tac_* tac = alloc_ty(chunk->allocator, Tac_);
+  *tac = (Tac_){ 0 };
+  tac->op = op;
+  tac->dst = dst;
+  tac->src_a = src_a;
+  tac->src_b = src_b;
+  tac->token = *token;
+
+  return tac;
+}
+
+static Tac_* emit_label(TacChunk_* chunk, const char* label, const Token_* token) {
+  Tac_* tac = alloc_ty(chunk->allocator, Tac_);
+  *tac = (Tac_){ 0 };
+  tac->label = label;
+  tac->token = *token;
+
+  return tac;
+}
+
+static Tac_* emit_jmp(TacChunk_* chunk, const char* label, const Token_* token) {
+  Tac_* tac = alloc_ty(chunk->allocator, Tac_);
+  *tac = (Tac_){ 0 };
+  tac->op = OP_JMP;
+  tac->label = label;
+  tac->token = *token;
+
+  return tac;
+}
+
+static void emit_add(TacChunk_* chunk, Operand_ l, Operand_ r, RuntimeType_ ltype, RuntimeType_ rtype, int line) {
+  if (ltype.ty != rtype.ty) {
+    emit_cast(chunk, rtype, ltype, line);
   }
 
-  if (ISA_TY_UINT(l) || ISA_TY_INT(l)) {
-    emit_byte(chunk, OP_ADD, line);
-  } else if (ISA_TY_REAL(l)) {
+  if (ISA_TY_UINT(ltype) || ISA_TY_INT(ltype)) {
+    emit_tac(chunk, OP_ADD, line);
+  } else if (ISA_TY_REAL(ltype)) {
     emit_byte(chunk, OP_FADD, line);
-  } else if (IS_TY_OBJ(l, OBJ_TYPE_STRING)) {
+  } else if (IS_TY_OBJ(ltype, OBJ_TYPE_STRING)) {
     emit_byte(chunk, OP_CONCAT, line);
   }
 }
@@ -320,7 +823,7 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
   AstBinaryExp_* exp = (AstBinaryExp_*)node;
   AstExpr_* l = AS_EXPR(exp->left);
   AstExpr_* r = AS_EXPR(exp->right);
-  
+
   RuntimeType_ ltype = semantictype_toruntime(l->sem_type);
   RuntimeType_ rtype = semantictype_toruntime(r->sem_type);
 
@@ -335,9 +838,9 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
     case TK_MINUS:         emit_sub(chunk, ltype, rtype, node->line); break;
     case TK_STAR:          emit_mul(chunk, ltype, rtype, node->line); break;
     case TK_SLASH:         emit_div(chunk, ltype, rtype, node->line); break;
-    // case TK_DOUBLE_SLASH:  emit_byte(chunk, OP_DIV, node->line); break; // TODO: convert integers to floats
+      // case TK_DOUBLE_SLASH:  emit_byte(chunk, OP_DIV, node->line); break; // TODO: convert integers to floats
     case TK_PERCENT:       emit_mod(chunk, ltype, rtype, node->line); break;
-    
+
     case TK_EQUAL_EQUAL:
       if (ltype.ty == VAL_OBJ) {
         emit_byte(chunk, OP_OBJ_EQ, node->line);
@@ -378,7 +881,7 @@ static void binary_code_gen(Chunk_* chunk, AstNode_* node) {
       emit_byte(chunk, OP_LT, node->line);
       emit_byte(chunk, OP_NOT, node->line);
       break;
-    
+
     case TK_LT:
       if (ISA_TY_UINT(ltype)) {
         emit_byte(chunk, OP_CMP, node->line);
@@ -423,7 +926,7 @@ static void primary_code_gen(Chunk_* chunk, AstNode_* node) {
       emit_byte(chunk, OP_FALSE, node->line);
     }
   } else {
-    //emit_constant(chunk, exp->value, node->line);
+    emit_constant(chunk, exp->value, node->line);
   }
 }
 
@@ -479,7 +982,7 @@ static void end_scope(Chunk_* chunk, AstBlock_* block) {
       case SYMBOL_TYPE_VAR:
         if (var->var.sem_type.val == VAL_OBJ && var->var.sem_type.kind == KIND_VAL) {
           emit_bytes(chunk, OP_DESTROY_VAR, var->var.frame_index, block->base.line);
-        }        
+        }
         break;
       case SYMBOL_TYPE_CLASS:
       case SYMBOL_TYPE_FN:  // TODO: how to handle this?
@@ -505,7 +1008,7 @@ static void return_code_gen(Chunk_* chunk, AstNode_* node) {
   if (stmt->expr) {
     code_gen(chunk, (AstNode_*)stmt->expr);
   } else {
-    //emit_constant(chunk, NIL_VAL, node->line);
+    emit_constant(chunk, NIL_VAL, node->line);
   }
   emit_return(chunk, node->line);
 }
@@ -564,7 +1067,7 @@ static void if_code_gen(Chunk_* chunk, AstNode_* node) {
   // elif true then ...
   AstListNode_* elif_e = stmt->elif_exprs.head;
   AstListNode_* elif_s = stmt->elif_stmts.head;
-  while(elif_e != NULL && elif_s != NULL) {
+  while (elif_e != NULL && elif_s != NULL) {
     AstNode_* elif_expr = elif_e->node;
     AstNode_* elif_stmt = elif_s->node;
 
@@ -592,8 +1095,8 @@ static void if_code_gen(Chunk_* chunk, AstNode_* node) {
     elif_s = elif_s->next;
 
     assertf(elif_e == NULL && elif_s == NULL ||
-            elif_e != NULL && elif_s != NULL,
-            "Malformed list: every elif should have an expression and statement");
+      elif_e != NULL && elif_s != NULL,
+      "Malformed list: every elif should have an expression and statement");
   }
 
   // :else
@@ -842,7 +1345,7 @@ static void while_stmt_code_gen(Chunk_* chunk, AstNode_* node) {
   // if true then ...
   emit_byte(chunk, OP_POP, node->line);
   code_gen(chunk, stmt->block_stmt);
- 
+
   emit_loop(chunk, loop_start, node->line);
 
   // :exit_jmp
@@ -850,16 +1353,16 @@ static void while_stmt_code_gen(Chunk_* chunk, AstNode_* node) {
   emit_byte(chunk, OP_POP, node->line);
 }
 
-void expression_statement_code_gen(Chunk_* chunk, AstNode_* node) {
+static void expression_statement_code_gen(Chunk_* chunk, AstNode_* node) {
   AstExpressionStmt_* stmt = (AstExpressionStmt_*)node;
   code_gen(chunk, (AstNode_*)stmt->expr);
 
   for (int64_t i = 0; i < stmt->expr->sem_type.size; ++i) {
     emit_byte(chunk, OP_POP, node->line);
-  }  
+  }
 }
 
-void function_def_code_gen(Chunk_* chunk, AstNode_* node) {
+static void function_def_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionDef_* def = (AstFunctionDef_*)node;
   FunctionSymbol_* fn = &def->fn_symbol->fn;
   ObjFunction_* obj_fn = fn->obj_fn;
@@ -867,7 +1370,7 @@ void function_def_code_gen(Chunk_* chunk, AstNode_* node) {
 
   Chunk_* fn_chunk = malloc(sizeof(Chunk_));
   obj_fn->chunk = fn_chunk;
-  
+
   chunk_init(fn_chunk);
 
   code_gen(fn_chunk, (AstNode_*)def->body);
@@ -875,7 +1378,7 @@ void function_def_code_gen(Chunk_* chunk, AstNode_* node) {
   emit_bytes(chunk, OP_CONSTANT, obj_fn->constant_index, node->line);
 }
 
-void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
+static void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionBody_* body = (AstFunctionBody_*)node;
   code_gen(chunk, body->stmt);
 
@@ -884,12 +1387,12 @@ void function_body_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 
   if (semantictype_isnil(body->return_type)) {
-    //emit_constant(chunk, NIL_VAL, node->line);
+    emit_constant(chunk, NIL_VAL, node->line);
     emit_byte(chunk, OP_RETURN, node->line);
   }
 }
 
-void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
+static void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionCall_* call = (AstFunctionCall_*)node;
   AstExpr_* prefix = call->prefix;
   Symbol_* sym = prefix->sem_type.sym;
@@ -907,31 +1410,31 @@ void function_call_code_gen(Chunk_* chunk, AstNode_* node) {
   emit_bytes(chunk, OP_CALL, (uint8_t)fn_sym->params.count, node->line);
 }
 
-void function_args_code_gen(Chunk_* chunk, AstNode_* node) {
+static void function_args_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionCallArgs_* args = (AstFunctionCallArgs_*)node;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     code_gen(chunk, n->node);
   }
 }
 
-void function_arg_code_gen(Chunk_* chunk, AstNode_* node) {
+static void function_arg_code_gen(Chunk_* chunk, AstNode_* node) {
   AstFunctionCallArg_* arg = (AstFunctionCallArg_*)node;
   code_gen(chunk, (AstNode_*)arg->expr);
 }
 
-void noop_code_gen(Chunk_* chunk, AstNode_* node) {}
+static void noop_code_gen(Chunk_* chunk, AstNode_* node) {}
 
-void clean_up_temps_code_gen(Chunk_* chunk, AstNode_* node) {
+static void clean_up_temps_code_gen(Chunk_* chunk, AstNode_* node) {
   return;
   AstCleanUpTemps_* temps = (AstCleanUpTemps_*)node;
-  
+
   for (ListNode_* n = temps->tmps.head; n != NULL; n = n->next) {
     Symbol_* tmp = list_val(n, Symbol_*);
     emit_bytes(chunk, OP_DESTROY_VAR, symboltmp_index(tmp), node->line);
   }
 }
 
-void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
+static void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
   AstTmpDecl_* decl = (AstTmpDecl_*)n;
   code_gen(chunk, (AstNode_*)decl->expr);
   if (semantictype_isaobj(decl->base.sem_type)) {
@@ -941,7 +1444,7 @@ void tmp_decl_code_gen(Chunk_* chunk, AstNode_* n) {
   }
 }
 
-void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
+static void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
   ClassSymbol_* cls_sym = NULL;
   const SemanticType_* type = &expr->prefix->sem_type;
@@ -961,7 +1464,7 @@ void dot_expr_code_gen(Chunk_* chunk, AstNode_* node) {
   emit_class_get_field(chunk, index, field_index, expr->prefix->sem_type.kind, expr->base.top_sem_type.kind, node->line);
 }
 
-void class_default_constructor_code_gen(Chunk_* chunk, Symbol_* cls_sym, int line) {
+static void class_default_constructor_code_gen(Chunk_* chunk, Symbol_* cls_sym, int line) {
   for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
     Symbol_* member = list_val(member_node, Symbol_*);
     FieldSymbol_* field = &member->field;
@@ -969,14 +1472,13 @@ void class_default_constructor_code_gen(Chunk_* chunk, Symbol_* cls_sym, int lin
     // TODO: eventually remove this if-statement. This should be better automated. 
     if (field->sem_type.val == VAL_CLASS) {
       class_default_constructor_code_gen(chunk, field->sem_type.sym, line);
+    } else {
+      emit_constant(chunk, field->val, line);
     }
-    else {
-      //emit_constant(chunk, field->val, line);
-    }    
   }
 }
 
-void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
+static void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
   AstConstructor_* constructor = (AstConstructor_*)node;
 
   SemanticType_* type = &constructor->base.sem_type;
@@ -1004,7 +1506,7 @@ void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
         if (field->sem_type.val == VAL_CLASS) {
           class_default_constructor_code_gen(chunk, field->sem_type.sym, node->line);
         } else {
-          //emit_constant(chunk, field->val, node->line);
+          emit_constant(chunk, field->val, node->line);
         }
       }
     }
@@ -1016,7 +1518,7 @@ void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
   }
 }
 
-void ast_class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
+static void ast_class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
   AstConstructorField_* field = (AstConstructorField_*)node;
   code_gen(chunk, (AstNode_*)field->expr);
 }
@@ -1056,6 +1558,7 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)]               = {noop_code_gen},
 };
+
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(
   sizeof(code_gen_rules) / sizeof(CodeGenRule_) == __AST_NODE_COUNT__,
@@ -1066,3 +1569,4 @@ static CodeGenRule_* get_rule(int info) {
   assertf(ret->code_gen, "Could not find code gen rule for AST class: %d", info);
   return ret;
 }
+#endif

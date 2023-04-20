@@ -273,7 +273,7 @@ bool hashmap_get(Hashmap* m, const void* key, size_t ksize, uintptr_t* out_val) 
 	uint64_t hash = hash_data(key, ksize);
 	struct bucket* entry = find_entry(m, key, ksize, hash);
 
-	// if there is no match, output val will just be NULL
+	// if there is no match, output pval will just be NULL
 	*out_val = entry->value;
 
 	return entry->key != NULL;

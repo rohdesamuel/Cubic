@@ -99,5 +99,8 @@
     <None Include="optionals.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="vars.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
