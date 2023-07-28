@@ -71,10 +71,13 @@ typedef struct ClassSymbol_ {
 typedef struct FieldSymbol_ {
   SemanticType_ sem_type;
 
+  // Name of the field.
+  Token_ name;
+
   // Field index in the containing class.
   int index;
 
-  // Byte offset into the outer-most class.
+  // Byte frame_offset into the outer-most class.
   size_t offset;
 
   struct Value_ val;
@@ -143,9 +146,9 @@ bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to);
 
 RuntimeType_ semantictype_toruntime(SemanticType_ semantic_type);
 
-Symbol_* symbol_findmember(Symbol_* cls, Token_ name);
-int symbol_findmember_index(Symbol_* cls, Token_ name);
-size_t symbol_findmember_offset(Symbol_* cls, Token_ name);
+Symbol_* symbol_findmember(const Symbol_* cls, Token_ name);
+int symbol_findmember_index(const Symbol_* cls, Token_ name);
+size_t symbol_findmember_offset(const Symbol_* cls, Token_ name);
 
 extern SemanticType_ SemanticType_Unknown;
 extern SemanticType_ SemanticType_Nil;

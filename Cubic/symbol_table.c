@@ -82,7 +82,7 @@ Symbol_* frame_addparam(Frame_* frame, Token_* name) {
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope) {
   Symbol_* s = scope_addvar(scope, name, SemanticType_Unknown);
   frame->var_count += 1;
-  frame->stack_size += 1;// max(frame->stack_size, scope->offset + scope->table->vars.count);  
+  frame->stack_size += 1;// max(frame->stack_size, scope->frame_offset + scope->table->vars.count);  
   return s;
 }
 
@@ -315,6 +315,7 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
     .type = SYMBOL_TYPE_FIELD,
     .field = {
       .sem_type = type,
+      .name = name,
       .index = cls_sym->members.count,
       .val = NIL_VAL,
       .cls_sym = sym,

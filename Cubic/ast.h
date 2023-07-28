@@ -45,11 +45,10 @@ typedef struct AstNode_ {
     AST_CLS(AstTmpDecl_),
     AST_CLS(AstClassDef_),
     AST_CLS(AstClassMemberDecl_),
-    AST_CLS(AstConstructor_),
-    AST_CLS(AstConstructorField_),
+    AST_CLS(AstClassConstructor_),
+    AST_CLS(AstClassConstructorParam_),
     AST_CLS(AstDotExpr_),
     AST_CLS(AstTypeExpr_),
-
     __AST_NODE_COUNT__,
   } cls;
   int line;
@@ -152,7 +151,7 @@ typedef struct AstExpressionStmt_ {
 typedef struct AstAssignmentExpr_ {
   AstExpr_ base;
 
-  AstNode_* left;
+  AstExpr_* left;
   AstExpr_* right;
 } AstAssignmentExpr_;
 
@@ -209,6 +208,7 @@ typedef struct AstIndexExpr_ {
 typedef struct AstDotExpr_ {
   struct AstExpr_ base;
 
+  Symbol_* cls_sym;
   struct AstExpr_* prefix;
   Token_ id;
 } AstDotExpr_;
@@ -310,20 +310,19 @@ typedef struct AstClassMemberDecl_ {
   AstExpr_* opt_expr;
 } AstClassMemberDecl_;
 
-// ClassConstructor ::= Id '{' [ClassConstructorFieldList] '}'
-typedef struct AstConstructor_ {
+// ClassConstructor ::= Id '{' [ClassConstructorParamList] [',' ClassConstructorNamedParamList] '}'
+typedef struct AstClassConstructor_ {
   struct AstExpr_ base;
 
-  struct AstList_ fields;
-} AstConstructor_;
+  struct AstList_ params;
+} AstClassConstructor_;
 
-// ClassConstructorField ::= Id '=' Expr
-typedef struct AstConstructorField_ {
+// ClassConstructorParam ::= [Id '='] Expr
+typedef struct AstClassConstructorParam_ {
   struct AstExpr_ base;
   Token_ name;
-
   struct AstExpr_* expr;
-} AstConstructorField_;
+} AstClassConstructorParam_;
 
 typedef struct AstTypeExpr_ {
   struct AstExpr_ base;

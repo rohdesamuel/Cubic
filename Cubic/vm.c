@@ -29,7 +29,7 @@ void vm_free(VM_* vm) {
 InterpretResult vm_interpret(VM vm, const char* source) {
   Chunk_ chunk;
   chunk_init(&chunk);
-  vm_init(vm);
+  
   if (!compile(source, &chunk)) {
     chunk_free(&chunk);
     return INTERPRET_COMPILE_ERROR;
@@ -125,6 +125,28 @@ static InterpretResult run(VM vm) {
 
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
+      case OP_NIL:
+      {
+        uint8_t dst = READ_BYTE();
+        frame->slots[dst] = NIL_VAL;
+        continue;
+      }
+
+      case OP_FALSE:
+      {
+        uint8_t dst = READ_BYTE();
+        frame->slots[dst] = FALSE_VAL;
+        continue;
+      }
+
+      case OP_TRUE:
+      {
+        uint8_t dst = READ_BYTE();
+        frame->slots[dst] = TRUE_VAL;
+        continue;
+      }
+
+
       case OP_CONSTANT:
       {
         uint8_t dst = READ_BYTE();
@@ -152,6 +174,110 @@ static InterpretResult run(VM vm) {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
         frame->slots[dst] = frame->slots[src];
+        continue;
+      }
+
+      case OP_MOVEN:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t size = READ_BYTE();
+        memcpy((void*)frame->slots[dst].as.ptr, (void*)frame->slots[src].as.ptr, sizeof(Value_) * size);
+        continue;
+      }
+
+      case OP_LOAD:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        frame->slots[dst] = *(Value_*)(frame->slots[src].as.ptr + offset);
+        continue;
+      }
+
+      case OP_LOADA:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        frame->slots[dst].as.ptr = (uintptr_t)(&frame->slots[src] + offset);
+        continue;
+      }
+
+      case OP_STORE:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        *(Value_*)(frame->slots[dst].as.ptr + offset) = frame->slots[src];
+        continue;
+      }
+
+      case OP_RLOAD:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        frame->slots[dst] = *(Value_*)(frame->slots[src].as.ref.pval + offset);
+        continue;
+      }
+
+      case OP_RLOADA:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        frame->slots[dst].as.ptr = (uintptr_t)(frame->slots[src].as.ref.pval + offset);
+        continue;
+      }
+
+      case OP_RSTORE:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        *(frame->slots[dst].as.ref.pval + offset) = frame->slots[src];
+        continue;
+      }
+
+      case OP_MAKE_REF:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t size = READ_BYTE();
+        Value_ ret = {
+          .as.ref = {
+            .pval = calloc(size, sizeof(Value_)),
+            .count = calloc(1, sizeof(int))
+          },
+        };
+        frame->slots[dst] = ret;
+        continue;
+      }
+
+      case OP_GET_REF:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst] = *frame->slots[src].as.ref.pval;
+        continue;
+      }
+
+      case OP_SET_REF:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        *frame->slots[dst].as.ref.pval = frame->slots[src];
+        continue;
+      }
+
+      case OP_SET_OFFSET:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        uint8_t slot = READ_BYTE();
+        Value_* base = (Value_*)READ_LONGLONG();
+        Value_ val = vm_pop(vm);
+        *(base + slot) = val;
         continue;
       }
 

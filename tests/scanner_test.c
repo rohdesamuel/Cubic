@@ -207,6 +207,12 @@ extern void scanner_all_tests() {
   TEST_LITERAL_SIMPLE(TK_STRING, "'hello'");
   TEST_LITERAL_SIMPLE(TK_STRING, "\"hello\"");
 
+  TEST_LITERAL_SIMPLE(TK_IF, "if");
+  TEST_LITERAL_SIMPLE(TK_ID, "iff");
+  TEST_LITERAL_SIMPLE(TK_OR, "or");
+  TEST_LITERAL_SIMPLE(TK_ID, "ord");
+  TEST_LITERAL_SIMPLE(TK_OUT, "out");
+
   TEST_TOKEN_STREAM("val x : int = 1234",
     TK_VAL, TK_ID, TK_COLON, TK_INT, TK_EQUAL, TK_INTEGER, TK_EOF);
 

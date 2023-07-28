@@ -48,6 +48,8 @@
 
 typedef enum {
   VAL_UNKNOWN = -1,
+
+  // Start primitives
   VAL_NIL,
   VAL_BOOL,
   VAL_INT,
@@ -62,8 +64,10 @@ typedef enum {
   VAL_UINT64,
   VAL_FLOAT,
   VAL_DOUBLE,
-  VAL_OBJ,
+  // End primitives
+
   VAL_CLASS,
+  VAL_OBJ,
 
   __VALUE_TYPE_COUNT__,
 } ValueType;
@@ -126,6 +130,14 @@ inline bool type_equal(RuntimeType_ from, RuntimeType_ to) {
 // Returns true if value and object types are the same.
 inline bool type_equiv(RuntimeType_ from, RuntimeType_ to) {
   return from.ty == to.ty && from.obj == to.obj;
+}
+
+inline static bool valuetype_isaprimitive(ValueType type) {
+  return type >= VAL_NIL && type <= VAL_DOUBLE;
+}
+
+inline static bool type_isaprimitive(RuntimeType_ info) {
+  return info.ty >= VAL_NIL && info.ty <= VAL_DOUBLE;
 }
 
 inline static bool type_isobj(RuntimeType_ info, enum ObjType obj_type) {

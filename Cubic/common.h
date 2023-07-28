@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "memory.h"
+
 // #define DEBUG_PRINT_CODE
 // #define DEBUG_TRACE_EXECUTION
 

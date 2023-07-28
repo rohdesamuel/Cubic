@@ -25,11 +25,10 @@ static void do_analysis(AstNode_* node) {
   get_rule(node->cls)->fn(node);
 }
 
-void analyzer_init(Analyzer_* analyzer) {
-  memset(analyzer, 0, sizeof(Analyzer_));
-  pageallocator_init(&analyzer->allocator, (size_t)1 << 14);
-
-  analyzer->frame = frame_root((MemoryAllocator_*)&analyzer->allocator);
+void analyzer_init(Analyzer_* analyzer, MemoryAllocator_* allocator) {
+  *analyzer = (Analyzer_){ 0 };
+  analyzer->allocator = allocator;
+  analyzer->frame = frame_root(analyzer->allocator);
   analyzer->scope = analyzer->frame->scope; //scope_create(analyzer->frame, NULL, (MemoryAllocator_*)&analyzer->allocator);
 }
 
@@ -42,7 +41,7 @@ void analyze(Analyzer_* analyzer, struct AstProgram_* ast) {
 void analyzer_clear(Analyzer_* analyzer) {
   scope_destroy(&analyzer->scope);
   frame_destroy(&analyzer->frame);
-  pageallocator_deinit(&analyzer->allocator);
+  *analyzer = (Analyzer_){ 0 };
   analyzer_ = NULL;
 }
 
@@ -103,6 +102,10 @@ void stmt_analysis(AstNode_* node) {
 
 void expr_analysis(AstNode_* node) {
   AstExpr_* expr = (AstExpr_*)node;
+  if (!expr->expr) {
+    return;
+  }
+
   AS_EXPR(expr->expr)->top_sem_type = expr->top_sem_type;
   do_analysis((AstNode_*)expr->expr);
   expr->sem_type = AS_EXPR(expr->expr)->sem_type;
@@ -138,26 +141,6 @@ void unary_analysis(AstNode_* n) {
         error(analyzer_, n, "expression does not have a number type.");
       }
       break;
-
-    case TK_AMPERSAND:
-    {
-      SemanticType_ sem_type = expr->base.sem_type;
-      if (expr->expr->base.cls != AST_CLS(AstVarExpr_)) {
-        error(analyzer_, (AstNode_*)expr->expr, "Cannot take address of expression");
-      }
-
-      if (sem_type.kind == KIND_UNKNOWN) {
-        error(analyzer_, n, "Cannot take address");
-      } else if (sem_type.kind == KIND_REF) {
-        error(analyzer_, n, "Cannot take address of reference.");
-      } else if (sem_type.lifetime == LIFETIME_TMP) {
-        error(analyzer_, n, "Cannot take address of temporary");
-      }
-
-      expr->base.sem_type.kind = KIND_REF;
-      expr->base.sem_type.ref_kind = REF_KIND_WEAK;
-      break;
-    }
 
     case TK_NEW:
     {
@@ -273,7 +256,12 @@ void binary_analysis(AstNode_* n) {
   }
 }
 
-void primary_analysis(AstNode_* n) {}
+void primary_analysis(AstNode_* n) {
+  AstPrimaryExp_* exp = AST_CAST(AstPrimaryExp_, n);
+
+  semantictype_size(&exp->base.sem_type);
+  assertf(exp->base.sem_type.size > 0, "");
+}
 
 void return_analysis(AstNode_* n) {
   AstReturnStmt_* stmt = (AstReturnStmt_*)n;
@@ -283,7 +271,7 @@ void return_analysis(AstNode_* n) {
   do_analysis((AstNode_*)stmt->expr);
   if (AS_EXPR(stmt->expr)->sem_type.val != frame->fn_symbol->fn.return_type.val) {
     error(analyzer_, n, "Return statement type does not match function type.");
-  }
+  }  
 }
 
 void if_analysis(AstNode_* n) {
@@ -334,10 +322,8 @@ void var_decl_analysis(AstNode_* n) {
     ValueRefKind ref_kind = stmt->sem_type.ref_kind;
 
     stmt->sem_type = AS_EXPR(stmt->expr)->sem_type;
-    if (kind == KIND_VAR) {
-      stmt->sem_type.kind = kind;
-      stmt->sem_type.ref_kind = ref_kind;
-    }
+    stmt->sem_type.kind = kind;
+    stmt->sem_type.ref_kind = ref_kind;
   }
 
   // The type will be KIND_TMP if created from a PRIMARY_EXP. Only change the kind for
@@ -353,12 +339,21 @@ void var_decl_analysis(AstNode_* n) {
   stmt->sem_type.lifetime = LIFETIME_AUTOMATIC;
 
   // TODO: implement tuples (and others) for variable declarations.
-  VarSymbol_* var = scope_var(n->scope, &stmt->name);  
+  VarSymbol_* var = scope_var(n->scope, &stmt->name);
   var->sem_type = stmt->sem_type;
-  
+  if (!valuetype_isaprimitive(var->sem_type.val)) {
+    var->sem_type.sym = scope_find(n->scope, &var->sem_type.name);
+    if (!var->sem_type.sym) {
+      error(analyzer_, n, "could not find symbol \"%.*s\" for variable type.", var->sem_type.name.length, var->sem_type.name.start);
+      return;
+    }
+  }
+
   if (stmt->expr && !semantictype_iscoercible(AS_EXPR(stmt->expr)->sem_type, stmt->sem_type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
+
+  semantictype_size(&var->sem_type);
 }
 
 void var_expr_analysis(AstNode_* n) {
@@ -414,19 +409,24 @@ void id_expr_analysis(AstNode_* n) {
 void assignment_expr_analysis(AstNode_* n) {
   AstAssignmentExpr_* expr = (AstAssignmentExpr_*)n;
 
+  SemanticType_  top_sem_type = SemanticType_Unknown;
+  top_sem_type.kind = KIND_REF;
+  top_sem_type.ref_kind = REF_KIND_WEAK;
+
   // TODO: allow for deconstructing tuples in assignments (and other types).
+  expr->left->top_sem_type = top_sem_type;
   expr->right->top_sem_type = expr->base.top_sem_type;
   do_analysis((AstNode_*)expr->left);
   do_analysis((AstNode_*)expr->right);
 
-  if (expr->left->cls != AST_CLS(AstVarExpr_)) {
+  if (expr->left->base.cls != AST_CLS(AstVarExpr_)) {
     error(analyzer_, n, "Left-hand side of assignment cannot be assigned to.");
     return;
   }
 
-  AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->right;
+  AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
-  if (!semantictype_infoequal(lvalue_expr->base.sem_type, rvalue_expr->sem_type)) {
+  if (lvalue_expr->base.sem_type.val != rvalue_expr->sem_type.val) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
   expr->base.sem_type = lvalue_expr->base.sem_type;
@@ -438,7 +438,7 @@ void while_stmt_analysis(AstNode_* n) {
 
   do_analysis((AstNode_*)stmt->condition_expr);
   do_analysis(stmt->block_stmt);
-
+   
   if (!semantictype_isabool(AS_EXPR(stmt->condition_expr)->sem_type)) {
     error(analyzer_, n, "while loop conditional must be a bool.");
   }
@@ -624,6 +624,13 @@ void ast_class_member_decl_analysis(AstNode_* node) {
         *type = symbolic_type->cls.self_type;
       }
     }
+  } else if (type->val == VAL_CLASS) {
+    type->sym = scope_find(node->scope, &type->name);
+    if (!type->sym) {
+      error(analyzer_, node,
+        "Could not find type '%.*s' in struct member declaration",
+        type->name.length, type->name.start);
+    }
   }
 
   if (decl->opt_expr) {
@@ -691,36 +698,62 @@ void ast_dot_expr_analysis(AstNode_* node) {
     error(analyzer_, node, "Could not find field '%.*s'", expr->id.length, expr->id.start);
     return;
   }
-
+  expr->cls_sym = cls_sym->self_type.sym;
   expr->base.sem_type = found->field.sem_type;
 }
 
-void ast_constructor_analysis(AstNode_* node) {
-  AstConstructor_* constructor = (AstConstructor_*)node;
+void ast_class_constructor_analysis(AstNode_* node) {
+  AstClassConstructor_* constructor = (AstClassConstructor_*)node;
 
   SemanticType_* type = &constructor->base.sem_type;
-  if (type->name.start) {
-    Symbol_* cls_sym = scope_find(node->scope, &type->name);
-
-    if (!cls_sym) {
-      error(analyzer_, node, "Could not find class %.*s", type->name.length, type->name.start);
-    } else {
-      constructor->base.sem_type = cls_sym->cls.self_type;
-      constructor->base.sem_type.sym = cls_sym;
-    }
+  if (!type->name.start) {
+    error(analyzer_, node, "Class name not given.");
+    return;
   }
 
-  for (AstListNode_* n = constructor->fields.head; n != NULL; n = n->next) {
-    AstConstructorField_* field = AST_CAST(AstConstructorField_, n->node);
-    field->base.top_sem_type = constructor->base.top_sem_type;
+  Symbol_* cls_sym = scope_find(node->scope, &type->name);  
+  if (!cls_sym) {
+    error(analyzer_, node, "Could not find class %.*s", type->name.length, type->name.start);
+    return;
+  } else {
+    constructor->base.sem_type = cls_sym->cls.self_type;
+    constructor->base.sem_type.kind = KIND_VAL;
+    constructor->base.sem_type.sym = cls_sym;
+  }
+
+  for (AstListNode_* n = constructor->params.head; n != NULL; n = n->next) {
+    AstClassConstructorParam_* field = AST_CAST(AstClassConstructorParam_, n->node);
+    field->base.top_sem_type = constructor->base.sem_type;
     do_analysis((AstNode_*)field);
   }
 }
 
-void ast_constructor_field_analysis(AstNode_* node) {
-  AstConstructorField_* field = (AstConstructorField_*)node;
+void ast_class_constructor_param_analysis(AstNode_* node) {
+  AstClassConstructorParam_* field = (AstClassConstructorParam_*)node;
   field->expr->top_sem_type = field->base.top_sem_type;
   do_analysis((AstNode_*)field->expr);
+
+  // Check that the field in the constructor parameter actually exists in the class.
+  SemanticType_* type = &field->base.top_sem_type;
+  if (field->name.start) {
+    bool found = false;
+
+    ClassSymbol_* cls_sym = &type->sym->cls;
+    for (ListNode_* n = cls_sym->members.head; n != NULL; n = n->next) {
+      Symbol_* member = list_val(n, Symbol_*);
+      if (token_eq(member->name, field->name)) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      error(analyzer_, node, "Constructor field %.*s does not exist in class %.*s.",
+        field->name.length, field->name.start,
+        type->name.length, type->name.start);
+    }
+  }
+
   field->base.sem_type = field->expr->sem_type;
 }
 
@@ -754,8 +787,8 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstTmpDecl_)]                = {ast_tmp_decl_analysis},
   [AST_CLS(AstClassDef_)]               = {ast_class_def_analysis},
   [AST_CLS(AstClassMemberDecl_)]        = {ast_class_member_decl_analysis},
-  [AST_CLS(AstConstructor_)]            = {ast_constructor_analysis},
-  [AST_CLS(AstConstructorField_)]       = {ast_constructor_field_analysis},
+  [AST_CLS(AstClassConstructor_)]       = {ast_class_constructor_analysis},
+  [AST_CLS(AstClassConstructorParam_)]  = {ast_class_constructor_param_analysis},
   [AST_CLS(AstDotExpr_)]                = {ast_dot_expr_analysis},
   [AST_CLS(AstTypeExpr_)]               = {noop_analysis},
 };

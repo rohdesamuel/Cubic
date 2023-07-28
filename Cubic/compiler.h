@@ -18,6 +18,7 @@ typedef struct Compiler_ {
   int locals_count;
   int locals_capacity;
   int scope_depth;
+  MemoryAllocator_* allocator;
 } Compiler_;
 
 bool compile(const char* source, Chunk_* chunk);

@@ -11,24 +11,40 @@ typedef struct CodeGenRule_ {
 
 static void emit_return(TacChunk_* chunk, int line);
 
-#define OP_LOC(LOCATION) ((Operand_){.arg_type = TAC_ARG_LOC, .loc = (LOCATION)})
-#define OP_LOC_INDEX(INDEX) ((Operand_){.arg_type = TAC_ARG_LOC, .loc = (Location_){.index = (INDEX)}})
-#define OP_VAL(TYPE, VAL) ((Operand_){.arg_type = TAC_ARG_LOC, .opt_type = (TYPE), .val = (VAL)}})
+#define OP_LOC(LOCATION) ((Operand_){.arg_type = OPERAND_TYPE_LOC, .loc = (LOCATION)})
+#define OP_LOC_INDEX(INDEX) ((Operand_){.arg_type = OPERAND_TYPE_LOC, .loc = (Location_){.index = (INDEX)})
+#define OP_SIZE(SIZE) ((Operand_){.arg_type = OPERAND_TYPE_SIZE, .size = (SIZE)})
+#define OP_CONSTANT(TYPE, VAL) ((Operand_){.arg_type = OPERAND_TYPE_VAL, .opt_type = (TYPE), .size = 1, .val = (VAL)})
+#define OP_SIZED_CONSTANT(TYPE, VAL, SIZE) ((Operand_){.arg_type = OPERAND_TYPE_VAL, .opt_type = (TYPE), .size = (SIZE), .val = (VAL)})
+#define OP_OFFSET(OFFSET) ((Operand_){.arg_type = OPERAND_TYPE_OFFSET, .offset = (OFFSET)})
 
-static Location_ EMPTY_LOC = { .index = -1 };
+#define LOC_VAL(INDEX, SIZE) ((Location_){.type = LOCATION_TYPE_VAL, .index = INDEX, .size = SIZE})
+#define LOC_VAR(INDEX, SIZE) ((Location_){.type = LOCATION_TYPE_VAR, .index = INDEX, .size = SIZE})
+#define LOC_PTR(INDEX, SIZE) ((Location_){.type = LOCATION_TYPE_PTR, .index = INDEX, .size = SIZE})
+
+static Location_ EMPTY_LOC = { 0 };
 static Operand_ EMPTY_OPERAND = { 0 };
 
 static CodeGenRule_* get_rule(int info);
+static void tac_chunk_free(TacChunk_* chunk);
+
 static Location_ code_gen(TacChunk_* chunk, AstNode_* node) {
   return get_rule(node->cls)->code_gen(chunk, node);
 }
 
-void tac_compiler_init(TacCompiler_* compiler) {
+void tac_compiler_init(TacCompiler_* compiler, MemoryAllocator_* allocator) {
   *compiler = (TacCompiler_){ 0 };
-  pageallocator_init(&compiler->allocator, 4096);
+  compiler->allocator = allocator;
 }
 
 void location_print(const Location_* loc) {
+  switch (loc->type) {
+    case LOCATION_TYPE_VAL: break;
+    //case LOCATION_TYPE_VAR: printf("&"); break;
+    //case LOCATION_TYPE_PTR: printf("*"); break;
+    case LOCATION_TYPE_EMPTY: break;
+  }
+
   if (loc->token.start) {
     printf("%.*s", loc->token.length, loc->token.start);
   } else {
@@ -37,7 +53,7 @@ void location_print(const Location_* loc) {
 }
 
 void opcode_print(OpCode op) {
-  printf(" %s ", OPCODE_STR(op));
+  printf("%s ", OPCODE_STR(op));
 }
 
 void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
@@ -45,6 +61,7 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
   emit_return(&compiler->chunk, 0);
 
   TacChunk_* chunk = &compiler->chunk;
+  int level = 0;
   for (int i = 0; i < chunk->count; ++i) {
     Tac_* tac = chunk->code + i;
     Location_* dst = &tac->dst;
@@ -54,15 +71,51 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
     Location_* loc_r = &arg_r->loc;
 
     if (tac->label) {
-      printf("%s:", tac->label);
+      printf("%s:\n", tac->label);
     }
 
-    if (tac->dst.token.start) {
-      printf("  %.*s <- ", tac->dst.token.length, tac->dst.token.start);
-    } else if (!is_loc_empty(tac->dst)) {
-      printf("  _t%d <- ", tac->dst.index);
-    } else {
-      printf(" ");
+    if (tac->op == OP_END_SCOPE) {
+      level--;
+    }
+
+    for (int j = 0; j < level; ++j) {
+      printf("  ");
+    }
+
+    if (is_loc_empty(tac->dst) && tac->arg_l.arg_type == OPERAND_TYPE_EMPTY &&
+      tac->arg_r.arg_type == OPERAND_TYPE_EMPTY) {
+      if (tac->op == OP_BEGIN_SCOPE) {
+        printf("do");
+        level++;
+      } else if (tac->op == OP_END_SCOPE) {
+        printf("end");
+      } else {
+        opcode_print(tac->op);
+      }
+      printf("\n");
+      continue;
+    }
+
+    if (!is_loc_empty(tac->dst)) {
+      if (tac->op == OP_STORE || tac->op == OP_RSTORE) {
+        printf("*(");
+      }
+
+      location_print(&tac->dst);
+      if (tac->op == OP_RSTORE) {
+        printf(".ptr");
+      }
+
+      if (tac->op == OP_STORE || tac->op == OP_RSTORE) {
+        if (tac->arg_r.offset > 0) {
+          printf(" + %d", tac->arg_r.offset);
+        }
+        printf(")");
+      } else if (tac->op == OP_MOVEN) {
+        printf("[0..%d]", tac->arg_r.offset - 1);
+      }
+
+      printf(" <- ");
     }
 
     switch (tac->op) {
@@ -79,12 +132,70 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
         opcode_print(tac->op);
         break;
 
+      case OP_MAKE_REF:
+        printf("new ref[%lld]", tac->arg_l.size);
+        break;
+
+      case OP_INC_REF:
+        location_print(loc_l);
+        printf(".count ++");
+        break;
+
       case OP_MOVE:
+        location_print(loc_l);
+        break;
+
+      case OP_MOVEN:
+        location_print(loc_l);
+        printf("[0..%lld]", tac->arg_r.size - 1);
+        break;
+
+      case OP_LOAD:
+        printf("*(");
+        location_print(loc_l);
+        if (tac->arg_r.offset > 0) {
+          printf(" + %d", tac->arg_r.offset);
+        }
+        printf(")");
+        break;
+
+      case OP_LOADA:
+        printf("&");
+        location_print(loc_l);
+        if (tac->arg_r.offset > 0) {
+          printf(" + %d", tac->arg_r.offset);
+        }
+        break;
+
+      case OP_STORE:
+        location_print(loc_l);
+        break;
+
+      case OP_RLOAD:
+        printf("*(");
+        location_print(loc_l);
+        printf(".ptr");
+        if (tac->arg_r.offset > 0) {
+          printf(" + %d", tac->arg_r.offset);
+        }
+        printf(")");
+        break;
+
+      case OP_RLOADA:
+        location_print(loc_l);
+        printf(".ptr");
+        if (tac->arg_r.offset > 0) {
+          printf(" + %d", tac->arg_r.offset);
+        }
+        break;
+
+      case OP_RSTORE:
         location_print(loc_l);
         break;
 
       default:
         location_print(loc_l);
+        printf(" ");
         opcode_print(tac->op);
         location_print(loc_r);
     }
@@ -93,7 +204,8 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
 }
 
 void tac_compiler_clear(TacCompiler_* compiler) {
-  pageallocator_deinit(&compiler->allocator);
+  tac_chunk_free(&compiler->chunk);
+  *compiler = (TacCompiler_){ 0 };
 }
 
 static inline void tac_chunk_reserve(TacChunk_* chunk, int count) {
@@ -108,10 +220,7 @@ static inline void tac_chunk_reserve(TacChunk_* chunk, int count) {
 }
 
 static void tac_chunk_init(TacChunk_* chunk) {
-  chunk->count = 0;
-  chunk->capacity = 0;
-  chunk->code = NULL;
-  chunk->lines = NULL;
+  *chunk = (TacChunk_){ 0 };
 }
 
 static void tac_chunk_free(TacChunk_* chunk) {
@@ -120,10 +229,53 @@ static void tac_chunk_free(TacChunk_* chunk) {
   tac_chunk_init(chunk);
 }
 
-static Location_ tac_alloc_temp(TacChunk_* chunk) {
-  Location_ ret;
-  memset(&ret, 0, sizeof(Location_));
-  ret.index = chunk->slot_index++;
+static Location_ tac_alloc(TacChunk_* chunk, size_t size) {
+  assertf(size != 0, "Trying to allocate zero-sized memory.");
+
+  Location_ ret = EMPTY_LOC;
+  ret.type = LOCATION_TYPE_VAL;
+  ret.index = ++chunk->slot_index;
+  ret.frame_offset = chunk->slot_offset;
+  chunk->slot_offset += (int32_t)size;
+  ret.size = size;
+  return ret;
+}
+
+static Location_ tac_alloc_ptr(TacChunk_* chunk) {
+  Location_ ret = EMPTY_LOC;
+  ret.type = LOCATION_TYPE_PTR;
+  ret.index = ++chunk->slot_index;
+  ret.frame_offset = chunk->slot_offset;
+  chunk->slot_offset += 1;
+  ret.size = 1;
+  return ret;
+}
+
+static Location_ tac_alloc_var(TacChunk_* chunk) {
+  Location_ ret = EMPTY_LOC;
+  ret.type = LOCATION_TYPE_VAR;
+  ret.index = ++chunk->slot_index;
+  ret.frame_offset = chunk->slot_offset;
+  chunk->slot_offset += 1;
+  ret.size = 1;
+  return ret;
+}
+
+static Location_ tac_alloca(TacChunk_* chunk, int64_t size) {
+  assertf(size > 0, "Trying to allocate a non-positive number: %lld", size);
+
+  Location_ ret = EMPTY_LOC;
+  ret.type = LOCATION_TYPE_VAL;
+  ret.index = chunk->slot_index + 1;
+  chunk->slot_index += (int)size;
+  chunk->slot_offset += (int32_t)size;
+  return ret;
+}
+
+static Location_ tac_current(TacChunk_* chunk) {
+  Location_ ret = EMPTY_LOC;
+  ret.type = LOCATION_TYPE_VAL;
+  ret.index = chunk->slot_index;
   return ret;
 }
 
@@ -137,10 +289,10 @@ static Tac_* tac_chunk_write(TacChunk_* chunk, Tac_* code, int line) {
   return chunk->code + chunk->count - 1;
 }
 
-static Location_ tac_chunk_writeconstant(TacChunk_* chunk, TypedValue_ value, int line) {  
+static Location_ tac_chunk_writeconstant(TacChunk_* chunk, TypedValue_ value, size_t size, int line) {  
   Tac_ tac = {
     .op = OP_CONSTANT,
-    .dst = tac_alloc_temp(chunk),
+    .dst = tac_alloc(chunk, size),
     .arg_l.opt_type = value.ty,
     .arg_l.val = value.val,
   };
@@ -148,10 +300,9 @@ static Location_ tac_chunk_writeconstant(TacChunk_* chunk, TypedValue_ value, in
   return tac.dst;
 }
 
-static Location_ emit_constant(TacChunk_* chunk, TypedValue_ value, int line) {
-  return tac_chunk_writeconstant(chunk, value, line);
+static Location_ emit_constant(TacChunk_* chunk, TypedValue_ value, size_t size, int line) {
+  return tac_chunk_writeconstant(chunk, value, size, line);
 }
-
 
 //static void emit_cast(TacChunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line);
 static int resolve_var(Scope_* scope, AstNode_* expr);
@@ -174,6 +325,10 @@ static Tac_* emit_tac(TacChunk_* chunk, OpCode op, Location_ dst, Operand_ arg_l
   return tac_chunk_write(chunk, &tac, line);
 }
 
+static void emit_op(TacChunk_* chunk, OpCode op, int line) {
+  emit_tac(chunk, op, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, line);
+}
+
 static void emit_return(TacChunk_* chunk, int line) {
   emit_tac(chunk, OP_RETURN, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, line);
 }
@@ -181,8 +336,173 @@ static void emit_return(TacChunk_* chunk, int line) {
 static Tac_* emit_label(TacChunk_* chunk, const char* label, int line) {
   Tac_ tac = { 0 };
   tac.label = label;
+  tac.line = line;
 
   return tac_chunk_write(chunk, &tac, line);
+}
+
+static void emit_set_val(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t val_size, int line) {
+  // dst       src       behavior              Op Code
+  // KIND_VAL  KIND_VAL  dst = src             OP_MOVE
+  // KIND_VAL  KIND_VAR  dst = *src.ptr        OP_RLOAD
+  // KIND_VAL  KIND_REF  dst = *src            OP_LOAD
+  assert(dst->type == LOCATION_TYPE_VAL);
+  
+  if (val_size == 1) {
+    switch (src->type) {
+      case LOCATION_TYPE_VAL:
+        emit_tac(chunk, OP_MOVE, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case LOCATION_TYPE_VAR:
+        emit_tac(chunk, OP_RLOAD, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case LOCATION_TYPE_PTR:
+        emit_tac(chunk, OP_LOAD, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+    }
+  } else {
+    Location_ src_ptr = tac_alloc_ptr(chunk);
+    Location_ dst_ptr = tac_alloc_ptr(chunk);
+
+    emit_tac(chunk, OP_LOADA, dst_ptr, OP_LOC(*dst), EMPTY_OPERAND, line);
+    switch (src->type) {
+      case KIND_VAL:
+        emit_tac(chunk, OP_LOADA, src_ptr, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case KIND_VAR:
+        emit_tac(chunk, OP_RLOADA, src_ptr, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case KIND_REF:
+        src_ptr = *src;
+        break;
+    }
+
+    emit_tac(chunk, OP_MOVEN, dst_ptr, OP_LOC(src_ptr), OP_SIZE(val_size), line);
+  }
+}
+
+static void emit_set_var(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t val_size, int line) {
+  // dst       src       behavior              Op Code
+  // KIND_VAR  KIND_VAL  *dst.ptr = src        OP_RSTORE
+  // KIND_VAR  KIND_VAR  *dst.ptr = *src.ptr   OP_RLOAD, OP_RSTORE
+  // KIND_VAR  KIND_REF  *dst.ptr = *src       OP_LOAD, OP_RSTORE
+  assert(dst->type == LOCATION_TYPE_VAR);
+
+  if (val_size == 1) {
+    Location_ tmp = src->type == LOCATION_TYPE_VAL ? *src : tac_alloc(chunk, val_size);
+
+    switch (src->type) {
+      case LOCATION_TYPE_VAL:
+        break;
+
+      case LOCATION_TYPE_VAR:
+        emit_tac(chunk, OP_RLOAD, tmp, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+
+      case LOCATION_TYPE_PTR:
+        emit_tac(chunk, OP_LOAD, tmp, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+    }
+    emit_tac(chunk, OP_RSTORE, *dst, OP_LOC(tmp), EMPTY_OPERAND, line);
+  } else {
+    Location_ src_ptr = src->type == LOCATION_TYPE_PTR ? *src : tac_alloc_ptr(chunk);
+    Location_ dst_ptr = tac_alloc_ptr(chunk);
+
+    emit_tac(chunk, OP_RLOADA, dst_ptr, OP_LOC(*dst), EMPTY_OPERAND, line);
+    switch (src->type) {
+      case LOCATION_TYPE_VAL:
+        emit_tac(chunk, OP_LOADA, src_ptr, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case LOCATION_TYPE_VAR:
+        emit_tac(chunk, OP_RLOADA, src_ptr, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case LOCATION_TYPE_PTR:
+        break;
+    }
+
+    emit_tac(chunk, OP_MOVEN, dst_ptr, OP_LOC(src_ptr), OP_SIZE(val_size), line);
+  }
+}
+
+static void emit_set_ref(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t val_size, int line) {
+  // dst       src       behavior              Op Code
+  // KIND_REF  KIND_VAL  *dst = src            OP_STORE
+  // KIND_REF  KIND_VAR  *dst = *src.ptr       OP_RLOAD, OP_STORE
+  // KIND_REF  KIND_REF  *dst = *src           OP_LOAD, OP_STORE
+  assert(dst->type == LOCATION_TYPE_PTR);
+
+  if (val_size == 1) {
+    Location_ tmp = src->type == LOCATION_TYPE_VAL ? *src : tac_alloc(chunk, val_size);
+    switch (src->type) {
+      case LOCATION_TYPE_VAL:
+        break;
+
+      case LOCATION_TYPE_VAR:
+        emit_tac(chunk, OP_RLOAD, tmp, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+
+      case LOCATION_TYPE_PTR:
+        emit_tac(chunk, OP_LOAD, tmp, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+    }
+    emit_tac(chunk, OP_STORE, *dst, OP_LOC(tmp), EMPTY_OPERAND, line);
+  } else {
+    Location_ src_ptr = src->type == KIND_REF ? *src : tac_alloc_ptr(chunk);
+    Location_ dst_ptr = *dst;
+    switch (src->type) {
+      case LOCATION_TYPE_VAL:
+        emit_tac(chunk, OP_LOADA, src_ptr, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case LOCATION_TYPE_VAR:
+        emit_tac(chunk, OP_RLOADA, src_ptr, OP_LOC(*src), EMPTY_OPERAND, line);
+        break;
+      case LOCATION_TYPE_PTR:
+        break;
+    }
+
+    emit_tac(chunk, OP_MOVEN, dst_ptr, OP_LOC(src_ptr), OP_SIZE(val_size), line);
+  }
+}
+
+static void emit_set_variable(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t val_size, int line) {
+  switch (dst->type) {
+    case LOCATION_TYPE_VAL:
+      emit_set_val(chunk, dst, src, val_size, line);
+      break;
+    case LOCATION_TYPE_VAR:
+      emit_set_var(chunk, dst, src, val_size, line);
+      break;
+    case LOCATION_TYPE_PTR:
+      emit_set_ref(chunk, dst, src, val_size, line);
+      break;
+  }
+}
+
+static Location_ emit_get_var(TacChunk_* chunk, const Location_* src, size_t size, int line) {
+  assertf(src->type == LOCATION_TYPE_VAR, "");
+  Location_ dst = tac_alloc(chunk, size);
+  emit_set_variable(chunk, &dst, src, size, line);
+  return dst;
+}
+
+static Location_ emit_get_ptr(TacChunk_* chunk, const Location_* src, size_t size, int line) {
+  assertf(src->type == LOCATION_TYPE_PTR, "");
+  Location_ dst = tac_alloc(chunk, size);
+  emit_set_variable(chunk, &dst, src, size, line);
+  return dst;
+}
+
+static Location_ emit_get_variable(TacChunk_* chunk, const Location_* src, size_t size, int line) {
+  switch (src->type) {
+    case LOCATION_TYPE_VAL:
+      return *src;
+    case LOCATION_TYPE_VAR:
+      return emit_get_var(chunk, src, size, line);
+    case LOCATION_TYPE_PTR:
+      return emit_get_ptr(chunk, src, size, line);
+  }
+  assertf(false, "Received unknown location type %d", src->type);
+  return EMPTY_LOC;
 }
 
 static Tac_* emit_jmp(TacChunk_* chunk, const char* label, int line) {
@@ -193,12 +513,12 @@ static Tac_* emit_jmp(TacChunk_* chunk, const char* label, int line) {
   return tac_chunk_write(chunk, &tac, line);
 }
 
-static Location_ emit_add(TacChunk_* chunk, Location_ l, Location_ r, RuntimeType_ ltype, RuntimeType_ rtype, int line) {
+static Location_ emit_add(TacChunk_* chunk, Location_ l, Location_ r, RuntimeType_ ltype, RuntimeType_ rtype, size_t type_size, int line) {
   if (ltype.ty != rtype.ty) {
     //emit_cast(chunk, rtype, ltype, line);
   }
 
-  Location_ dest = tac_alloc_temp(chunk);
+  Location_ dest = tac_alloc(chunk, type_size);
 
   if (ISA_TY_UINT(ltype) || ISA_TY_INT(ltype)) {
     emit_tac(chunk, OP_ADD, dest, (Operand_) { .loc=l }, (Operand_) { .loc = r }, line);
@@ -209,6 +529,18 @@ static Location_ emit_add(TacChunk_* chunk, Location_ l, Location_ r, RuntimeTyp
   }
 
   return dest;
+}
+
+static void emit_make_ref(TacChunk_* chunk, const Location_* dst, size_t size, int line) {
+  assertf(dst->type == LOCATION_TYPE_VAR, "");
+  emit_tac(chunk, OP_MAKE_REF, *dst, OP_SIZE(size), EMPTY_OPERAND, line);
+}
+
+static void emit_make_ref_from(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t size, int line) {
+  assertf(dst->type == LOCATION_TYPE_VAR, "");
+  assertf(src->type == LOCATION_TYPE_VAR, "");
+  emit_tac(chunk, OP_INC_REF, EMPTY_LOC, OP_LOC(*src), EMPTY_OPERAND, line);
+  emit_tac(chunk, OP_MOVE, *dst, OP_LOC(*src), EMPTY_OPERAND, line);  
 }
 
 #if 0
@@ -286,8 +618,16 @@ static Location_ binary_code_gen(TacChunk_* chunk, AstNode_* node) {
   Location_ l_loc = code_gen(chunk, (AstNode_*)l);
   Location_ r_loc = code_gen(chunk, (AstNode_*)r);
 
+  if (l_loc.type != LOCATION_TYPE_VAL) {
+    l_loc = emit_get_variable(chunk, &l_loc, l->sem_type.size, node->line);
+  }
+
+  if (r_loc.type != LOCATION_TYPE_VAL) {
+    r_loc = emit_get_variable(chunk, &r_loc, r->sem_type.size, node->line);
+  }
+
   switch (exp->op) {
-    case TK_PLUS:          return emit_add(chunk, l_loc, r_loc, ltype, rtype, node->line); break;
+    case TK_PLUS:          return emit_add(chunk, l_loc, r_loc, ltype, rtype, exp->base.sem_type.size, node->line); break;
   }
 
   return EMPTY_LOC;
@@ -306,7 +646,7 @@ static Location_ primary_code_gen(TacChunk_* chunk, AstNode_* node) {
   } else {
     v = (TypedValue_){ exp->value, semantictype_toruntime(exp->base.sem_type)};
   }
-  return emit_constant(chunk, v, node->line);
+  return emit_constant(chunk, v, exp->base.sem_type.size, node->line);
 }
 
 static Location_ print_code_gen(TacChunk_* chunk, AstNode_* node) {
@@ -314,10 +654,9 @@ static Location_ print_code_gen(TacChunk_* chunk, AstNode_* node) {
   Location_ loc = code_gen(chunk, (AstNode_*)stmt->expr);
   assertf(!is_loc_empty(loc), "Encountered empty destination address");
 
-  Operand_ op_l = {
-    .opt_type = semantictype_toruntime(stmt->expr->sem_type),
-    .loc = loc
-  };
+  Operand_ op_l = OP_LOC(loc);
+  op_l.opt_type = semantictype_toruntime(stmt->expr->sem_type);
+
   emit_tac(chunk, OP_PRINT, EMPTY_LOC, op_l, EMPTY_OPERAND, node->line);
 
   return EMPTY_LOC;
@@ -342,13 +681,18 @@ static Location_ stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
 
 static Location_ expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstExpr_* expr = (AstExpr_*)node;
+  if (!expr->expr) {
+    return EMPTY_LOC;
+  }
   return code_gen(chunk, (AstNode_*)expr->expr);
 }
 
 static void begin_scope(TacChunk_* chunk, AstBlock_* block) {
+  emit_op(chunk, OP_BEGIN_SCOPE, block->base.line);
 }
 
 static void end_scope(TacChunk_* chunk, AstBlock_* block) {
+  emit_op(chunk, OP_END_SCOPE, block->base.line);
 }
 
 static Location_ block_code_gen(TacChunk_* chunk, AstNode_* node) {
@@ -366,7 +710,7 @@ static Location_ return_code_gen(TacChunk_* chunk, AstNode_* node) {
   if (stmt->expr) {
     code_gen(chunk, (AstNode_*)stmt->expr);
   }
-  //emit_return(chunk, node->line);
+  emit_return(chunk, node->line);
   return EMPTY_LOC;
 }
 
@@ -438,24 +782,64 @@ static int resolve_var(Scope_* scope, AstNode_* expr) {
 
 static Location_ var_decl_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
-
-  Location_ dst = tac_alloc_temp(chunk);
-  dst.token = stmt->name;
-
   Symbol_* sym = scope_find(node->scope, &stmt->name);
-  sym->var.location = dst;
+  SemanticType_ var_type = sym->var.sem_type;
+  
+  Location_ dst = EMPTY_LOC;
+  switch (var_type.kind) {
+    case KIND_VAL: dst = tac_alloc(chunk, var_type.size); break;
+    case KIND_VAR: dst = tac_alloc_var(chunk); break;
+    case KIND_REF: dst = tac_alloc_ptr(chunk); break;
+    case KIND_PTR: dst = tac_alloc_ptr(chunk); break;
+  }  
 
+  dst.token = stmt->name;
+  sym->var.location = dst;
+  
   // TODO: allow for multiple expressions.
   if (stmt->expr) {
-    Location_ expr_loc = code_gen(chunk, (AstNode_*)stmt->expr);
-    emit_tac(chunk, OP_MOVE, dst, OP_LOC(expr_loc), EMPTY_OPERAND, node->line);
+    SemanticType_ rhs_type = stmt->expr->sem_type;
+    if (var_type.kind == KIND_VAR) {
+      if (rhs_type.kind == KIND_VAR) {
+        Location_ tmp = code_gen(chunk, (AstNode_*)stmt->expr);
+        emit_make_ref_from(chunk, &dst, &tmp, var_type.size, node->line);
+        return dst;
+      } else {
+        emit_make_ref(chunk, &dst, var_type.size, node->line);
+      }
+    }
+
+    Location_ tmp = code_gen(chunk, (AstNode_*)stmt->expr);
+    emit_set_variable(chunk, &dst, &tmp, stmt->sem_type.size, node->line);
+
+    return dst;
+  } else {
+    if (var_type.kind == KIND_VAR) {
+      emit_make_ref(chunk, &dst, var_type.size, node->line);
+    }
+    return dst;
   }
-  return dst;
 }
 
 static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstVarExpr_* expr = (AstVarExpr_*)node;
-  return code_gen(chunk, (AstNode_*)expr->expr);
+  Location_ dst = code_gen(chunk, (AstNode_*)expr->expr);
+  return dst;
+
+  SemanticType_ top_type = expr->base.top_sem_type;
+  SemanticType_ expr_type = expr->base.sem_type;
+
+  if (top_type.kind == expr_type.kind) {
+    return dst;
+  }
+
+  if (top_type.kind == KIND_VAL) {
+    Location_ tmp = tac_alloc(chunk, dst.size);
+    emit_tac(chunk, OP_MOVE, tmp, OP_LOC(dst), EMPTY_OPERAND, node->line);
+    return tmp;
+  }
+
+  return dst;
 }
 
 // Get the specified variable.
@@ -474,6 +858,8 @@ static Location_ id_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
       emit_bytes(chunk, OP_GET_VAR, (uint8_t)(sym->closure.frame_index), node->line);
       break;
 #endif
+    default:
+      assertf(false, "Unknown symbol type %d for IdExpr", (int)sym->type);
   }
 
   return EMPTY_LOC;
@@ -484,7 +870,11 @@ static Location_ assignment_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstAssignmentExpr_* expr = (AstAssignmentExpr_*)node;
   Location_ dst = code_gen(chunk, (AstNode_*)expr->left);
   Location_ src = code_gen(chunk, (AstNode_*)expr->right);
-  emit_tac(chunk, OP_MOVE, dst, OP_LOC(src), EMPTY_OPERAND, node->line);
+
+  if (dst.type == LOCATION_TYPE_VAL) {
+  }
+
+  emit_set_variable(chunk, &dst, &src, expr->left->sem_type.size, node->line);
   return dst;
 }
 
@@ -506,18 +896,21 @@ static Location_ expression_statement_code_gen(TacChunk_* chunk, AstNode_* node)
 }
 
 static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
-  /*AstFunctionDef_* def = (AstFunctionDef_*)node;
+  AstFunctionDef_* def = (AstFunctionDef_*)node;
   FunctionSymbol_* fn = &def->fn_symbol->fn;
+
   ObjFunction_* obj_fn = fn->obj_fn;
-  obj_fn->constant_index = make_constant(chunk, OBJ_VAL(obj_fn));
 
-  Chunk_* fn_chunk = malloc(sizeof(Chunk_));
-  obj_fn->chunk = fn_chunk;
+  //emit_label(chunk, "fn", node->line);
+  //obj_fn->constant_index = make_constant(chunk, OBJ_VAL(obj_fn));
 
-  chunk_init(fn_chunk);
+  TacChunk_* fn_chunk = malloc(sizeof(TacChunk_));
+  //obj_fn->chunk = fn_chunk;
+
+  tac_chunk_init(fn_chunk);
 
   code_gen(fn_chunk, (AstNode_*)def->body);
-  */
+  
   return EMPTY_LOC;
 }
 
@@ -575,62 +968,209 @@ static Location_ tmp_decl_code_gen(TacChunk_* chunk, AstNode_* n) {
   return ret;
 }
 
+static Location_ class_find_member_as_ptr(TacChunk_* chunk, const Location_* cls_loc, const Symbol_* cls_sym, const Token_* id, int line) {
+  Symbol_* sym = symbol_findmember(cls_sym, *id);
+  Location_ dst = tac_alloc_ptr(chunk);
+  int offset = (int)sym->field.offset;
+
+  switch (cls_loc->type) {
+    case LOCATION_TYPE_VAL:
+      emit_tac(chunk, OP_LOADA, dst, OP_LOC(*cls_loc), OP_OFFSET(offset), line);
+      break;
+
+    case LOCATION_TYPE_VAR:
+      emit_tac(chunk, OP_RLOADA, dst, OP_LOC(*cls_loc), OP_OFFSET(offset), line);
+      break;
+
+    case LOCATION_TYPE_PTR:
+      emit_tac(chunk, OP_MOVE, dst, OP_LOC(*cls_loc), OP_OFFSET(offset), line);
+      break;
+  }
+
+  return dst;
+}
+
+static Location_ class_find_member_as_val(TacChunk_* chunk, const Location_* cls_loc, const Symbol_* cls_sym, const Token_* id, int line) {
+  Symbol_* sym = symbol_findmember(cls_sym, *id);
+  Location_ tmp = class_find_member_as_ptr(chunk, cls_loc, cls_sym, id, line);
+  Location_ dst = tac_alloc(chunk, sym->field.sem_type.size);
+  
+  Location_ dst_ptr = tac_alloc_ptr(chunk);
+  emit_tac(chunk, OP_LOADA, dst_ptr, OP_LOC(dst), EMPTY_OPERAND, line);
+  emit_tac(chunk, OP_MOVEN, dst_ptr, OP_LOC(tmp), OP_SIZE(dst.size), line);
+
+  return dst;
+}
+
+static Location_ class_set_member(TacChunk_* chunk, const Location_* val, const Location_* cls_loc, const Symbol_* cls_sym, const Token_* id, int line) {
+  Symbol_* sym = symbol_findmember(cls_sym, *id);
+  Location_ dst = class_find_member_as_ptr(chunk, cls_loc, cls_sym, id, line);
+
+  if (val->size == 1) {
+    emit_tac(chunk, OP_STORE, dst, OP_LOC(*val), OP_OFFSET(0), line);
+    return dst;
+  }
+
+  Location_ tmp = tac_alloc_ptr(chunk);
+  emit_tac(chunk, OP_LOADA, tmp, OP_LOC(*val), EMPTY_OPERAND, line);
+  emit_tac(chunk, OP_MOVEN, dst, OP_LOC(tmp), OP_SIZE(sym->field.sem_type.size), line);
+
+  return dst;
+}
+
 static Location_ dot_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
-  code_gen(chunk, (AstNode_*)expr->prefix);
+  Location_ cls_loc = code_gen(chunk, (AstNode_*)expr->prefix);
 
-  return EMPTY_LOC;
+  if (expr->base.top_sem_type.kind == KIND_REF) {
+    return class_find_member_as_ptr(chunk, &cls_loc, expr->cls_sym, &expr->id, node->line);
+  } else {
+    return class_find_member_as_val(chunk, &cls_loc, expr->cls_sym, &expr->id, node->line);
+  }
 }
 
 static Location_ class_default_constructor_code_gen(TacChunk_* chunk, Symbol_* cls_sym, int line) {
-  return EMPTY_LOC;
-}
+  //Location_ dst = tac_alloc(chunk);
 
-static Location_ ast_class_constructor_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstConstructor_* constructor = (AstConstructor_*)node;
+  for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
+    Symbol_* member = list_val(member_node, Symbol_*);
+    FieldSymbol_* field = &member->field;
 
-  SemanticType_* type = &constructor->base.sem_type;
-  if (type->name.start) {
-    Symbol_* cls_sym = scope_find(node->scope, &type->name);
-    AstListNode_* current_field_node = constructor->fields.head;
-    for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
-      Symbol_* member = list_val(member_node, Symbol_*);
-      FieldSymbol_* field = &member->field;
-      bool found_value = false;
-
-      for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
-        AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
-        if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
-          code_gen(chunk, field_node->node);
-          found_value = true;
-          current_field_node = field_node->next;
-          break;
-        }
-      }
-
-      if (!found_value) {
-
-        // TODO: eventually remove this if-statement. This should be better automated. 
-        if (field->sem_type.val == VAL_CLASS) {
-          class_default_constructor_code_gen(chunk, field->sem_type.sym, node->line);
-        } else {
-          //emit_constant(chunk, field->val, node->line);
-        }
-      }
-    }
-  } else {
-    for (AstListNode_* field_node = constructor->fields.head; field_node != NULL; field_node = field_node->next) {
-      AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
-      code_gen(chunk, field_node->node);
+    // TODO: eventually remove this if-statement. This should be better automated. 
+    if (field->sem_type.val == VAL_CLASS) {
+      class_default_constructor_code_gen(chunk, field->sem_type.sym, line);
+    } else {
+      //emit_constant(chunk, field->src, line);
     }
   }
   return EMPTY_LOC;
 }
 
-static Location_ ast_class_constructor_field_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstConstructorField_* field = (AstConstructorField_*)node;
-  code_gen(chunk, (AstNode_*)field->expr);
-  return EMPTY_LOC;
+static void emit_construct_default_class(TacChunk_* chunk, const Symbol_* cls_sym, const Location_* dst, int line);
+
+static void class_init_member(TacChunk_* chunk, const Location_* cls_loc, const Location_* field_ptr, const Symbol_* cls_sym, const Symbol_* field_sym, int line) {
+  const FieldSymbol_* field = &field_sym->field;
+  if (field->sem_type.kind == KIND_VAR) {
+    Location_ tmp = tac_alloc_var(chunk);
+    emit_make_ref(chunk, &tmp, field->sem_type.size, line);
+    class_set_member(chunk, &tmp, cls_loc, cls_sym, &field->name, line);
+  }
+
+  if (field->sem_type.val == VAL_CLASS) {
+    emit_construct_default_class(chunk, field->sem_type.sym, field_ptr, line);
+  } else {
+    assertf(field->sem_type.size == 1, "");
+    Location_ tmp = tac_alloc(chunk, field->sem_type.size);
+    emit_tac(chunk, OP_NIL, tmp, EMPTY_OPERAND, EMPTY_OPERAND, line);
+    emit_set_variable(chunk, field_ptr, &tmp, field->sem_type.size, line);
+  }
+}
+
+static void class_init_member_to(TacChunk_* chunk, const Location_* cls_loc, const Location_* field_ptr, const Location_* val, const Symbol_* cls_sym, const Symbol_* field_sym, int line) {
+  const FieldSymbol_* field = &field_sym->field;
+  if (field->sem_type.kind == KIND_VAR) {
+    Location_ tmp = tac_alloc_var(chunk);
+    emit_make_ref(chunk, &tmp, field->sem_type.size, line);
+    class_set_member(chunk, &tmp, cls_loc, cls_sym, &field->name, line);
+  }
+
+  emit_set_variable(chunk, field_ptr, val, field->sem_type.size, line);
+}
+
+static void emit_construct_default_class(TacChunk_* chunk, const Symbol_* cls_sym, const Location_* dst, int line) {
+  const SemanticType_* type = &cls_sym->cls.self_type;
+  ListNode_* current_member_node = cls_sym->cls.members.head;
+
+  Location_ dst_ptr;
+  if (dst->type == LOCATION_TYPE_PTR) {
+    dst_ptr = *dst;
+  } else if (dst->type == LOCATION_TYPE_VAL) {
+    dst_ptr = tac_alloc_ptr(chunk);
+    emit_tac(chunk, OP_LOADA, dst_ptr, OP_LOC(*dst), EMPTY_OPERAND, line);
+  } else if (dst->type == LOCATION_TYPE_VAR) {
+    dst_ptr = tac_alloc_var(chunk);
+    emit_tac(chunk, OP_RLOADA, dst_ptr, OP_LOC(*dst), EMPTY_OPERAND, line);
+  }
+
+  for (current_member_node = cls_sym->cls.members.head; current_member_node != NULL; current_member_node = current_member_node->next) {
+    Symbol_* field = list_val(current_member_node, Symbol_*);
+    FieldSymbol_* field_sym = &field->field;
+    Location_ field_ptr = class_find_member_as_ptr(chunk, &dst_ptr, cls_sym, &field->name, line);
+    class_init_member(chunk, dst, &field_ptr, cls_sym, field, line);
+  }
+}
+
+static Location_ class_constructor_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstClassConstructor_* constructor = (AstClassConstructor_*)node;
+  SemanticType_* type = &constructor->base.sem_type;
+
+  Location_ dst = tac_alloc(chunk, type->size);
+  if (type->name.start) {
+    Symbol_* cls_sym = scope_find(node->scope, &type->name);
+
+    AstListNode_* current_param_node;
+    ListNode_* current_member_node = cls_sym->cls.members.head;
+
+    // The syntax is that all named constructor paramters must be at the end.
+    // So first, generate code for all the unnamed parameters.
+    for (current_param_node = constructor->params.head; current_param_node != NULL; current_param_node = current_param_node->next) {
+      AstClassConstructorParam_* constructor_field = AST_CAST(AstClassConstructorParam_, current_param_node->node);
+      if (constructor_field->name.start) {
+        break;
+      }
+
+      Symbol_* member = list_val(current_member_node, Symbol_*);
+      Location_ field_ptr = class_find_member_as_ptr(chunk, &dst, cls_sym, &member->name, node->line);
+      Location_ tmp = code_gen(chunk, current_param_node->node);
+      class_init_member_to(chunk, &dst, &field_ptr, &tmp, cls_sym, member, node->line);
+
+      current_member_node = current_member_node->next;
+    }
+
+    // If the unnamed parameters iterator is at the end, that means there are
+    // no named parameters.
+    if (!current_member_node) {
+      return dst;
+    }
+
+    // There are named parameters, so loop through the rest of the class
+    // members we haven't seen yet to try and find matches.
+    for (current_member_node = cls_sym->cls.members.head;
+         current_member_node != NULL;
+         current_member_node = current_member_node->next) {
+      Symbol_* member = list_val(current_member_node, Symbol_*);
+      FieldSymbol_* field = &member->field;
+
+      bool found = false;
+      for (AstListNode_* param_node = current_param_node; param_node != NULL; param_node = param_node->next) {
+        AstClassConstructorParam_* constructor_param = AST_CAST(AstClassConstructorParam_, current_param_node->node);
+        if (token_eq(constructor_param->name, member->name)) {
+          Symbol_* member = list_val(current_member_node, Symbol_*);
+          Location_ field_ptr = class_find_member_as_ptr(chunk, &dst, cls_sym, &member->name, node->line);
+          Location_ tmp = code_gen(chunk, current_param_node->node);
+          class_set_member(chunk, &tmp, &dst, cls_sym, &member->field.name, node->line);
+          class_init_member_to(chunk, &dst, &field_ptr, &tmp, cls_sym, member, node->line);
+          found = true;
+          break;
+        }
+      }
+
+      // It could be that the user did not write an initializer for the
+      // parameter. In this case, create the default value.
+      if (!found) {
+        FieldSymbol_* field = &list_val(current_member_node, Symbol_*)->field;
+        Location_ field_ptr = class_find_member_as_ptr(chunk, &dst, cls_sym, &field->name, node->line);
+        class_init_member(chunk, &dst, &field_ptr, cls_sym, member, node->line);
+      }
+    }
+  }
+
+  return dst;
+}
+
+static Location_ class_constructor_field_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstClassConstructorParam_* field = (AstClassConstructorParam_*)node;
+  return code_gen(chunk, (AstNode_*)field->expr);
 }
 
 static CodeGenRule_ code_gen_rules[] = {
@@ -663,8 +1203,8 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstTmpDecl_)] = {tmp_decl_code_gen},
   [AST_CLS(AstClassDef_)] = {noop_code_gen},
   [AST_CLS(AstClassMemberDecl_)] = {noop_code_gen},
-  [AST_CLS(AstConstructor_)] = {ast_class_constructor_code_gen},
-  [AST_CLS(AstConstructorField_)] = {ast_class_constructor_field_code_gen},
+  [AST_CLS(AstClassConstructor_)] = {class_constructor_code_gen},
+  [AST_CLS(AstClassConstructorParam_)] = {class_constructor_field_code_gen},
   [AST_CLS(AstDotExpr_)] = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)] = {noop_code_gen},
 };
@@ -1014,7 +1554,7 @@ static void return_code_gen(Chunk_* chunk, AstNode_* node) {
 }
 
 static void patch_jmp(Chunk_* chunk, int offset) {
-  // -2 to adjust for the bytecode for the jump offset itself.
+  // -2 to adjust for the bytecode for the jump frame_offset itself.
   int jump = chunk->count - offset - 2;
   //assertf(jump > UINT16_MAX, "Too much code to jump over.");
 
@@ -1478,20 +2018,20 @@ static void class_default_constructor_code_gen(Chunk_* chunk, Symbol_* cls_sym, 
   }
 }
 
-static void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstConstructor_* constructor = (AstConstructor_*)node;
+static void class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstClassConstructor_* constructor = (AstClassConstructor_*)node;
 
   SemanticType_* type = &constructor->base.sem_type;
   if (type->name.start) {
     Symbol_* cls_sym = scope_find(node->scope, &type->name);
-    AstListNode_* current_field_node = constructor->fields.head;
+    AstListNode_* current_field_node = constructor->params.head;
     for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
       Symbol_* member = list_val(member_node, Symbol_*);
       FieldSymbol_* field = &member->field;
       bool found_value = false;
 
       for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
-        AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+        AstClassConstructorParam_* constructor_field = AST_CAST(AstClassConstructorParam_, field_node->node);
         if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
           code_gen(chunk, field_node->node);
           found_value = true;
@@ -1511,15 +2051,15 @@ static void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
       }
     }
   } else {
-    for (AstListNode_* field_node = constructor->fields.head; field_node != NULL; field_node = field_node->next) {
-      AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+    for (AstListNode_* field_node = constructor->params.head; field_node != NULL; field_node = field_node->next) {
+      AstClassConstructorParam_* constructor_field = AST_CAST(AstClassConstructorParam_, field_node->node);
       code_gen(chunk, field_node->node);
     }
   }
 }
 
-static void ast_class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstConstructorField_* field = (AstConstructorField_*)node;
+static void class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstClassConstructorParam_* field = (AstClassConstructorParam_*)node;
   code_gen(chunk, (AstNode_*)field->expr);
 }
 
@@ -1553,8 +2093,8 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstTmpDecl_)]                = {tmp_decl_code_gen},
   [AST_CLS(AstClassDef_)]               = {noop_code_gen},
   [AST_CLS(AstClassMemberDecl_)]        = {noop_code_gen},
-  [AST_CLS(AstConstructor_)]            = {ast_class_constructor_code_gen},
-  [AST_CLS(AstConstructorField_)]       = {ast_class_constructor_field_code_gen},
+  [AST_CLS(AstClassConstructor_)]            = {class_constructor_code_gen},
+  [AST_CLS(AstClassConstructorParam_)]       = {class_constructor_field_code_gen},
   [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)]               = {noop_code_gen},
 };

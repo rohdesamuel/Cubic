@@ -13,10 +13,10 @@ typedef struct Parser_ {
   bool had_error;
   bool panic_mode;
 
-  PageAllocator_ allocator;
+  MemoryAllocator_* allocator;
 } Parser_;
 
-void parser_init(Parser_* parser);
+void parser_init(Parser_* parser, MemoryAllocator_* allocator);
 void parser_clear(Parser_* parser);
 AstNode_* parse(Parser_* parser, Scanner_* scanner, struct Scope_* scope, const char* source);
 

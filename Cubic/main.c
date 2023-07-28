@@ -11,6 +11,8 @@
 #include <string.h>
 
 /*
+* class Bar c: int, d: int end; class Foo a: int, b: Bar end; val foo := Foo{1, Bar{2, 3}}; val a := foo.b.d; print(a)
+* 
 const char* code = R"
 
 [pval | mut | ref | ptr] name : type = expression
@@ -206,7 +208,7 @@ int main(int argc, const char* argv[]) {
   VM_ vm;
   vm_init(&vm);
   
-  //const char* filename = "D:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\vars.cub";
+  //const char* filename = "D:\\Users\\rohde\\source\\repos\\Cubic\\x64\\Debug\\classes.cub";
   //run_file(&vm, filename);
 
   if (argc == 1) {

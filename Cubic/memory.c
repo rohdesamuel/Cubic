@@ -24,6 +24,28 @@ void* reallocate(void* pointer, size_t old_size, size_t new_size) {
   return result;
 }
 
+void array_init(Array_* array, struct MemoryAllocator_* allocator, size_t elm_size) {
+  *array = (Array_){ 0 };
+  array->elm_size = elm_size;
+}
+
+void* array_grow(Array_* array) {
+  int new_capacity = (array->capacity) < 8 ? 8 : (array->capacity) * 2;
+  if (new_capacity == 0) {
+    free(array->data);
+    return NULL;
+  }
+
+  void* result = realloc(array->data, array->elm_size * new_capacity);
+  if (result == NULL) exit(1);
+
+  return result;
+}
+
+void array_free(Array_* array) {
+  free(array->data);
+}
+
 #if 0
 struct MemoryPoolAllocator {
   // https://github.com/Isty001/mem-pool

@@ -1,5 +1,16 @@
 ##########
 
+class Vec2
+  x: double
+  y: double
+end
+
+class Vec3
+  val x: double
+  val y: double
+  val z: double
+end
+
 class InnerA
   a : int
   b : int
@@ -73,7 +84,7 @@ do
   a.a = 2
   assert a.a == 2
 
-  ref b := &a.a
+  var b := a.a
   b = 3
   assert a.a == 3
 end
@@ -194,14 +205,23 @@ do
   assert a.d == 2.0
 end
 
-/#
-
 ##########
 
-class Tree
-  left : Tree*
-  right : Tree*
+class ClassWithMethods
+  n: int
 end
 
+function ClassWithMethods.inc(self) -> int
+  self.n += 1
+  return self.n
+end
 
-#/
+function ClassWithMethods.static() -> int
+  return 20
+end
+
+do
+  val a := ClassWithMethods{9}
+  assert a.inc() == 10
+  assert a.static() == 20
+end

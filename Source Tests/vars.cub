@@ -1,22 +1,30 @@
-# do
-#   var a := 0
-#   assert a == 0
-# 
-#   a = 1
-#   assert a == 1
-# end
-# 
-# do
-#   var a := 0
-#   ref b := &a
-# 
-#   b = 1
-#   assert a == 1
-# end
+do
+  val a := 0
+  assert a == 0
+
+  a = 1
+  assert a == 1
+end
+
+do
+  var a := 0
+  assert a == 0
+
+  a = 1
+  assert a == 1
+end
+
+do
+  var a := 0
+  var b := a
+
+  b = 1
+  assert a == 1
+end
 
 class Foo
-  a : int
-  b : int
+  val a : int
+  var b : int
 end
 
 do
@@ -27,10 +35,10 @@ do
   assert b.b == 2
 end
 
-# do
-#   val a := Foo{a=1, b=2}
-#   var b := a
-# 
-#   assert b.a == 1
-#   assert b.b == 2
-# end
+do
+  val a := Foo{a=1, b=2}
+  var b := a
+
+  assert b.a == 1
+  assert b.b == 2
+end

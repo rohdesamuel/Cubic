@@ -76,10 +76,10 @@ bool semantictype_iscoercible(SemanticType_ from, SemanticType_ to) {
       from.val >= VAL_UINT8 && from.val <= VAL_UINT32));
 }
 
-Symbol_* symbol_findmember(Symbol_* cls, Token_ name) {
+Symbol_* symbol_findmember(const Symbol_* cls, Token_ name) {
   for (ListNode_* n = cls->cls.members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
-    Token_ field_name = field->field.sem_type.name;
+    Token_ field_name = field->field.name;
     if (field_name.length == name.length && memcmp(field_name.start, name.start, field_name.length) == 0) {
       return field;
     }
@@ -88,7 +88,7 @@ Symbol_* symbol_findmember(Symbol_* cls, Token_ name) {
   return NULL;
 }
 
-int symbol_findmember_index(Symbol_* cls, Token_ name) {
+int symbol_findmember_index(const Symbol_* cls, Token_ name) {
   int index = 0;
   for (ListNode_* n = cls->cls.members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
@@ -101,7 +101,7 @@ int symbol_findmember_index(Symbol_* cls, Token_ name) {
   return index;
 }
 
-size_t symbol_findmember_offset(Symbol_* cls, Token_ name) {
+size_t symbol_findmember_offset(const Symbol_* cls, Token_ name) {
   for (ListNode_* n = cls->cls.members.head; n != NULL; n = n->next) {
     Symbol_* field = list_val(n, Symbol_*);
     if (token_eq(field->name, name)) {
@@ -137,7 +137,7 @@ static bool semantictype_hascycle_recur(const Symbol_* symbol, Hashmap* seen) {
 }
 
 bool semantictype_hascycle(const SemanticType_* type) {
-  if (type->val != VAL_CLASS) {
+  if (true || type->val != VAL_CLASS) {
     return false;
   }
 
@@ -153,7 +153,7 @@ static size_t semantictype_size_recur(SemanticType_* type) {
     return type->size;
   }
 
-  ClassSymbol_* sym = &type->sym->cls;
+  ClassSymbol_* sym = &type->sym->cls;  
 
   size_t ret = 0;
   for (ListNode_* n = sym->members.head; n != NULL; n = n->next) {
@@ -167,7 +167,7 @@ static size_t semantictype_size_recur(SemanticType_* type) {
 
 size_t semantictype_size(SemanticType_* type) {
   if (type->val != VAL_CLASS) {
-    return 1;
+    type->size = 1;
   }
 
   if (type->size <= 0) {

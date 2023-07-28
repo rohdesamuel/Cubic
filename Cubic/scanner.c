@@ -387,7 +387,7 @@ static TokenType identifier_type(Scanner scanner) {
     {
       if (length > 1) {
         switch (scanner->start[1]) {
-          case 'f': return TK_IF;
+          case 'f': return check_keyword(scanner, 1, 1, "f", TK_IF);
           case 'n':
           {
             if (length == 2) {
@@ -419,7 +419,13 @@ static TokenType identifier_type(Scanner scanner) {
       break;
 
     // or
-    case 'o': return check_keyword(scanner, 1, 1, "r", TK_OR);
+    case 'o':
+      if (length > 1) {
+        switch (scanner->start[1]) {
+          case 'r': return check_keyword(scanner, 1, 1, "r", TK_OR);
+          case 'u': return check_keyword(scanner, 1, 2, "ut", TK_OUT);
+        }        
+      }
 
     // pass
     case 'p':

@@ -7,7 +7,7 @@
 typedef struct Analyzer_ {
   struct Ast_* ast;
 
-  struct PageAllocator_ allocator;
+  MemoryAllocator_* allocator;
   struct Scope_* scope;
   struct Frame_* frame;
 
@@ -15,7 +15,7 @@ typedef struct Analyzer_ {
   bool panic_mode;
 } Analyzer_;
 
-void analyzer_init(Analyzer_* analyzer);
+void analyzer_init(Analyzer_* analyzer, MemoryAllocator_* allocator);
 void analyze(Analyzer_* analyzer, struct AstProgram_* ast);
 void analyzer_clear(Analyzer_* analyzer);
 

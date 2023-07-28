@@ -1,4 +1,145 @@
-/##################
+###########################
+
+# Final decisions.
+# A value or "val" declares a variable on the stack with local storage.
+val a: int
+val a: Foo
+
+# A reference or "var" declares a variable on the heap with automatic storage.
+var a: int = 0
+var a: Foo = 0
+
+# A reference can be initialized to copy a value or alias another reference.
+# Trying to alias a value will copy the value.
+val a: int
+var b: int
+var c: int = a  # Copies the value of 'a' into a new heap allocation
+var d: int = b  # Aliases 'b', increments the reference count.
+
+# A reference can be constructed with a different allocator using the "with" keyword.
+val a: int = 0 with my_custom_allocator
+
+# A value can also be a pointer. This is a manually managed piece of memory.
+# The use of pointers must be within an "unsafe" block.
+unsafe
+  # This creates a new pointer to an int.
+  val a: *int = new int{1}
+  
+  # This deletes the pointer.
+  del a
+
+  # This creates a new pointer to an int with a custom allocator.
+  val a: *int = new int{1} with alloc
+  del a with alloc
+
+  # This creates a pointer to a variable.
+  val b: int
+  val a: *int = &a
+
+  # Pointer arithmetic is allowed. This increments the address.
+  a += 1
+
+  # This increments the value.
+  *a += 1
+
+  # A "Block" is a C-style array.
+  # This creates a 
+  val block: Block = new Block[256]
+  val block: Block = new Block[256]
+end
+
+
+###########################
+Requirements:
+  - Able to pass in values
+  - Able to pass in reference-counted variables
+  - Able to pass in values by reference
+
+# Copy everything?
+# Pros:
+#  - simple
+# Cons:
+#  - performance loss when passing in large value
+function foo(a: int)
+end
+
+# Keywords
+# Pros:
+#  - self-documenting
+#  - allows for passing large values
+# Cons:
+#  - harder to learn
+#  - needs a specific keyword for every situation
+function foo(a: int, in a: int, out a: int, in var a: int)
+end
+
+# Shadow initialization
+# Pros:
+#  - no need to learn new keywords
+# Cons:
+#  - Non-intuitive: passing a value into a var creates a new reference
+#  - verbose
+function foo(val a: int, var b: int)
+  a = b
+  b = 10
+end
+
+# Hybrid?
+function foo(a: int, var b: int)
+end
+
+# Compiler magic?
+# Pros:
+#  - simple
+#  - no new keywords
+# Cons:
+#  - how to implement?
+#  - function code doesn't know if argument is mutable or not
+#  - code gen bloat
+function foo(a: int, in b: int /*const&*/, out c: int /*&*/)
+  # Is "a" a var? Will this mutate the value?
+  a = 1
+end
+
+function add(a: vec2, b: vec2) -> vec2
+  return vec2{a.x + b.x, a.y + b.y}
+end
+
+function add(in a: vec2, in b: vec2) -> vec2
+  return vec2{a.x + b.x, a.y + b.y}
+end
+
+function add(in a: vec2, out b: vec2)
+  b.x += a.x
+  b.y += a.y
+end
+
+# Function parameters can either be a "val" or "var". A "var" being passed into
+# a "val" will copy the referenced value. A "val" being passed into a "var"
+# creates a new reference.
+function foo(val a: int, var b: int)
+  a = b
+  b = 10
+end
+
+# A function can return a reference denoted by the "var" before the return
+# type.
+function bar(a: int) -> var int
+end
+
+class ListNode
+  var next: ListNode?
+  val n: int
+end
+
+class LinkedList
+  var head: ListNode
+end
+
+function LinkedList.append(n: int)
+  var head := ListNode{n: n}
+  self.head = head
+end
 
 ###################
 # USE CASE 1

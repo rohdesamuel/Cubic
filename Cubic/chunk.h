@@ -5,16 +5,20 @@
 #include "value.h"
 
 #define OPCODE_LIST(OPCODE) \
-    OPCODE(OP_NOP)  \
+    OPCODE(OP_NOP) \
     OPCODE(OP_NIL)  \
     OPCODE(OP_TRUE)  \
     OPCODE(OP_FALSE)  \
-    OPCODE(OP_LOAD)  \
-    OPCODE(OP_STORE)  \
-    OPCODE(OP_MOVE)  \
-    OPCODE(OP_MOVEA)  \
-    OPCODE(OP_MOVED)  \
+    OPCODE(OP_MOVE)   /* val <- val */                        \
+    OPCODE(OP_MOVEN)  /* &val[0..n-1] <- &val[0..n-1] */       \
+    OPCODE(OP_LOAD)   /* val <- *(val + frame_offset) */       \
+    OPCODE(OP_LOADA)  /* val <- &val + frame_offset */        \
+    OPCODE(OP_STORE)  /* *(val + frame_offset) <- val */      \
+    OPCODE(OP_RLOAD)  /* val <- *(ref.ptr + frame_offset) */  \
+    OPCODE(OP_RLOADA) /* val <- ret.ptr + frame_offset */    \
+    OPCODE(OP_RSTORE) /* *(ref.ptr + frame_offset) <- val */ \
     OPCODE(OP_CONSTANT)  \
+\
     OPCODE(OP_CONSTANT_LONG)  \
     OPCODE(OP_OBJ_EQ)  \
     OPCODE(OP_EQ)  \
@@ -80,6 +84,9 @@
     OPCODE(OP_DEC_REF)  \
     OPCODE(OP_PRINT)  \
     OPCODE(OP_ASSERT)  \
+    OPCODE(OP_BEGIN_SCOPE)  \
+    OPCODE(OP_END_SCOPE)  \
+    OPCODE(OP_MEMSET)  \
     OPCODE(__OP_CODE_COUNT_)
 
 #define GENERATE_ENUM(ENUM) ENUM,
@@ -103,7 +110,6 @@ typedef struct Chunk_ {
 
   ValueArray_ constants;
   int* lines;
-
 } Chunk_, *Chunk;
 
 void chunk_init(Chunk chunk);

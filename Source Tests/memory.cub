@@ -1,6 +1,40 @@
+
+# "val" declares a value on the stack with local storage.
 do
-  ref a := int{1234}
+  val a: int = 0
+  assert a == 0
+end
+
+# "var" declares a variable on the heap with automatic storage.
+do
+  var a: int = 0
+  assert a == 0
+end
+
+# Variables can either be initialized with values or other variables. When
+# initialized with a var, will alias the given var.
+do
+  val a: int = 0
+  var b: int = 1
+  var c: int = a  # Copies the value of 'a' into a new heap allocation
+  var d: int = b  # Aliases 'b'
+
+  # Changing the value it was initialized from, does not change the reference.
+  a = 10
+
+  # Changing the reference it aliases does change the reference.
+  b = 20
+  assert c == 0
+  assert d == 20
+end
+
+
+do
+  var a := int{1234}
   assert a == 1234
+
+  var b: int = 5678
+  assert b == 5678
 end
 
 class Vec3
@@ -10,7 +44,7 @@ class Vec3
 end
 
 do
-  ref a := Vec3{1, 2, 3}
+  var a := Vec3{1, 2, 3}
   assert a.x == 1
   assert a.y == 2
   assert a.z == 3
@@ -18,7 +52,7 @@ end
 
 /#
 do
-  ref a := new int{1234}
+  var a := new int{1234}
   assert a == 1234
 end
 

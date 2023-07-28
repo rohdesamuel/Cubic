@@ -1,47 +1,47 @@
 do
   val a := 100
-  ref b := &a
+  var b := a
 
   assert a == 100
   assert b == 100
 
-  b = 200
+  a = 200
 
   assert a == 200
-  assert b == 200
+  assert b == 100
 end
 
 do
   val a : int = 100
-  ref b : int = &a
+  var b : int = a
 
   assert a == 100
   assert b == 100
 
   b = 200
 
-  assert a == 200
+  assert a == 100
   assert b == 200
 end
 
 do
   val a := 'hello'
-  ref b := &a
+  var b := a
 
   assert a == 'hello'
   assert b == 'hello'
 
   b = 'world'
 
-  assert a == 'world'
+  assert a == 'hello'
   assert b == 'world'
 end
- 
+
 # Duplicate references.
 do
   val a := 100
-  ref b := &a
-  ref c := b
+  var b := a
+  var c := b
 
   assert a == 100
   assert b == 100
@@ -49,45 +49,18 @@ do
 
   c = 200
 
-  assert a == 200
-  assert b == 200
-  assert c == 200
-end
-
-do
-  val a : int = 100
-  ref b : int = &a
-  ref c : int = b
-
   assert a == 100
-  assert b == 100
-  assert c == 100
-
-  c = 200
-
-  assert a == 200
   assert b == 200
   assert c == 200
 end
 
 do
   val a := 1
-  function foo(ref x : int)
+  function foo(out x : int)
     x = 100
   end
 
   assert a == 1
   foo(&a)
   assert a == 100
-end
-
-do
-  val a := 1
-  function foo(ref x : int) -> ref int
-    return x
-  end
-
-  val b := foo(&a)
-  b = 2
-  assert a == 2
 end

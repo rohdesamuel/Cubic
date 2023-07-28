@@ -22,6 +22,19 @@ void* reallocate(void* pointer, size_t old_size, size_t new_size);
 void* alloc_(struct MemoryAllocator_* allocator, size_t size);
 void dealloc_(struct MemoryAllocator_* allocator, void* ptr);
 
+#define ARRAY_GROW(arr, ty) (ty*)array_grow(arr)
+#define ARRAY_FREE(arr) array_free(arr)
+
+typedef struct Array_ {
+  int count;
+  int capacity;
+  size_t elm_size;
+  uint8_t* data;
+} Array_;
+
+void array_init(Array_* array, struct MemoryAllocator_* allocator, size_t elm_size);
+void* array_grow(Array_* array);
+
 typedef struct ListNode_ {
   struct ListNode_* next;
   void* data;
@@ -105,7 +118,7 @@ MemoryAllocator memallocator_default();
 // Creates a linear allocator.
 // 
 // Description: A linear allocator is a simple stack allocator. The memory is
-//              pre-allocated and an offset is moved based on how much memory
+//              pre-allocated and an frame_offset is moved based on how much memory
 //              is `alloc`ed. Memory cannot be deallocated. 
 // 
 // Behavior:
@@ -113,7 +126,7 @@ MemoryAllocator memallocator_default();
 //                  if size + total allocated is greater than max size.
 //   - deallocate(ptr): noop
 //   - flush(frame): noop
-//   - clear(): resets offset to zero.
+//   - clear(): resets frame_offset to zero.
 void linearallocator_init(LinearAllocator_* allocator, size_t max_size);
 void linearallocator_deinit(LinearAllocator_* allocator);
 
@@ -146,7 +159,7 @@ void pageallocator_deinit(PageAllocator_* allocator);
 //                   is at the top of the stack. The stack becomes corrupted if
 //                   trying to deallocate a pointer not at the top.
 //   - flush(frame): noop
-//   - clear(): resets offset to zero.
+//   - clear(): resets frame_offset to zero.
 // MemoryAllocator memallocator_stack(size_t max_size);
 
 // Creates a object pool allocator.

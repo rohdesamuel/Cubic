@@ -20,7 +20,7 @@ Statement ::= ';'
     | AssertStmt
     | ExpressionStmt
 
-DeclarationStmt ::= LetDecl | RefDecl
+DeclarationStmt ::= ValDecl | RefDecl
 BlockStmt ::= 'do' Block 'end'
 IfStmt ::= 'if' Expr 'then' Block {'elif' Expr 'then' Block} ['else' Block] 'end'
 ForStmt ::= 'for' Id 'in' Expr {'and' Expr} ['step' Expr] 'do' Block 'end'
@@ -43,8 +43,8 @@ FunctionCallArgs ::= '(' FunctionCallArg* ')'
 FunctionCallArg ::= Expr
 
 // Defining a function
-FunctionDef ::= 'function' [Id] FunctionBody 'end'
-FunctionParam ::= ['ref'] (Id | UnionType | Id ':' UnionType)
+FunctionDef ::= 'function' [Id '.'] [Id] FunctionBody 'end'
+FunctionParam ::= [('in' | 'out')] (Id | UnionType | Id ':' UnionType)
 FunctionParamList ::= FunctionParam {',' FunctionParam}
 FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 
@@ -54,8 +54,8 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 
 VarDecl ::= IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 ValDecl ::= 'val' VarDecl
-RefDecl ::= 'ref' VarDecl
-ClassDef ::= 'struct' {ClassMemberDecl} 'end'
+RefDecl ::= 'var' VarDecl
+ClassDef ::= 'class' {ClassMemberDecl} 'end'
 ClassMemberDecl ::= [pub] [(owns | shares)] IdList ':' UnionType ['=' ExprList]
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -70,7 +70,8 @@ ExprList ::= Expr {',' Expr}
 ///////////////////////////////////////////////////////////////////////////////
 // Typing Information
 ///////////////////////////////////////////////////////////////////////////////
-Type ::= ['ref'] (Id | PrimitiveType | CompositeType | FunctionType | 'nil') [ArrayFieldList]
+AddressableType ::= Id | PrimitiveType | CompositeType
+Type ::= ['ref'] (AddressableType ['*'] | FunctionType | 'nil') [ArrayFieldList]
 UnionType ::= Type {'|' Type}
 
 ArrayFieldDecl ::= '[' [(Number | '..')] ']'
@@ -99,9 +100,11 @@ MapValue ::= '{' [FieldList] '}'
 SetValue ::= '{' [ExprList] '}'
 
 // TODO: Make the Id optional and add type inference for this case.
-ClassConstructor ::= Id '{' [ClassConstructorParamList] '}'
-ClassConstructorParam ::= [Id '='] Expr
+ClassConstructor ::= Id '{' [ClassConstructorParamList] [',' ClassConstructorNamedParamList] '}'
+ClassConstructorParam ::= Expr
+ClassConstructorNamedParam ::= Id '=' Expr
 ClassConstructorParamList ::= ClassConstructorParam {',' ClassConstructorParam} [',']
+ClassConstructorNamedParamList ::= ClassConstructorNamedParam {',' ClassConstructorNamedParam} [',']
 
 ///////////////////////////////////////////////////////////////////////////////
 // Expressions

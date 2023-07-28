@@ -34,25 +34,30 @@ static void code_gen(Chunk_* chunk, AstNode_* node) {
   get_rule(node->cls)->code_gen(chunk, node);
 }
 
-static void compiler_init(Compiler_* compiler) {
+static void compiler_init(Compiler_* compiler, MemoryAllocator_* allocator) {
   compiler->locals_count = 0;
   compiler->locals_capacity = UINT8_MAX + 1;
   compiler->scope_depth = 0;
+  compiler->allocator = allocator;
   current_compiler = compiler;
 }
 
+static void compiler_clear(Compiler_* compiler) {}
+
 bool compile(const char* source, Chunk_* chunk) {
+  PageAllocator_ allocator;
   Parser_ parser;
   Scanner_ scanner;
   TacCompiler_ tac_compiler;
   Compiler_ compiler;
   Analyzer_ analyzer;
-  
+  pageallocator_init(&allocator, 1ull << 12);
+
   scanner_init(&scanner, source);
-  parser_init(&parser);
-  analyzer_init(&analyzer);
-  tac_compiler_init(&tac_compiler);
-  compiler_init(&compiler);
+  parser_init(&parser, (MemoryAllocator_*)&allocator);
+  analyzer_init(&analyzer, (MemoryAllocator_*)&allocator);
+  tac_compiler_init(&tac_compiler, (MemoryAllocator_*)&allocator);
+  compiler_init(&compiler, (MemoryAllocator_*)&allocator);
 
   AstNode_* root = parse(&parser, &scanner, analyzer.scope, source);
 
@@ -66,9 +71,13 @@ bool compile(const char* source, Chunk_* chunk) {
   }
   
   end_compiler(&parser, chunk);
+
+  compiler_clear(&compiler);
   tac_compiler_clear(&tac_compiler);
   analyzer_clear(&analyzer);
   parser_clear(&parser);
+
+  pageallocator_deinit(&allocator);
   return !parser.had_error && !analyzer.had_error;
 }
 
@@ -142,7 +151,7 @@ static void emit_return(Chunk_* chunk, int line) {
 
 static void emit_constant(Chunk_* chunk, Location_ loc, Value_ value, int line) {
   emit_byte(chunk, OP_CONSTANT, line);
-  emit_byte(chunk, loc.index, line);
+  emit_byte(chunk, loc.frame_offset, line);
   emit_byte(chunk, make_constant(chunk, value), line);
 }
 
@@ -170,7 +179,7 @@ void emit_class_get_field(Chunk_* chunk, int index, int field_index, ValueKind e
 
 static void print_gen(Chunk_* chunk, Tac_* tac) {
   emit_byte(chunk, OP_PRINT, tac->line);
-  emit_byte(chunk, tac->arg_l.loc.index, tac->line);
+  emit_byte(chunk, tac->arg_l.loc.frame_offset, tac->line);
   emit_long(chunk, type_toint(tac->arg_l.opt_type), tac->line);
 }
 
@@ -179,6 +188,24 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
     Tac_* tac = tac_chunk->code + i;
     int line = tac->line;
     switch (tac->op) {
+      case OP_NOP:
+        break;
+
+      case OP_NIL:
+        emit_byte(chunk, OP_NIL, tac->line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        break;
+
+      case OP_TRUE:
+        emit_byte(chunk, OP_TRUE, tac->line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        break;
+
+      case OP_FALSE:
+        emit_byte(chunk, OP_FALSE, tac->line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        break;
+
       case OP_CONSTANT:
         emit_constant(chunk, tac->dst, tac->arg_l.val, tac->line);
         break;
@@ -189,22 +216,70 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
 
       case OP_MOVE:
         emit_byte(chunk, OP_MOVE, line);
-        emit_byte(chunk, tac->dst.index, line);
-        emit_byte(chunk, tac->arg_l.loc.index, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_MOVEN:
+        emit_byte(chunk, OP_MOVEN, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, (uint8_t)tac->arg_r.size, line);
         break;
 
       case OP_LOAD:
-        //emit_byte(chunk, OP_LOAD, line);
-        //emit_byte(chunk, tac->dst, line);
-        //emit_byte(chunk, tac->arg_l, line);
-        //emit_byte(chunk, tac->arg_r, line);
+        emit_byte(chunk, OP_LOAD, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.offset, line);
+        break;
+
+      case OP_LOADA:
+        emit_byte(chunk, OP_LOADA, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.offset, line);
+        break;
+
+      case OP_STORE:
+        emit_byte(chunk, OP_STORE, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.offset, line);
+        break;
+
+      case OP_RLOAD:
+        emit_byte(chunk, OP_RLOAD, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.offset, line);
+        break;
+
+      case OP_RLOADA:
+        emit_byte(chunk, OP_RLOADA, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.offset, line);
+        break;
+
+      case OP_RSTORE:
+        emit_byte(chunk, OP_RSTORE, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.offset, line);
+        break;
+
+      case OP_MAKE_REF:
+        emit_byte(chunk, OP_MAKE_REF, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, (uint8_t)tac->arg_l.size, line);
         break;
 
       case OP_ADD:
         emit_byte(chunk, OP_ADD, line);
-        emit_byte(chunk, tac->dst.index, line);
-        emit_byte(chunk, tac->arg_l.loc.index, line);
-        emit_byte(chunk, tac->arg_r.loc.index, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_byte(chunk, tac->arg_r.loc.frame_offset, line);
         break;
     }
   }
@@ -511,7 +586,7 @@ static void return_code_gen(Chunk_* chunk, AstNode_* node) {
 }
 
 static void patch_jmp(Chunk_* chunk, int offset) {
-  // -2 to adjust for the bytecode for the jump offset itself.
+  // -2 to adjust for the bytecode for the jump frame_offset itself.
   int jump = chunk->count - offset - 2;
   //assertf(jump > UINT16_MAX, "Too much code to jump over.");
 
@@ -976,20 +1051,20 @@ void class_default_constructor_code_gen(Chunk_* chunk, Symbol_* cls_sym, int lin
   }
 }
 
-void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstConstructor_* constructor = (AstConstructor_*)node;
+void class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstClassConstructor_* constructor = (AstClassConstructor_*)node;
 
   SemanticType_* type = &constructor->base.sem_type;
   if (type->name.start) {
     Symbol_* cls_sym = scope_find(node->scope, &type->name);
-    AstListNode_* current_field_node = constructor->fields.head;
+    AstListNode_* current_field_node = constructor->params.head;
     for (ListNode_* member_node = cls_sym->cls.members.head; member_node != NULL; member_node = member_node->next) {
       Symbol_* member = list_val(member_node, Symbol_*);
       FieldSymbol_* field = &member->field;
       bool found_value = false;
 
       for (AstListNode_* field_node = current_field_node; field_node != NULL; field_node = field_node->next) {
-        AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+        AstClassConstructorParam_* constructor_field = AST_CAST(AstClassConstructorParam_, field_node->node);
         if (!constructor_field->name.start || token_eq(constructor_field->name, member->name)) {
           code_gen(chunk, field_node->node);
           found_value = true;
@@ -1009,15 +1084,15 @@ void ast_class_constructor_code_gen(Chunk_* chunk, AstNode_* node) {
       }
     }
   } else {
-    for (AstListNode_* field_node = constructor->fields.head; field_node != NULL; field_node = field_node->next) {
-      AstConstructorField_* constructor_field = AST_CAST(AstConstructorField_, field_node->node);
+    for (AstListNode_* field_node = constructor->params.head; field_node != NULL; field_node = field_node->next) {
+      AstClassConstructorParam_* constructor_field = AST_CAST(AstClassConstructorParam_, field_node->node);
       code_gen(chunk, field_node->node);
     }
   }
 }
 
-void ast_class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
-  AstConstructorField_* field = (AstConstructorField_*)node;
+void class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
+  AstClassConstructorParam_* field = (AstClassConstructorParam_*)node;
   code_gen(chunk, (AstNode_*)field->expr);
 }
 
@@ -1051,8 +1126,8 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstTmpDecl_)]                = {tmp_decl_code_gen},
   [AST_CLS(AstClassDef_)]               = {noop_code_gen},
   [AST_CLS(AstClassMemberDecl_)]        = {noop_code_gen},
-  [AST_CLS(AstConstructor_)]            = {ast_class_constructor_code_gen},
-  [AST_CLS(AstConstructorField_)]       = {ast_class_constructor_field_code_gen},
+  [AST_CLS(AstClassConstructor_)]       = {class_constructor_code_gen},
+  [AST_CLS(AstClassConstructorParam_)]  = {class_constructor_field_code_gen},
   [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)]               = {noop_code_gen},
 };

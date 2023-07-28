@@ -10,6 +10,7 @@ std::filesystem::path exedir = {};
 
 struct MyTestFixture {
   std::string current_dir;
+  std::shared_ptr<int> a;
 };
 
 UTEST_F_SETUP(MyTestFixture) {  

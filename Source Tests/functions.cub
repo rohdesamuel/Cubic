@@ -60,6 +60,28 @@ do
   end
 end
 
+function inc_with_in(in a: int)
+  return a + 1
+end
+
+do
+  val a := 0
+  a = inc_with_in(a)
+  assert a == 1
+end
+
+function inc_with_out(out a: int)
+  a = a + 1
+end
+
+do
+  val a := 0
+  a = inc_with_in(a)
+  assert a == 1
+end
+
+
+
 # do
 #   function bar(a: int) -> int
 #     return foo(a)

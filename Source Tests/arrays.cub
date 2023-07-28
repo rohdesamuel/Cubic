@@ -63,3 +63,6 @@ assert f == g
 val i: list[int] = f
 assert i == g
 assert g == i
+
+# val j: List[var List[int]]
+# val k: List[var int]
