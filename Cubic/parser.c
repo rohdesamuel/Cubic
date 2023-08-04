@@ -453,12 +453,14 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
     decl->sem_type.sym = field;
 
-    if (match(parser, scanner, TK_END)) {
+    if (check(parser, TK_END)) {
       break;
     }
 
     match(parser, scanner, TK_COMMA);
   }
+
+  consume(parser, scanner, TK_END, "Expected 'end' at the end of a class definition.");
 
   return (AstNode_*)def;
 }
@@ -711,10 +713,19 @@ static AstPrintStmt_* Print(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 }
 
 static AstNode_* Number(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  double value = strtod(parser->previous.start, NULL);
+  Token_ token = parser->previous;
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.sem_type = semantictype_tmp(VAL_DOUBLE);
-  expr->value = DOUBLE_VAL(value);  
+
+  if (token.start[token.length - 1] == 'f') {
+    float value = strtof(parser->previous.start, NULL);
+    expr->base.sem_type = semantictype_tmp(VAL_FLOAT);
+    expr->value = FLOAT_VAL(value);
+  } else {
+    double value = strtod(parser->previous.start, NULL);
+    expr->base.sem_type = semantictype_tmp(VAL_DOUBLE);
+    expr->value = DOUBLE_VAL(value);
+  }
+  
   return (AstNode_*)expr;
 }
 

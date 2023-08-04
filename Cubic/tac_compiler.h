@@ -13,8 +13,11 @@ typedef struct TacChunk_ {
   Tac_* code;
   int* lines;
 
+  int label_index;
   int slot_index;
   int slot_offset;
+
+  MemoryAllocator_* allocator;
 } TacChunk_;
 
 typedef struct TacCompiler_ {

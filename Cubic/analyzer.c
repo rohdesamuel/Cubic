@@ -216,16 +216,22 @@ void binary_analysis(AstNode_* n) {
       break;
 
     case TK_PLUS:
-    case TK_MINUS:
-    case TK_STAR:
-    case TK_SLASH:
       expr->base.sem_type = lsem_type;
       if (!semantictype_isanumber(expr->base.sem_type) && !semantictype_isastring(expr->base.sem_type)) {
         error(analyzer_, n, "expected the expression type to be a number or a string.");
       }
       break;
 
-    // case TK_DOUBLE_SLASH:
+    case TK_MINUS:
+    case TK_STAR:
+    case TK_SLASH:
+    case TK_DOUBLE_SLASH:
+      expr->base.sem_type = lsem_type;
+      if (!semantictype_isanumber(expr->base.sem_type)) {
+        error(analyzer_, n, "expected the expression type to be a number.");
+      }
+      break;
+
     case TK_PERCENT:
     case TK_LSHIFT:
     case TK_RSHIFT:
@@ -254,6 +260,8 @@ void binary_analysis(AstNode_* n) {
   } else {
     expr->base.sem_type.lifetime = LIFETIME_TMP;
   }
+
+  semantictype_size(&expr->base.sem_type);
 }
 
 void primary_analysis(AstNode_* n) {
@@ -652,7 +660,7 @@ void ast_class_member_decl_analysis(AstNode_* node) {
     field->val = NIL_VAL;
     field->has_default_val = false;
   }
-
+  field->opt_expr = decl->opt_expr;
   decl->sem_type = *type;
 }
 

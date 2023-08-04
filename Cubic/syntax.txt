@@ -56,7 +56,7 @@ VarDecl ::= IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 ValDecl ::= 'val' VarDecl
 RefDecl ::= 'var' VarDecl
 ClassDef ::= 'class' {ClassMemberDecl} 'end'
-ClassMemberDecl ::= [pub] [(owns | shares)] IdList ':' UnionType ['=' ExprList]
+ClassMemberDecl ::= [pub] [('val' | 'var')] IdList ':' UnionType ['=' ExprList]
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helpers

@@ -279,6 +279,9 @@ static Token_ match_number(Scanner scanner) {
     advance(scanner);
 
     while (isdigit(peek(scanner))) advance(scanner);
+
+    // Allow for floats with the syntax like "1.f"
+    if (peek(scanner) == 'f') advance(scanner);
   }
 
   return make_token(scanner, info);

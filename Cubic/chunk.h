@@ -9,25 +9,27 @@
     OPCODE(OP_NIL)  \
     OPCODE(OP_TRUE)  \
     OPCODE(OP_FALSE)  \
-    OPCODE(OP_MOVE)   /* val <- val */                        \
-    OPCODE(OP_MOVEN)  /* &val[0..n-1] <- &val[0..n-1] */       \
-    OPCODE(OP_LOAD)   /* val <- *(val + frame_offset) */       \
-    OPCODE(OP_LOADA)  /* val <- &val + frame_offset */        \
-    OPCODE(OP_STORE)  /* *(val + frame_offset) <- val */      \
-    OPCODE(OP_RLOAD)  /* val <- *(ref.ptr + frame_offset) */  \
+    OPCODE(OP_MOVE)   /* val <- val */                       \
+    OPCODE(OP_MEMCPY)  /* &val[0..n-1] <- &val[0..n-1] */     \
+    OPCODE(OP_MEMSET) /* &val[0..n-1] <- val */           \
+    OPCODE(OP_LOAD)   /* val <- *(val + frame_offset) */     \
+    OPCODE(OP_LOADA)  /* val <- &val + frame_offset */       \
+    OPCODE(OP_STORE)  /* *(val + frame_offset) <- val */     \
+    OPCODE(OP_RLOAD)  /* val <- *(ref.ptr + frame_offset) */ \
     OPCODE(OP_RLOADA) /* val <- ret.ptr + frame_offset */    \
     OPCODE(OP_RSTORE) /* *(ref.ptr + frame_offset) <- val */ \
     OPCODE(OP_CONSTANT)  \
-\
-    OPCODE(OP_CONSTANT_LONG)  \
-    OPCODE(OP_OBJ_EQ)  \
     OPCODE(OP_EQ)  \
+    OPCODE(OP_GT)  \
+    OPCODE(OP_GTE)  \
     OPCODE(OP_LT)  \
     OPCODE(OP_LTE)  \
     OPCODE(OP_CMP)  \
     OPCODE(OP_ICMP)  \
     OPCODE(OP_FCMP)  \
+    OPCODE(OP_DCMP)  \
     OPCODE(OP_ADD)  \
+    OPCODE(OP_ADDIMM)  \
     OPCODE(OP_SUB)  \
     OPCODE(OP_MUL)  \
     OPCODE(OP_DIV)  \
@@ -37,8 +39,11 @@
     OPCODE(OP_FSUB)  \
     OPCODE(OP_FMUL)  \
     OPCODE(OP_FDIV)  \
+    OPCODE(OP_DADD)  \
+    OPCODE(OP_DSUB)  \
+    OPCODE(OP_DMUL)  \
+    OPCODE(OP_DDIV)  \
     OPCODE(OP_CONCAT)  \
-    OPCODE(OP_CAST)  \
     OPCODE(OP_MOD)  \
     OPCODE(OP_IMOD)  \
     OPCODE(OP_BITWISE_AND)  \
@@ -53,6 +58,13 @@
     OPCODE(OP_NOT)  \
     OPCODE(OP_NEG)  \
     OPCODE(OP_FNEG)  \
+    OPCODE(OP_DNEG)  \
+    OPCODE(OP_CAST_f2i)  \
+    OPCODE(OP_CAST_f2d)  \
+    OPCODE(OP_CAST_d2i)  \
+    OPCODE(OP_CAST_d2f)  \
+    OPCODE(OP_CAST_i2f)  \
+    OPCODE(OP_CAST_i2d)  \
     OPCODE(OP_RETURN)  \
     OPCODE(OP_POP)  \
     OPCODE(OP_JMP)  \
@@ -86,7 +98,8 @@
     OPCODE(OP_ASSERT)  \
     OPCODE(OP_BEGIN_SCOPE)  \
     OPCODE(OP_END_SCOPE)  \
-    OPCODE(OP_MEMSET)  \
+    OPCODE(OP_CONSTANT_LONG)  \
+    OPCODE(OP_OBJ_EQ)  \
     OPCODE(__OP_CODE_COUNT_)
 
 #define GENERATE_ENUM(ENUM) ENUM,

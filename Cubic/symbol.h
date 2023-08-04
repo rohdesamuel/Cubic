@@ -83,6 +83,8 @@ typedef struct FieldSymbol_ {
   struct Value_ val;
   bool has_default_val;
 
+  struct AstExpr_* opt_expr;
+
   struct Symbol_* cls_sym;
 } FieldSymbol_;
 

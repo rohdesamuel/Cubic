@@ -94,19 +94,36 @@ static InterpretResult run(VM vm) {
                                 ((uint64_t)frame->ip[-4] << 24) | ((uint64_t)frame->ip[-3] << 16) | ((uint64_t)frame->ip[-2] <<  8) | (uint64_t)frame->ip[-1]))
 
 #define READ_CONSTANT() (frame->chunk->constants.values[READ_BYTE()])
-#define BINARY_OP(op) \
-    do { \
-      double b = vm_pop(vm); \
-      double a = vm_pop(vm); \
-      vm_push(vm, a op b); \
-    } while (false)
 
-#define FBINARY_OP(op) \
+#define UNARY_OP(OP) \
     do { \
-      double b = vm_pop(vm); \
-      double a = vm_pop(vm); \
-      vm_push(vm, a op b); \
-    } while (false)
+      uint8_t dst = READ_BYTE(); \
+      uint8_t src = READ_BYTE(); \
+      frame->slots[dst].as.u = OP frame->slots[src].as.u; \
+    } while (0)
+
+#define UNARY_TYPED_OP(OP, TY) \
+    do { \
+      uint8_t dst = READ_BYTE(); \
+      uint8_t src = READ_BYTE(); \
+      frame->slots[dst].as.##TY = OP frame->slots[src].as.##TY; \
+    } while (0)
+
+#define BINARY_OP(OP) \
+    do { \
+      uint8_t dst = READ_BYTE(); \
+      uint8_t l = READ_BYTE(); \
+      uint8_t r = READ_BYTE(); \
+      frame->slots[dst].as.u = frame->slots[l].as.u OP frame->slots[r].as.u; \
+    } while (0)
+
+#define BINARY_TYPED_OP(OP, TY) \
+    do { \
+      uint8_t dst = READ_BYTE(); \
+      uint8_t l = READ_BYTE(); \
+      uint8_t r = READ_BYTE(); \
+      frame->slots[dst].as.##TY = frame->slots[l].as.##TY OP frame->slots[r].as.##TY; \
+    } while (0)
 
   for (;;) {
 
@@ -120,7 +137,8 @@ static InterpretResult run(VM vm) {
       printf(" ]");
     }*/
     //printf("\n");
-    disassemble_instruction(frame->chunk, (int)(frame->ip - frame->chunk->code));
+    //disassemble_instruction(frame->chunk, (int)(frame->ip - frame->chunk->code));
+    printf("%d\t%s\n", (int)(frame->ip - frame->chunk->code), OPCODE_STRING[*frame->ip]);
 #endif  // DEBUG_TRACE_EXECUTION
 
     uint8_t instruction;
@@ -177,7 +195,7 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_MOVEN:
+      case OP_MEMCPY:
       {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
@@ -281,14 +299,113 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_ADD:
+      case OP_EQ: BINARY_OP(==); continue;
+      case OP_GT:
       {
         uint8_t dst = READ_BYTE();
-        uint8_t l   = READ_BYTE();
-        uint8_t r   = READ_BYTE();
-        frame->slots[dst].as.u = frame->slots[l].as.u + frame->slots[r].as.u;
+        int64_t val = frame->slots[READ_BYTE()].as.i;
+        frame->slots[dst].as.i = val == 1;
         continue;
       }
+
+      case OP_GTE:
+      {
+        uint8_t dst = READ_BYTE();
+        int64_t val = frame->slots[READ_BYTE()].as.i;
+        frame->slots[dst].as.i = val >= 0;
+        continue;
+      }
+
+      case OP_LT:
+      {
+        uint8_t dst = READ_BYTE();
+        int64_t val = frame->slots[READ_BYTE()].as.i;
+        frame->slots[dst].as.i = val == -1;
+        continue;
+      }
+
+      case OP_LTE:
+      {
+        uint8_t dst = READ_BYTE();
+        int64_t val = frame->slots[READ_BYTE()].as.i;
+        frame->slots[dst].as.i = val <= 0;
+        continue;
+      }
+
+      case OP_CMP:
+      {
+        uint8_t dst = READ_BYTE();
+        uint64_t l = frame->slots[READ_BYTE()].as.u;
+        uint64_t r = frame->slots[READ_BYTE()].as.u;
+        frame->slots[dst].as.i = l == r ? 0 : (l < r ? -1 : 1);
+        continue;
+      }
+
+      case OP_ICMP:
+      {
+        uint8_t dst = READ_BYTE();
+        int64_t l = frame->slots[READ_BYTE()].as.i;
+        int64_t r = frame->slots[READ_BYTE()].as.i;
+        frame->slots[dst].as.i = l == r ? 0 : (l < r ? -1 : 1);
+        continue;
+      }
+
+      case OP_FCMP:
+      {
+        uint8_t dst = READ_BYTE();
+        float l = frame->slots[READ_BYTE()].as.f;
+        float r = frame->slots[READ_BYTE()].as.f;
+        frame->slots[dst].as.i = l == r ? 0 : (l < r ? -1 : 1);
+        continue;
+      }
+
+      case OP_DCMP:
+      {
+        uint8_t dst = READ_BYTE();
+        double l = frame->slots[READ_BYTE()].as.d;
+        double r = frame->slots[READ_BYTE()].as.d;
+        frame->slots[dst].as.i = l == r ? 0 : (l < r ? -1 : 1);
+        continue;
+      }
+
+      case OP_ADDIMM:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t l = READ_BYTE();
+        uint32_t r = READ_LONG();
+        frame->slots[dst].as.u = frame->slots[l].as.u + r;
+        continue;
+      }
+
+      case OP_ADD: BINARY_TYPED_OP(+, u); continue;
+      case OP_SUB: BINARY_TYPED_OP(-, u); continue;
+      case OP_MUL: BINARY_TYPED_OP(*, u); continue;
+      case OP_DIV: BINARY_TYPED_OP(/, u); continue;
+      case OP_IMUL: BINARY_TYPED_OP(*, i); continue;
+      case OP_IDIV: BINARY_TYPED_OP(/, i); continue;
+      case OP_FADD: BINARY_TYPED_OP(+, f); continue;
+      case OP_FSUB: BINARY_TYPED_OP(-, f); continue;
+      case OP_FMUL: BINARY_TYPED_OP(*, f); continue;
+      case OP_FDIV: BINARY_TYPED_OP(/, f); continue;
+      case OP_DADD: BINARY_TYPED_OP(+, d); continue;
+      case OP_DSUB: BINARY_TYPED_OP(-, d); continue;
+      case OP_DMUL: BINARY_TYPED_OP(*, d); continue;
+      case OP_DDIV: BINARY_TYPED_OP(/, d); continue;
+      case OP_MOD: BINARY_TYPED_OP(%, u); continue;
+      case OP_IMOD: BINARY_TYPED_OP(%, i); continue;
+      case OP_BITWISE_AND: BINARY_OP(&); continue;
+      case OP_BITWISE_OR: BINARY_OP(|); continue;
+      case OP_BITWISE_XOR: BINARY_OP(^); continue;
+      case OP_BITWISE_NOT: UNARY_OP(~); continue;
+      case OP_LSHIFT: BINARY_OP(<<); continue;
+      case OP_RSHIFT: BINARY_OP(>>); continue;
+      case OP_AND: BINARY_OP(&&); continue;
+      case OP_OR: BINARY_OP(||); continue;
+      case OP_XOR: BINARY_OP(^); continue;
+      case OP_NOT: UNARY_OP(!); continue;
+      case OP_NEG: UNARY_OP(+); continue;
+      case OP_FNEG: UNARY_TYPED_OP(-, f); continue;
+      case OP_DNEG: UNARY_TYPED_OP(-, d); continue;
 
       case OP_PRINT:
       {
@@ -299,6 +416,66 @@ static InterpretResult run(VM vm) {
         printf("\n");
         continue;
       }
+
+      case OP_ASSERT:
+      {
+        uint8_t slot = READ_BYTE();
+        Value_ assert_val = frame->slots[slot];
+        if (is_falsey(assert_val)) {
+          vm_runtime_error(vm, "Assertion failed");
+          return INTERPRET_ASSERTION_FAILED;
+        }
+        continue;
+      }
+
+      case OP_CAST_f2i:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst].as.i = (int64_t)frame->slots[src].as.f;
+        continue;
+      }
+
+      case OP_CAST_f2d:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst].as.d = (double)frame->slots[src].as.f;
+        continue;
+      }
+
+      case OP_CAST_d2i:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst].as.i = (int64_t)frame->slots[src].as.d;
+        continue;
+      }
+
+      case OP_CAST_d2f:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst].as.f = (float)frame->slots[src].as.d;
+        continue;
+      }
+
+      case OP_CAST_i2f:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst].as.f = (float)frame->slots[src].as.i;
+        continue;
+      }
+
+      case OP_CAST_i2d:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t src = READ_BYTE();
+        frame->slots[dst].as.d = (double)frame->slots[src].as.i;
+        continue;
+      }
+
 #if 0
       case OP_NIL:
         vm_push(vm, NIL_VAL);
@@ -856,6 +1033,8 @@ static InterpretResult run(VM vm) {
   }
 
 #undef READ_SHORT
+#undef UNARY_OP
+#undef BINARY_TYPED_OP
 #undef BINARY_OP
 #undef READ_CONSTANT
 #undef READ_BYTE

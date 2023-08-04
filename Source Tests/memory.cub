@@ -30,7 +30,7 @@ end
 
 
 do
-  var a := int{1234}
+  var a := 1234
   assert a == 1234
 
   var b: int = 5678

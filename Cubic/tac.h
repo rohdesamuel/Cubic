@@ -47,6 +47,7 @@ typedef struct Tac_ {
   Operand_ arg_r;
 
   int line;
+  int chunk_loc;
   const char* label;
 } Tac_;
 

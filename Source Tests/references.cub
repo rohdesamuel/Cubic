@@ -61,6 +61,6 @@ do
   end
 
   assert a == 1
-  foo(&a)
+  foo(a)
   assert a == 100
 end

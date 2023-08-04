@@ -156,7 +156,7 @@ static void emit_constant(Chunk_* chunk, Location_ loc, Value_ value, int line) 
 }
 
 static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line) {
-  emit_byte(chunk, OP_CAST, line);
+  //emit_byte(chunk, OP_CAST, line);
   emit_long(chunk, type_toint(from), line);
   emit_long(chunk, type_toint(to), line);
 }
@@ -184,6 +184,19 @@ static void print_gen(Chunk_* chunk, Tac_* tac) {
 }
 
 static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
+#define UNARY_OP(OP) case OP: \
+    emit_byte(chunk, OP, line); \
+    emit_byte(chunk, tac->dst.frame_offset, line); \
+    emit_byte(chunk, tac->arg_l.loc.frame_offset, line); \
+    break
+
+#define BINARY_OP(OP) case OP: \
+    emit_byte(chunk, OP, line); \
+    emit_byte(chunk, tac->dst.frame_offset, line); \
+    emit_byte(chunk, tac->arg_l.loc.frame_offset, line); \
+    emit_byte(chunk, tac->arg_r.loc.frame_offset, line); \
+    break
+
   for (int i = 0; i < tac_chunk->count; ++i) {
     Tac_* tac = tac_chunk->code + i;
     int line = tac->line;
@@ -210,6 +223,42 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
         emit_constant(chunk, tac->dst, tac->arg_l.val, tac->line);
         break;
 
+      case OP_CAST_f2i:
+        emit_byte(chunk, OP_CAST_f2i, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_CAST_f2d:
+        emit_byte(chunk, OP_CAST_f2d, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_CAST_d2i:
+        emit_byte(chunk, OP_CAST_d2i, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_CAST_d2f:
+        emit_byte(chunk, OP_CAST_d2f, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_CAST_i2f:
+        emit_byte(chunk, OP_CAST_i2f, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_CAST_i2d:
+        emit_byte(chunk, OP_CAST_i2d, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
       case OP_PRINT:
         print_gen(chunk, tac);
         break;
@@ -220,8 +269,8 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
         emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
         break;
 
-      case OP_MOVEN:
-        emit_byte(chunk, OP_MOVEN, line);
+      case OP_MEMCPY:
+        emit_byte(chunk, OP_MEMCPY, line);
         emit_byte(chunk, tac->dst.frame_offset, line);
         emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
         emit_byte(chunk, (uint8_t)tac->arg_r.size, line);
@@ -275,14 +324,62 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
         emit_byte(chunk, (uint8_t)tac->arg_l.size, line);
         break;
 
-      case OP_ADD:
-        emit_byte(chunk, OP_ADD, line);
+      case OP_ASSERT:
+        emit_byte(chunk, OP_ASSERT, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_ADDIMM:
+        emit_byte(chunk, OP_ADDIMM, line);
         emit_byte(chunk, tac->dst.frame_offset, line);
         emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
-        emit_byte(chunk, tac->arg_r.loc.frame_offset, line);
+        emit_long(chunk, tac->arg_r.offset, line);
         break;
+
+      BINARY_OP(OP_EQ);
+      BINARY_OP(OP_GT);
+      BINARY_OP(OP_GTE);
+      BINARY_OP(OP_LT);
+      BINARY_OP(OP_LTE);
+      BINARY_OP(OP_CMP);
+      BINARY_OP(OP_ICMP);
+      BINARY_OP(OP_FCMP);
+      BINARY_OP(OP_DCMP);
+      BINARY_OP(OP_ADD);
+      BINARY_OP(OP_SUB);
+      BINARY_OP(OP_MUL);
+      BINARY_OP(OP_DIV);
+      BINARY_OP(OP_IMUL);
+      BINARY_OP(OP_IDIV);
+      BINARY_OP(OP_FADD);
+      BINARY_OP(OP_FSUB);
+      BINARY_OP(OP_FMUL);
+      BINARY_OP(OP_FDIV);
+      BINARY_OP(OP_DADD);
+      BINARY_OP(OP_DSUB);
+      BINARY_OP(OP_DMUL);
+      BINARY_OP(OP_DDIV);
+      BINARY_OP(OP_CONCAT);
+      BINARY_OP(OP_MOD);
+      BINARY_OP(OP_IMOD);
+      BINARY_OP(OP_BITWISE_AND);
+      BINARY_OP(OP_BITWISE_OR);
+      BINARY_OP(OP_BITWISE_XOR);
+      BINARY_OP(OP_BITWISE_NOT);
+      BINARY_OP(OP_LSHIFT);
+      BINARY_OP(OP_RSHIFT);
+      BINARY_OP(OP_AND);
+      BINARY_OP(OP_OR);
+      BINARY_OP(OP_XOR);
+      UNARY_OP(OP_NOT);
+      UNARY_OP(OP_NEG);
+      UNARY_OP(OP_FNEG);
+      UNARY_OP(OP_DNEG);
     }
   }
+
+#undef UNARY_OP
+#undef BINARY_OP
 }
 
 static void unary_code_gen(Chunk_* chunk, AstNode_* node) {

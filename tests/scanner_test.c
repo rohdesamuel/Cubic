@@ -160,6 +160,10 @@ extern void scanner_all_tests() {
   TEST_LITERAL(TK_NUMBER, "1.23", "1.23");
   TEST_LITERAL(TK_NUMBER, "1.23", "1.2.3..");
   TEST_LITERAL(TK_NUMBER, ".2", ".2.3..");
+  TEST_LITERAL(TK_NUMBER, "1.f", "1.f");
+  TEST_LITERAL(TK_NUMBER, "1.23f", "1.23f");
+  TEST_LITERAL(TK_NUMBER, "1.23f", "1.2.3f..");
+  TEST_LITERAL(TK_NUMBER, ".2", ".2.3..");
   TEST_LITERAL(TK_INTEGER, "12", "12 .");
 
   TEST_LITERAL(TK_DOUBLE_DOT, "..", "..");
@@ -246,4 +250,5 @@ extern void scanner_all_tests() {
   TEST_TOKEN_STREAM("ref a? : int", TK_REF, TK_ID, TK_QUESTION, TK_COLON, TK_INT, TK_EOF);
   TEST_TOKEN_STREAM("a ?? b", TK_ID, TK_QQ, TK_ID, TK_EOF);
   TEST_TOKEN_STREAM("a ??= b", TK_ID, TK_QQE, TK_ID, TK_EOF);
+  TEST_TOKEN_STREAM("a = 1.f + 2.f", TK_ID, TK_EQUAL, TK_NUMBER, TK_PLUS, TK_NUMBER, TK_EOF);
 }

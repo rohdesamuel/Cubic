@@ -50,7 +50,7 @@ void value_print(Value_ value, RuntimeType_ info) {
         case OBJ_TYPE_STRING:
         {
           ObjString_* str = AS_STRING(value);
-          printf("\'%.*s\'", str->length, str->chars);
+          printf("%.*s", str->length, str->chars);
           break;
         }
         default:

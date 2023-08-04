@@ -84,7 +84,12 @@ int disassemble_instruction(Chunk chunk, int offset) {
     DEBUG_INSTRUCTION(OP_ASSERT, simple_instruction);
     DEBUG_INSTRUCTION(OP_CALL, byte_instruction);
 
-    DEBUG_INSTRUCTION(OP_CAST, cast_instruction);
+    DEBUG_INSTRUCTION(OP_CAST_f2i, cast_instruction);
+    DEBUG_INSTRUCTION(OP_CAST_f2d, cast_instruction);
+    DEBUG_INSTRUCTION(OP_CAST_d2i, cast_instruction);
+    DEBUG_INSTRUCTION(OP_CAST_d2f, cast_instruction);
+    DEBUG_INSTRUCTION(OP_CAST_i2f, cast_instruction);
+    DEBUG_INSTRUCTION(OP_CAST_i2d, cast_instruction);
 
     DEBUG_INSTRUCTION(OP_PROLOGUE, short_instruction);
     DEBUG_INSTRUCTION(OP_EPILOGUE, simple_instruction);
