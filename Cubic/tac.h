@@ -9,6 +9,7 @@ typedef enum {
   LOCATION_TYPE_VAL,
   LOCATION_TYPE_VAR,
   LOCATION_TYPE_PTR,
+  LOCATION_TYPE_LABEL,
 } LocationType_;
 
 typedef struct Location_ {
@@ -48,7 +49,6 @@ typedef struct Tac_ {
 
   int line;
   int chunk_loc;
-  const char* label;
 } Tac_;
 
 inline bool is_loc_empty(Location_ addr) {

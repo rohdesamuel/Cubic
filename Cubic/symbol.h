@@ -109,7 +109,9 @@ typedef struct RefSymbol_ {
 typedef struct FunctionSymbol_ {
   ListOf_(Symbol_*) params;
   SemanticType_ return_type;
-  
+  int64_t arg_size;
+
+  Location_ loc;
   struct ObjFunction_* obj_fn;
 } FunctionSymbol_;
 
@@ -129,6 +131,7 @@ typedef struct Symbol_ {
   SymbolType_ type;
   Token_ name;
   struct Scope_* parent;
+  uint64_t uid;
 
   union {
     ClassSymbol_ cls;

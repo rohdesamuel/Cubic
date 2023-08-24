@@ -18,6 +18,9 @@ typedef struct Compiler_ {
   int locals_count;
   int locals_capacity;
   int scope_depth;
+
+  struct Hashmap* label_locations;
+  struct Hashmap* patch_lists;
   MemoryAllocator_* allocator;
 } Compiler_;
 

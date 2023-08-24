@@ -256,6 +256,7 @@ typedef struct AstFunctionDef_ {
 // FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement
 typedef struct AstFunctionBody_ {
   struct AstNode_ base;
+  struct Symbol_* fn_symbol;
   AstList_ function_params;
   struct SemanticType_ return_type;
   AstNode_* stmt;
@@ -282,14 +283,13 @@ typedef struct AstFunctionCall_ {
 typedef struct AstFunctionCallArgs_ {
   struct AstNode_ base;
   AstList_ args;
-  struct FunctionSymbol_* fn_sym;
+  struct FunctionSymbol_* fn_sym;  
 } AstFunctionCallArgs_;
 
 // FunctionCallArg ::= Expr
 typedef struct AstFunctionCallArg_ {
   struct AstExpr_ base;
   AstExpr_* expr;
-  struct Symbol_* field_sym;
 } AstFunctionCallArg_;
 
 // ClassDef ::= 'struct' {ClassMemberDecl} 'end'

@@ -60,7 +60,7 @@ do
   end
 end
 
-function inc_with_in(in a: int)
+function inc_with_in(in a: int) -> int
   return a + 1
 end
 

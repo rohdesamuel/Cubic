@@ -350,7 +350,7 @@ void var_decl_analysis(AstNode_* n) {
   VarSymbol_* var = scope_var(n->scope, &stmt->name);
   var->sem_type = stmt->sem_type;
   if (!valuetype_isaprimitive(var->sem_type.val)) {
-    var->sem_type.sym = scope_find(n->scope, &var->sem_type.name);
+    var->sem_type.sym = scope_search_to_root(n->scope, &var->sem_type.name);
     if (!var->sem_type.sym) {
       error(analyzer_, n, "could not find symbol \"%.*s\" for variable type.", var->sem_type.name.length, var->sem_type.name.start);
       return;
@@ -460,9 +460,7 @@ void expression_statement_analysis(AstNode_* n) {
 void function_def_analysis(AstNode_* n) {
   AstFunctionDef_* def = (AstFunctionDef_*)n;  
 
-  FunctionSymbol_* fn = &def->fn_symbol->fn;
-  fn->return_type = def->body->return_type;
-
+  FunctionSymbol_* fn = &def->fn_symbol->fn;  
   ObjFunction_* obj_fn = objfn_create(def->fn_symbol);
   fn->obj_fn = obj_fn;
 
@@ -471,15 +469,22 @@ void function_def_analysis(AstNode_* n) {
     .kind = KIND_VAL,
     .obj = OBJ_TYPE_FUNCTION,
     .lifetime = LIFETIME_STATIC,
-    .sym = def->fn_symbol
+    .sym = def->fn_symbol,
+    .size = 1
   };
 
-  do_analysis((AstNode_*)def->body);
+  do_analysis((AstNode_*)def->body);  
 }
 
 void function_body_analysis(AstNode_* n) {
   AstFunctionBody_* body = (AstFunctionBody_*)n;
-  
+  FunctionSymbol_* fn = &body->fn_symbol->fn;
+  fn->return_type = body->return_type;
+  if (body->return_type.name.start) {
+    fn->return_type.sym = scope_search_to_root(n->scope, &body->return_type.name);
+  }
+  semantictype_size(&fn->return_type);
+
   for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
     do_analysis(n->node);
   }
@@ -491,6 +496,8 @@ void function_param_analysis(AstNode_* n) {
   AstFunctionParam_* param = (AstFunctionParam_*)n;
   
   // TODO: implement parameter type inference.
+  param->type.sym = scope_search_to_root(n->scope, &param->type.name);
+  semantictype_size(&param->type);
   if (semantictype_isunknown(param->type)) {
     error(analyzer_, n, "Parameter type inferrece is unimplemented.");
   }
@@ -563,7 +570,7 @@ void function_call_args_analysis(AstNode_* node) {
         expr_sem_type.kind != KIND_VAR)) {
       error(analyzer_, n->node, "Expression does not match function parameter type.");
     }
-
+    
     param_node = param_node->next;
   }
 
@@ -719,7 +726,7 @@ void ast_class_constructor_analysis(AstNode_* node) {
     return;
   }
 
-  Symbol_* cls_sym = scope_find(node->scope, &type->name);  
+  Symbol_* cls_sym = scope_search_to_root(node->scope, &type->name);
   if (!cls_sym) {
     error(analyzer_, node, "Could not find class %.*s", type->name.length, type->name.start);
     return;

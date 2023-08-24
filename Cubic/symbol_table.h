@@ -8,12 +8,19 @@
 #include "tokens.h"
 #include "symbol.h"
 
+// Frame -> Frame :: 1 -> *
 // Frame -> Scope :: 1 -> *
 // Scope -> Scope :: 1 -> *
 // Scope -> Symbol Table :: 1 -> 1
 typedef struct Scope_ {
   struct MemoryAllocator_* allocator;
+  // The parent scope that this scope belongs to. Roots are created at
+  // function definitions and program node. If this is a root, the parent is
+  // NULL.
   struct Scope_* parent;
+  // The scope that this scope belongs to. This links between roots and will
+  // only be NULL if the node is the program root.
+  struct Scope_* prev;
   struct Frame_* frame;
   struct SymbolTable_* table;
 
@@ -57,7 +64,7 @@ typedef struct SymbolTable_ {
 } SymbolTable_;
 
 Frame_* frame_root(struct MemoryAllocator_* allocator);
-Frame_* frame_createfrom(Frame_* frame, Symbol_* fn_symbol);
+Frame_* frame_createfrom(Frame_* frame, Scope_* prev_scope, Symbol_* fn_symbol);
 void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope);
@@ -81,6 +88,7 @@ SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
 Symbol_* scope_find(Scope_* scope, Token_* name);
+Symbol_* scope_search_to_root(Scope_* scope, Token_* name);
 VarSymbol_* scope_var(Scope_* scope, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
 

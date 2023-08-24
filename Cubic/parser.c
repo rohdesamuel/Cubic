@@ -170,7 +170,7 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
 
   SemanticType_ ret = {
     .val = VAL_UNKNOWN,
-    .kind = KIND_UNKNOWN,
+    .kind = KIND_VAL,
     .obj = OBJ_TYPE_UNKNOWN,
     .name = { 0 },
     .sym = NULL
@@ -371,18 +371,19 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
   AstFunctionDef_* def = MAKE_AST_NODE(allocator, AstFunctionDef_, scope, parser->current.line);
 
   Token_ name;
-  if (match(parser, scanner, TK_ID)) {    
+  if (match(parser, scanner, TK_ID)) {
     name = parse_variable(parser, scanner, &parser->previous);
   } else {
     name = (Token_) { 0 };
   }
 
   Symbol_* fn_symbol = frame_addfn(scope->frame, &name, scope);
-  Frame_* fn_frame = frame_createfrom(scope->frame, fn_symbol);
+  Frame_* fn_frame = frame_createfrom(scope->frame, scope, fn_symbol);
   Scope_* fn_scope = fn_frame->scope;
 
   def->fn_symbol = fn_symbol;
   def->body = (AstFunctionBody_*)FunctionBody(parser, scanner, fn_scope);
+  def->body->fn_symbol = def->fn_symbol;
 
   return (AstNode_*)def;
 }
@@ -626,7 +627,7 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       if (match(parser, scanner, TK_ELSE)) {
         stmt->else_stmt = (AstNode_*)Block(parser, scanner, scope);
       } else {
-        stmt->else_stmt = MAKE_AST_NOOP(parser->allocator);
+        stmt->else_stmt = NULL;
       }
 
       consume(parser, scanner, TK_END, "Expected 'end' after if-statement.");

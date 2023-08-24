@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "object.h"
 #include "native_fns.h"
+#include "random.h"
 
 #include <string.h>
 
@@ -30,6 +31,7 @@ Frame_* frame_root(struct MemoryAllocator_* allocator) {
     },
     .name = entry_name,
     .parent = NULL,
+    .uid = cb_rand()
   };
 
   return frame_create(entry_fn, allocator);
@@ -49,9 +51,10 @@ Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocator) {
   return ret;
 }
 
-Frame_* frame_createfrom(Frame_* frame, Symbol_* fn_symbol) {
+Frame_* frame_createfrom(Frame_* frame, Scope_* prev_scope, Symbol_* fn_symbol) {
   Frame_* ret = frame_create(fn_symbol, frame->allocator);
   ret->parent = frame;
+  ret->scope->prev = prev_scope;
   list_push(&frame->children, &ret);
 
   return ret;
@@ -106,7 +109,8 @@ Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
       .tmp_index = tmp_index,
     },
     .name = {0},
-    .parent = scope
+    .parent = scope,
+    .uid = cb_rand()
   };
 
   list_push(&frame->tmps, &ret);
@@ -172,6 +176,7 @@ Scope_* scope_create(Frame_* frame, SymbolTable_* table, struct MemoryAllocator_
 Scope_* scope_createfrom(Scope_* scope) {
   Scope_* ret = scope_create(scope->frame, scope->table, scope->allocator);
   ret->parent = scope;
+  ret->prev = scope;
   
   list_push(&scope->children, &ret);
 
@@ -251,6 +256,7 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type) {
     },
     .name = *name,
     .parent = scope,
+    .uid = cb_rand()
   };
 
   return scope_add(scope, &s);
@@ -265,6 +271,7 @@ Symbol_* scope_addfn(Scope_* scope, Token_* name) {
     },
     .name = *name,
     .parent = scope,
+    .uid = cb_rand()
   };
   list_of(&s.fn.params, Symbol_*, scope->allocator);
   return scope_add(scope, &s);
@@ -295,6 +302,7 @@ Symbol_* scope_addclass(Scope_* scope, Token_* name) {
     .cls = {0},
     .name = *name,
     .parent = scope,
+    .uid = cb_rand()
   };
   MemoryAllocator_* allocator = scope->allocator;
   s.cls.constructor = alloc_ty(allocator, Symbol_);
@@ -322,6 +330,7 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
     },
     .name = name,
     .parent = sym->parent,
+    .uid = cb_rand()
   };
 
   list_push(&cls_sym->members, &field);
@@ -339,6 +348,23 @@ Symbol_* scope_find(Scope_* scope, Token_* name) {
       return NULL;
     }
     return scope_find(scope->parent, name);
+  }
+
+  return ret;
+}
+
+Symbol_* scope_search_to_root(Scope_* scope, Token_* name) {
+  if (!name || !name->start) {
+    return NULL;
+  }
+
+  Symbol_* ret = NULL;
+  SymbolTable_* table = scope->table;
+  if (!hashmap_get(table->symbols_, name->start, name->length, (uintptr_t*)&ret)) {
+    if (!scope->prev) {
+      return NULL;
+    }
+    return scope_search_to_root(scope->prev, name);
   }
 
   return ret;

@@ -175,6 +175,7 @@
     <ClCompile Include="native_fns.c" />
     <ClCompile Include="object.c" />
     <ClCompile Include="parser.c" />
+    <ClCompile Include="random.c" />
     <ClCompile Include="scanner.c" />
     <ClCompile Include="symbol.c" />
     <ClCompile Include="symbol_table.c" />
@@ -199,6 +200,7 @@
     <ClInclude Include="native_fns.h" />
     <ClInclude Include="object.h" />
     <ClInclude Include="parser.h" />
+    <ClInclude Include="random.h" />
     <ClInclude Include="scanner.h" />
     <ClInclude Include="symbol.h" />
     <ClInclude Include="symbol_table.h" />

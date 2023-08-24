@@ -10,7 +10,7 @@
     OPCODE(OP_TRUE)  \
     OPCODE(OP_FALSE)  \
     OPCODE(OP_MOVE)   /* val <- val */                       \
-    OPCODE(OP_MEMCPY)  /* &val[0..n-1] <- &val[0..n-1] */     \
+    OPCODE(OP_MEMCPY) /* &val[0..n-1] <- &val[0..n-1] */     \
     OPCODE(OP_MEMSET) /* &val[0..n-1] <- val */           \
     OPCODE(OP_LOAD)   /* val <- *(val + frame_offset) */     \
     OPCODE(OP_LOADA)  /* val <- &val + frame_offset */       \
@@ -70,6 +70,7 @@
     OPCODE(OP_JMP)  \
     OPCODE(OP_JMP_IF_FALSE)  \
     OPCODE(OP_LOOP)  \
+    OPCODE(OP_PUSH_PARAM)  \
     OPCODE(OP_CALL)  \
     OPCODE(OP_PROLOGUE)  \
     OPCODE(OP_EPILOGUE)  \

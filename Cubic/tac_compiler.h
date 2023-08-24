@@ -5,12 +5,14 @@
 #include "memory.h"
 
 #include "tac.h"
+#include "map.h"
 
 typedef struct TacChunk_ {
   int count;
   int capacity;
 
   Tac_* code;
+  Location_ ret_loc;
   int* lines;
 
   int label_index;
@@ -18,6 +20,8 @@ typedef struct TacChunk_ {
   int slot_offset;
 
   MemoryAllocator_* allocator;
+
+  Hashmap* fn_code;
 } TacChunk_;
 
 typedef struct TacCompiler_ {

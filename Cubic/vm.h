@@ -15,6 +15,7 @@ typedef struct CallFrame_ {
   Chunk chunk;
   uint8_t* ip;
   Value_* slots;
+  Value_* ret_slot;
 
   size_t size;
 } CallFrame_;

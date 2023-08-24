@@ -9,6 +9,7 @@
 #include "ast.h"
 #include "symbol_table.h"
 #include "tac_compiler.h"
+#include "map.h"
 
 #include <assert.h>
 #include <string.h>
@@ -28,7 +29,8 @@ static CodeGenRule_* get_rule(int info);
 static void emit_return(Chunk_* chunk, int line);
 static void emit_cast(Chunk_* chunk, RuntimeType_ from, RuntimeType_ to, int line);
 static int resolve_var(Scope_* scope, AstNode_* expr);
-static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk);
+static void codegen_tac(Compiler_* compiler, Chunk_* chunk, const TacChunk_* tac_chunk, struct MemoryAllocator_* allocator);
+static void codegen(Compiler_* compiler, Chunk_* chunk, const TacChunk_* root, struct MemoryAllocator_* allocator);
 
 static void code_gen(Chunk_* chunk, AstNode_* node) {
   get_rule(node->cls)->code_gen(chunk, node);
@@ -39,10 +41,15 @@ static void compiler_init(Compiler_* compiler, MemoryAllocator_* allocator) {
   compiler->locals_capacity = UINT8_MAX + 1;
   compiler->scope_depth = 0;
   compiler->allocator = allocator;
+  compiler->label_locations = hashmap_create();
+  compiler->patch_lists = hashmap_create();
   current_compiler = compiler;
 }
 
-static void compiler_clear(Compiler_* compiler) {}
+static void compiler_clear(Compiler_* compiler) {
+  hashmap_free(compiler->patch_lists);
+  hashmap_free(compiler->label_locations);
+}
 
 bool compile(const char* source, Chunk_* chunk) {
   PageAllocator_ allocator;
@@ -60,14 +67,15 @@ bool compile(const char* source, Chunk_* chunk) {
   compiler_init(&compiler, (MemoryAllocator_*)&allocator);
 
   AstNode_* root = parse(&parser, &scanner, analyzer.scope, source);
-
-  if (!parser.had_error) {
+  bool error = parser.had_error;
+  if (!error) {
     analyze(&analyzer, (AstProgram_*)root);
   }
 
-  if (!parser.had_error && !analyzer.had_error) {
+  error = error || analyzer.had_error;
+  if (!error) {
     tac_compiler_compile(&tac_compiler, root);
-    codegen_tac(chunk, &tac_compiler.chunk);
+    codegen(&compiler, chunk, &tac_compiler.chunk, (MemoryAllocator_*)&allocator);
   }
   
   end_compiler(&parser, chunk);
@@ -78,11 +86,11 @@ bool compile(const char* source, Chunk_* chunk) {
   parser_clear(&parser);
 
   pageallocator_deinit(&allocator);
-  return !parser.had_error && !analyzer.had_error;
+  return !error;
 }
 
 static void end_compiler(Parser_* parser, Chunk_* chunk) {
-  emit_return(chunk, parser->current.line);
+  //emit_return(chunk, parser->current.line);
   current_compiler = NULL;
 
 #ifdef DEBUG_PRINT_CODE
@@ -124,7 +132,7 @@ static void emit_long(Chunk_* chunk, uint32_t s, int line) {
   emit_byte(chunk, (s & 0xFF000000) >> 24, line);
   emit_byte(chunk, (s & 0x00FF0000) >> 16, line);
   emit_byte(chunk, (s & 0x0000FF00) >> 8, line);
-  emit_byte(chunk, s  & 0x000000FF, line);
+  emit_byte(chunk,  s & 0x000000FF, line);
 }
 
 static void emit_longlong(Chunk_* chunk, uint64_t s, int line) {
@@ -183,7 +191,94 @@ static void print_gen(Chunk_* chunk, Tac_* tac) {
   emit_long(chunk, type_toint(tac->arg_l.opt_type), tac->line);
 }
 
-static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
+static void label_memoize(Token_* label, Hashmap* labels, Chunk_* chunk, uintptr_t ip) {
+  hashmap_get_set(labels, label->start, label->length, &ip);
+}
+
+static bool label_find_or_defer(Token_* label, Hashmap* labels, Hashmap* patch_lists, uintptr_t* ip, struct MemoryAllocator_* allocator) {
+  uintptr_t jmp_ip = *ip;
+  if (hashmap_get(labels, label->start, label->length, ip)) {
+    return true;
+  }
+
+  List_* patch_list = NULL;
+  if (!hashmap_get(patch_lists, label->start, label->length, (uintptr_t*)&patch_list)) {
+    patch_list = alloc_ty(allocator, List_);
+    list_of(patch_list, uintptr_t, allocator);
+    hashmap_set(patch_lists, label->start, label->length, (uintptr_t)patch_list);
+  }
+
+  list_push(patch_list, &jmp_ip);
+
+  return false;
+}
+
+typedef struct LabelResolveState_ {
+  Hashmap* labels;
+  Chunk_* chunk;
+} LabelResolveState_;
+
+static void label_patch(uintptr_t jump_dst, uintptr_t patch_offset, Chunk_* chunk) {
+  OpCode op = *(chunk->code + patch_offset);
+  assertf(op == OP_JMP || op == OP_JMP_IF_FALSE || op == OP_CALL, "Patch location is not a jump. Got: %d", op);
+
+  uint32_t offset = (uint32_t)jump_dst;
+  uint8_t* patch_dst = chunk->code + patch_offset + 1;
+  patch_dst[0] = (offset & 0xFF000000) >> 24;
+  patch_dst[1] = (offset & 0x00FF0000) >> 16;
+  patch_dst[2] = (offset & 0x0000FF00) >> 8;
+  patch_dst[3] = (offset & 0x000000FF) >> 0;
+}
+
+static void label_resolve_jump_list(const void* key, size_t ksize, uintptr_t patch_list_ptr, void* usr) {
+  LabelResolveState_* state = (LabelResolveState_*)usr;
+
+  uintptr_t jump_dst = 0;
+  assertf(hashmap_get(state->labels, key, ksize, &jump_dst), "Unresolved label: '%.*s'", (int)ksize, (const char*)key);
+
+  List_* patch_list = (List_*)patch_list_ptr;
+  for (ListNode_* n = patch_list->head; n != NULL; n = n->next) {
+    uintptr_t patch_offset = list_val(n, uintptr_t);
+    label_patch((uintptr_t)jump_dst, patch_offset, state->chunk);
+  }
+}
+
+static void label_resolve_jumps(Hashmap* labels, Hashmap* patch_lists, Chunk_* chunk) {
+  LabelResolveState_ state = {
+    .labels = labels,
+    .chunk = chunk
+  };
+
+  hashmap_iterate(patch_lists, label_resolve_jump_list, &state);
+}
+
+struct CodegenFnState {
+  Compiler_* compiler;
+  Chunk_* chunk;
+  struct MemoryAllocator_* allocator;
+};
+
+static void codegen_fn(const void* key, size_t ksize, uintptr_t value, void* usr) {
+  struct CodegenFnState* state = (struct CodegenFnState*)usr;
+  TacChunk_* tac_chunk = (TacChunk_*)value;
+  hashmap_iterate(tac_chunk->fn_code, codegen_fn, state);
+  codegen_tac(state->compiler, state->chunk, tac_chunk, state->allocator);
+}
+
+static void codegen(Compiler_* compiler, Chunk_* chunk, const TacChunk_* root, struct MemoryAllocator_* allocator) {
+  codegen_tac(compiler, chunk, root, allocator);
+  struct CodegenFnState state = {
+    .compiler = compiler,
+    .chunk = chunk,
+    .allocator = allocator
+  };
+
+  hashmap_iterate(root->fn_code, codegen_fn, &state);
+
+  label_resolve_jumps(compiler->label_locations, compiler->patch_lists, chunk);
+}
+
+static void codegen_tac(Compiler_* compiler, Chunk_* chunk, const TacChunk_* tac_chunk, struct MemoryAllocator_* allocator) {
 #define UNARY_OP(OP) case OP: \
     emit_byte(chunk, OP, line); \
     emit_byte(chunk, tac->dst.frame_offset, line); \
@@ -202,7 +297,62 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
     int line = tac->line;
     switch (tac->op) {
       case OP_NOP:
+      {
+        if (tac->dst.type == LOCATION_TYPE_LABEL) {
+          uintptr_t ip = chunk->count;
+          label_memoize(&tac->dst.token, compiler->label_locations, chunk, ip);
+        }
         break;
+      }
+
+      case OP_RETURN:
+        emit_byte(chunk, OP_RETURN, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_JMP:
+      {
+        Token_* label = &tac->dst.token;
+        uintptr_t ip = chunk->count;
+        label_find_or_defer(label, compiler->label_locations, compiler->patch_lists, &ip, allocator);
+
+        emit_byte(chunk, OP_JMP, line);
+        emit_long(chunk, (uint32_t)ip, line);
+        break;
+      }
+
+      case OP_JMP_IF_FALSE:
+      {
+        Token_* label = &tac->dst.token;
+        uintptr_t ip = chunk->count;
+        label_find_or_defer(label, compiler->label_locations, compiler->patch_lists, &ip, allocator);
+
+        emit_byte(chunk, OP_JMP_IF_FALSE, line);
+        emit_long(chunk, (uint32_t)ip, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+      }
+
+      case OP_CALL:
+      {
+        Token_* label = &tac->arg_l.loc.token;
+        uintptr_t ip = chunk->count;
+        label_find_or_defer(label, compiler->label_locations, compiler->patch_lists, &ip, allocator);
+
+        emit_byte(chunk, OP_CALL, line);
+        emit_long(chunk, (uint32_t)ip, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_long(chunk, (uint32_t)tac->arg_r.size, line);
+        break;
+      }
+
+      case OP_PROLOGUE:
+      {
+        emit_byte(chunk, OP_PROLOGUE, line);
+        emit_long(chunk, (uint32_t)tac->arg_l.size, line);
+        emit_long(chunk, (uint32_t)tac->arg_r.size, line);
+        break;
+      }
 
       case OP_NIL:
         emit_byte(chunk, OP_NIL, tac->line);
@@ -376,7 +526,7 @@ static void codegen_tac(Chunk_* chunk, const TacChunk_* tac_chunk) {
       UNARY_OP(OP_FNEG);
       UNARY_OP(OP_DNEG);
     }
-  }
+  }  
 
 #undef UNARY_OP
 #undef BINARY_OP

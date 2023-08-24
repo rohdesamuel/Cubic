@@ -140,13 +140,72 @@ static InterpretResult run(VM vm) {
     //disassemble_instruction(frame->chunk, (int)(frame->ip - frame->chunk->code));
     printf("%d\t%s\n", (int)(frame->ip - frame->chunk->code), OPCODE_STRING[*frame->ip]);
 #endif  // DEBUG_TRACE_EXECUTION
-
+    //printf("%llX\n", (uint64_t)vm->stack_top);
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
       case OP_NIL:
       {
         uint8_t dst = READ_BYTE();
         frame->slots[dst] = NIL_VAL;
+        continue;
+      }
+
+      case OP_CALL:
+      {
+        uint32_t jump_dst = READ_LONG();
+        uint8_t ret_dst = READ_BYTE();
+        uint32_t param_size = READ_LONG();
+
+        CallFrame_* new_frame = &vm->frames[vm->frame_count++];
+        new_frame->ip = frame->chunk->code + jump_dst;
+        new_frame->chunk = frame->chunk;
+        new_frame->slots = &frame->slots[ret_dst];
+        new_frame->ret_slot = &frame->slots[ret_dst];
+        frame = new_frame;
+
+        continue;
+      }
+
+      case OP_RETURN:
+      {
+        //Value_ result = vm_pop(vm);
+        uint8_t ret_src = READ_BYTE();
+        vm->stack_top -= frame->size;
+        if (--vm->frame_count == 0) {
+          //vm_pop(vm);
+          return INTERPRET_OK;
+        }
+
+        //vm_push(vm, result);
+        //*frame->ret_slot = frame->slots[ret_src];
+        frame = &vm->frames[vm->frame_count - 1];
+        continue;
+      }
+
+      case OP_PROLOGUE:
+      {
+        uint32_t frame_size = READ_LONG();
+        uint32_t param_size = READ_LONG();
+        frame->size = frame_size;// +param_size;
+        //frame->slots -= param_size;
+        vm->stack_top += frame->size;
+        continue;
+      }
+
+      case OP_JMP:
+      {
+        uint32_t jump_dst = READ_LONG();
+        frame->ip = frame->chunk->code + jump_dst;
+        continue;
+      }
+
+      case OP_JMP_IF_FALSE:
+      {
+        uint32_t jump_dst = READ_LONG();
+        uint8_t condition = READ_BYTE();
+        if (!frame->slots[condition].as.u) {
+          frame->ip = frame->chunk->code + jump_dst;
+        }
         continue;
       }
 
@@ -170,20 +229,6 @@ static InterpretResult run(VM vm) {
         uint8_t dst = READ_BYTE();
         Value_ constant = READ_CONSTANT();
         frame->slots[dst] = constant;
-        continue;
-      }
-
-      case OP_RETURN:
-      {
-        Value_ result = vm_pop(vm);
-        if (--vm->frame_count == 0) {
-          vm_pop(vm);
-          return INTERPRET_OK;
-        }
-
-        vm->stack_top = frame->slots;
-        vm_push(vm, result);
-        frame = &vm->frames[vm->frame_count - 1];
         continue;
       }
 
