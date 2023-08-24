@@ -670,12 +670,6 @@ static Location_ emit_constant(TacChunk_* chunk, TypedValue_ value, size_t size,
   return tac_chunk_writeconstant(chunk, value, size, line);
 }
 
-static Location_ unary_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstUnaryExp_* exp = (AstUnaryExp_*)node;
-  code_gen(chunk, (AstNode_*)exp->expr);
-  return EMPTY_LOC;
-}
-
 static void emit_make_ref(TacChunk_* chunk, const Location_* dst, size_t size, int line) {
   assertf(dst->type == LOCATION_TYPE_VAR, "");
   emit_tac(chunk, OP_MAKE_REF, *dst, OP_SIZE(size), EMPTY_OPERAND, line);
@@ -1121,6 +1115,12 @@ static Location_ emit_bit_xor(TacChunk_* chunk, Location_ l, Location_ r, size_t
   return dest;
 }
 
+static Location_ emit_bit_not(TacChunk_* chunk, Location_ val, size_t type_size, int line) {
+  Location_ dest = tac_alloc_val(chunk, type_size);
+  emit_tac(chunk, OP_BITWISE_NOT, dest, OP_LOC(val), EMPTY_OPERAND, line);
+  return dest;
+}
+
 static Location_ emit_and(TacChunk_* chunk, Location_ l, Location_ r, size_t type_size, int line) {
   Location_ dest = tac_alloc_val(chunk, type_size);
   emit_tac(chunk, OP_AND, dest, OP_LOC(l), OP_LOC(r), line);
@@ -1264,6 +1264,29 @@ static Location_ binary_code_gen(TacChunk_* chunk, AstNode_* node) {
   }
 
   return EMPTY_LOC;
+}
+
+static Location_ unary_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstUnaryExp_* exp = (AstUnaryExp_*)node;
+  AstExpr_* e = AS_EXPR(exp->expr);
+
+  RuntimeType_ type = semantictype_toruntime(e->sem_type);
+  Location_ loc = code_gen(chunk, (AstNode_*)e);
+
+  if (loc.type != LOCATION_TYPE_VAL) {
+    loc = emit_get_variable(chunk, &loc, e->sem_type.size, node->line);
+  }
+
+  size_t type_size = exp->base.sem_type.size;
+  switch (exp->op) {
+    case TK_BANG:  return emit_not(chunk, loc, loc.size, node->line);
+    case TK_MINUS: return emit_neg(chunk, loc, type, loc.size, node->line);
+    case TK_TILDE: return emit_bit_not(chunk, loc, loc.size, node->line);
+
+    default: printf("[Line %d] UnaryOp '%d' unimplemented\n", exp->base.base.line, exp->op);  break; // Unreachable.
+  }
+
+  return loc;
 }
 
 #if 0
@@ -1450,8 +1473,8 @@ static Location_ if_code_gen(TacChunk_* chunk, AstNode_* node) {
 
   Location_ end_if = tac_alloc_label(chunk, "end_if");
   Location_ else_if = stmt->elif_exprs.count ? tac_alloc_label(chunk, "else_if") : EMPTY_LOC;
-  Location_ next_else = loc_is_empty(else_if) ? end_if : else_if;
   Location_ final_else = stmt->else_stmt ? tac_alloc_label(chunk, "else") : EMPTY_LOC;
+  Location_ next_else = loc_is_empty(else_if) ? final_else : else_if;
 
   // if `condition_expr`
   Location_ condition_expr = code_gen(chunk, (AstNode_*)stmt->condition_expr);
@@ -1775,13 +1798,12 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
   i = 0;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, n->node);
-    //emit_set_variable(chunk, &param_locs[i], &args_locs[i], arg->expr->sem_type.size, node->line);
-    emit_cast_kind(chunk, )
+    emit_set_variable(chunk, &param_locs[i], &args_locs[i], arg->expr->sem_type.size, node->line);
     ++i;
   }
 
   emit_call(chunk, &ret_loc, &fn, arg_size, node->line);
-  return ret_loc;
+  return ret_val;
 }
 
 static Location_ function_args_code_gen(TacChunk_* chunk, AstNode_* node) {

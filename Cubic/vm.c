@@ -448,7 +448,7 @@ static InterpretResult run(VM vm) {
       case OP_OR: BINARY_OP(||); continue;
       case OP_XOR: BINARY_OP(^); continue;
       case OP_NOT: UNARY_OP(!); continue;
-      case OP_NEG: UNARY_OP(+); continue;
+      case OP_NEG: UNARY_TYPED_OP(-, i); continue;
       case OP_FNEG: UNARY_TYPED_OP(-, f); continue;
       case OP_DNEG: UNARY_TYPED_OP(-, d); continue;
 
