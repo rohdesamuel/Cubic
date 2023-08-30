@@ -49,6 +49,7 @@ typedef struct AstNode_ {
     AST_CLS(AstClassConstructorParam_),
     AST_CLS(AstDotExpr_),
     AST_CLS(AstTypeExpr_),
+    AST_CLS(AstArrayValueExpr_),
     __AST_NODE_COUNT__,
   } cls;
   int line;
@@ -182,6 +183,12 @@ typedef struct AstPrimaryExp_ {
 
   Value_ value;
 } AstPrimaryExp_;
+
+// ArrayValue ::= '[' Expr {',' Expr} ']'
+typedef struct AstArrayValueExpr_ {
+  struct AstExpr_ base;
+  AstList_ values;
+} AstArrayValueExpr_;
 
 // Var ::= Id | PrefixExpr '[' Expr ']' | PrefixExpr '.' Id
 typedef struct AstVarExpr_ {

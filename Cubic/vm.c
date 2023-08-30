@@ -303,7 +303,7 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_MAKE_REF:
+      case OP_REF_MAKE:
       {
         uint8_t dst = READ_BYTE();
         uint8_t size = READ_BYTE();
@@ -313,34 +313,8 @@ static InterpretResult run(VM vm) {
             .count = calloc(1, sizeof(int))
           },
         };
+        *ret.as.ref.count = 1;
         frame->slots[dst] = ret;
-        continue;
-      }
-
-      case OP_GET_REF:
-      {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        frame->slots[dst] = *frame->slots[src].as.ref.pval;
-        continue;
-      }
-
-      case OP_SET_REF:
-      {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        *frame->slots[dst].as.ref.pval = frame->slots[src];
-        continue;
-      }
-
-      case OP_SET_OFFSET:
-      {
-        uint8_t dst = READ_BYTE();
-        uint8_t src = READ_BYTE();
-        uint8_t slot = READ_BYTE();
-        Value_* base = (Value_*)READ_LONGLONG();
-        Value_ val = vm_pop(vm);
-        *(base + slot) = val;
         continue;
       }
 
@@ -639,7 +613,7 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_MAKE_REF:
+      case OP_REF_MAKE:
       {
         Value_ loc = vm_pop(vm);
         Value_ ret = {
@@ -711,12 +685,12 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
-      case OP_INC_REF:
+      case OP_REF_INC:
       {
         continue;
       }
 
-      case OP_DEC_REF:
+      case OP_REF_DEC:
       {
         continue;
       }

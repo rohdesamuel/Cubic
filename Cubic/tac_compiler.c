@@ -114,11 +114,36 @@ static void tac_chunk_print(TacChunk_* chunk) {
       continue;
     }
 
-    if (!is_loc_empty(tac->dst)) {      
+    if (!is_loc_empty(tac->dst)) {
+      if (tac->op == OP_CALL) {
+        printf("*");
+        location_print(&tac->dst);
+        printf(" <- CALL ");
+        location_print(&tac->arg_l.loc);
+        printf("(");
+        for (int i = 0; i < tac->arg_r.size; ++i) {
+          Location_ loc = tac->dst;
+          loc.index += i + 1;  // +1 because index 0 is the return value address.
+          location_print(&loc);
+          if (i < tac->arg_r.size - 1) {
+            printf(", ");
+          }
+        }
+        printf(")");
+        printf("\n");
+        continue;
+      }
+
       if (tac->op == OP_JMP) {
         printf("JMP ");
         location_print(&tac->dst);
         printf("\n");
+        continue;
+      }
+
+      if (tac->op == OP_NIL) {
+        location_print(&tac->dst);
+        printf(" <- NIL\n");
         continue;
       }
 
@@ -178,26 +203,16 @@ static void tac_chunk_print(TacChunk_* chunk) {
         }
         break;
 
-      case OP_CALL:
-        if (dst->type != LOCATION_TYPE_EMPTY) {
-          location_print(dst);
-          printf(" = ");
-        }
-        printf("CALL ");
-        location_print(&tac->arg_l.loc);
-        printf("\n");
-        break;
-
       case OP_ASSERT:
         printf("ASSERT ");
         location_print(loc_l);
         break;
 
-      case OP_MAKE_REF:
+      case OP_REF_MAKE:
         printf("new ref[%lld]", tac->arg_l.size);
         break;
 
-      case OP_INC_REF:
+      case OP_REF_INC:
         location_print(loc_l);
         printf(".count ++");
         break;
@@ -474,7 +489,7 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
   Location_ empty_ret = EMPTY_LOC;
   emit_return(&compiler->chunk, &empty_ret, 0);
 
-  tac_compiler_print(compiler);
+  //tac_compiler_print(compiler);
 }
 
 void tac_compiler_clear(TacCompiler_* compiler) {
@@ -666,19 +681,25 @@ static TacHandle_ emit_tac(TacChunk_* chunk, OpCode op, Location_ dst, Operand_ 
   return tac_chunk_write(chunk, &tac, line);
 }
 
+static Location_ emit_nil(TacChunk_* chunk, int line) {
+  Location_ ret = tac_alloc_val(chunk, 1);
+  emit_tac(chunk, OP_NIL, ret, EMPTY_OPERAND, EMPTY_OPERAND, line);
+  return ret;
+}
+
 static Location_ emit_constant(TacChunk_* chunk, TypedValue_ value, size_t size, int line) {
   return tac_chunk_writeconstant(chunk, value, size, line);
 }
 
 static void emit_make_ref(TacChunk_* chunk, const Location_* dst, size_t size, int line) {
   assertf(dst->type == LOCATION_TYPE_VAR, "");
-  emit_tac(chunk, OP_MAKE_REF, *dst, OP_SIZE(size), EMPTY_OPERAND, line);
+  emit_tac(chunk, OP_REF_MAKE, *dst, OP_SIZE(size), EMPTY_OPERAND, line);
 }
 
 static void emit_make_ref_from(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t size, int line) {
   assertf(dst->type == LOCATION_TYPE_VAR, "");
   assertf(src->type == LOCATION_TYPE_VAR, "");
-  emit_tac(chunk, OP_INC_REF, EMPTY_LOC, OP_LOC(*src), EMPTY_OPERAND, line);
+  emit_tac(chunk, OP_REF_INC, EMPTY_LOC, OP_LOC(*src), EMPTY_OPERAND, line);
   emit_tac(chunk, OP_MOVE, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
 }
 
@@ -886,54 +907,29 @@ static void emit_set_variable(TacChunk_* chunk, const Location_* dst, const Loca
   }
 }
 
-static Location_ emit_cast_kind(TacChunk_* chunk, const Location_* val, const SemanticType_* dst_type, const SemanticType_* src_type, size_t val_size, int line) {
-  Location_ dst = *val;
-
-  switch (dst_type->kind) {
-    case KIND_VAL:
-      dst = tac_alloc(chunk, dst_type);
-      switch (src_type->kind) {
-        case KIND_VAR:
-          emit_set_variable(chunk, &dst, val, dst.size, line);
-          break;
-        case KIND_REF:
-          // Fall-through intended.
-        case KIND_PTR:
-          emit_set_variable(chunk, &dst, val, dst.size, line);
-          break;
-      }
+//
+static void emit_set_param(TacChunk_* chunk, const Location_* dst, const Location_* src, size_t val_size, int line) {
+  switch (dst->type) {
+    case LOCATION_TYPE_VAL:
+      emit_set_val(chunk, dst, src, val_size, line);
       break;
-
-    case KIND_VAR:
-      dst = tac_alloc(chunk, dst_type);
-      emit_make_ref(chunk, &dst, dst.size, line);
-      switch (src_type->kind) {
-        case KIND_VAL:
-          emit_set_variable(chunk, &dst, val, dst.size, line);
-          break;
-        case KIND_REF:
-          // Fall-through intended.
-        case KIND_PTR:
-          emit_set_variable(chunk, &dst, val, dst.size, line);
-          break;
-      }
+    case LOCATION_TYPE_VAR:
+      emit_set_var(chunk, dst, src, val_size, line);
       break;
-
-    case KIND_REF:
-      // Fall-through intended.
-    case KIND_PTR:
-      dst = tac_alloc(chunk, dst_type);
-      switch (src_type->kind) {
-        case KIND_VAL:
-          emit_tac(chunk, OP_LOADA, dst, OP_LOC(*val), EMPTY_OPERAND, line);
+    case LOCATION_TYPE_PTR:
+      switch (src->type) {
+        case LOCATION_TYPE_VAL:
+          emit_tac(chunk, OP_LOADA, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
           break;
-        case KIND_VAR:
-          emit_tac(chunk, OP_RLOADA, dst, OP_LOC(*val), EMPTY_OPERAND, line);
+        case LOCATION_TYPE_VAR:
+          emit_tac(chunk, OP_RLOADA, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
+          break;
+        case LOCATION_TYPE_PTR:
+          emit_tac(chunk, OP_MOVE, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
           break;
       }
       break;
   }
-  return dst;
 }
 
 static Location_ emit_get_var(TacChunk_* chunk, const Location_* src, size_t size, int line) {
@@ -1281,6 +1277,7 @@ static Location_ unary_code_gen(TacChunk_* chunk, AstNode_* node) {
   switch (exp->op) {
     case TK_BANG:  return emit_not(chunk, loc, loc.size, node->line);
     case TK_MINUS: return emit_neg(chunk, loc, type, loc.size, node->line);
+    case TK_NOT:  return emit_not(chunk, loc, loc.size, node->line);
     case TK_TILDE: return emit_bit_not(chunk, loc, loc.size, node->line);
 
     default: printf("[Line %d] UnaryOp '%d' unimplemented\n", exp->base.base.line, exp->op);  break; // Unreachable.
@@ -1463,7 +1460,7 @@ static Location_ return_code_gen(TacChunk_* chunk, AstNode_* node) {
   if (stmt->expr) {
     dst = code_gen(chunk, (AstNode_*)stmt->expr);
   }
-  emit_set_variable(chunk, &chunk->ret_loc, &dst, dst.size, node->line);
+  emit_set_variable(chunk, &chunk->ret_loc, &dst, stmt->expr->sem_type.size, node->line);
   emit_return(chunk, &dst, node->line);
   return EMPTY_LOC;
 }
@@ -1474,7 +1471,7 @@ static Location_ if_code_gen(TacChunk_* chunk, AstNode_* node) {
   Location_ end_if = tac_alloc_label(chunk, "end_if");
   Location_ else_if = stmt->elif_exprs.count ? tac_alloc_label(chunk, "else_if") : EMPTY_LOC;
   Location_ final_else = stmt->else_stmt ? tac_alloc_label(chunk, "else") : EMPTY_LOC;
-  Location_ next_else = loc_is_empty(else_if) ? final_else : else_if;
+  Location_ next_else = loc_is_empty(else_if) ? (loc_is_empty(final_else) ?  end_if : final_else) : else_if;
 
   // if `condition_expr`
   Location_ condition_expr = code_gen(chunk, (AstNode_*)stmt->condition_expr);
@@ -1635,21 +1632,6 @@ static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstVarExpr_* expr = (AstVarExpr_*)node;
   Location_ dst = code_gen(chunk, (AstNode_*)expr->expr);
   return dst;
-
-  SemanticType_ top_type = expr->base.top_sem_type;
-  SemanticType_ expr_type = expr->base.sem_type;
-
-  if (top_type.kind == expr_type.kind) {
-    return dst;
-  }
-
-  if (top_type.kind == KIND_VAL) {
-    Location_ tmp = tac_alloc_val(chunk, dst.size);
-    emit_tac(chunk, OP_MOVE, tmp, OP_LOC(dst), EMPTY_OPERAND, node->line);
-    return tmp;
-  }
-
-  return dst;
 }
 
 // Get the specified variable.
@@ -1689,10 +1671,19 @@ static Location_ while_stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstWhileStmt_* stmt = (AstWhileStmt_*)node;
 
   // if `condition_expr`
-  code_gen(chunk, (AstNode_*)stmt->condition_expr);
+  Location_ while_loop_begin = tac_alloc_label(chunk, "while_loop_begin");
+  Location_ while_loop_end = tac_alloc_label(chunk, "while_loop_end");
+
+  emit_label(chunk, while_loop_begin, stmt->condition_expr->base.line);
+  Location_ condition = code_gen(chunk, (AstNode_*)stmt->condition_expr);
+
+  emit_tac(chunk, OP_JMP_IF_FALSE, while_loop_end, OP_LOC(condition), EMPTY_OPERAND, stmt->condition_expr->base.line);
 
   // if true then ...
   code_gen(chunk, stmt->block_stmt);
+
+  emit_tac(chunk, OP_JMP, while_loop_begin, EMPTY_OPERAND, EMPTY_OPERAND, stmt->block_stmt->line);
+  emit_label(chunk, while_loop_end, stmt->block_stmt->line);
   return EMPTY_LOC;
 }
 
@@ -1771,7 +1762,9 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
   int i = 0;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, n->node);
-    args_locs[i] = code_gen(chunk, n->node);
+    Location_ tmp = code_gen(chunk, n->node);
+    //tmp = emit_cast_kind(chunk, &tmp, &arg->base.top_sem_type, &arg->base.sem_type, tmp.size, n->node->line);
+    args_locs[i] = tmp;
     ++i;
   }
 
@@ -1781,6 +1774,8 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
     ret_val = tac_alloc(chunk, &fn_sym->return_type);
     ret_loc = tac_alloc_ptr(chunk);
     emit_tac(chunk, OP_LOADA, ret_loc, OP_LOC(ret_val), EMPTY_OPERAND, node->line);
+  } else {
+    ret_loc = emit_nil(chunk, node->line);
   }
 
   // Get function to call.
@@ -1798,7 +1793,7 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
   i = 0;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, n->node);
-    emit_set_variable(chunk, &param_locs[i], &args_locs[i], arg->expr->sem_type.size, node->line);
+    emit_set_param(chunk, &param_locs[i], &args_locs[i], arg->expr->sem_type.size, node->line);
     ++i;
   }
 
@@ -1935,8 +1930,7 @@ static void class_init_member(TacChunk_* chunk, const Location_* cls_loc, const 
     emit_construct_default_class(chunk, field->sem_type.sym, field_ptr, line);
   } else {
     assertf(field->sem_type.size == 1, "");
-    Location_ tmp = tac_alloc_val(chunk, field->sem_type.size);
-    emit_tac(chunk, OP_NIL, tmp, EMPTY_OPERAND, EMPTY_OPERAND, line);
+    Location_ tmp = emit_nil(chunk, line);
     emit_set_variable(chunk, field_ptr, &tmp, field->sem_type.size, line);
   }
 }
@@ -2054,40 +2048,45 @@ static Location_ class_constructor_field_code_gen(TacChunk_* chunk, AstNode_* no
   return code_gen(chunk, (AstNode_*)field->expr);
 }
 
+static Location_ array_value_code_gen(TacChunk_* chunk, AstNode_* node) {
+  return EMPTY_LOC;
+}
+
 static CodeGenRule_ code_gen_rules[] = {
-  [AST_CLS(AstProgram_)] = {program_code_gen},
-  [AST_CLS(AstBlock_)] = {block_code_gen},
-  [AST_CLS(AstStmt_)] = {stmt_code_gen},
-  [AST_CLS(AstExpr_)] = {expr_code_gen},
-  [AST_CLS(AstPrintStmt_)] = {print_code_gen},
-  [AST_CLS(AstUnaryExp_)] = {unary_code_gen},
-  [AST_CLS(AstBinaryExp_)] = {binary_code_gen},
-  [AST_CLS(AstPrimaryExp_)] = {primary_code_gen},
-  [AST_CLS(AstReturnStmt_)] = {return_code_gen},
-  [AST_CLS(AstIfStmt_)] = {if_code_gen},
-  [AST_CLS(AstAssertStmt_)] = {assert_code_gen},
-  [AST_CLS(AstVarDeclStmt_)] = {var_decl_code_gen},
-  [AST_CLS(AstVarExpr_)] = {var_expr_code_gen},
-  [AST_CLS(AstIdExpr_)] = {id_expr_code_gen},
-  [AST_CLS(AstAssignmentExpr_)] = {assignment_expr_code_gen},
-  [AST_CLS(AstWhileStmt_)] = {while_stmt_code_gen},
-  [AST_CLS(AstFunctionDef_)] = {function_def_code_gen},
-  [AST_CLS(AstFunctionBody_)] = {function_body_code_gen},
-  [AST_CLS(AstFunctionParam_)] = {function_param_code_gen},
-  [AST_CLS(AstFunctionCall_)] = {function_call_code_gen},
-  [AST_CLS(AstFunctionCallArgs_)] = {function_args_code_gen},
-  [AST_CLS(AstFunctionCallArg_)] = {function_arg_code_gen},
-  [AST_CLS(AstExpressionStmt_)] = {expression_statement_code_gen},
-  [AST_CLS(AstNoopExpr_)] = {noop_code_gen},
-  [AST_CLS(AstNoopStmt_)] = {noop_code_gen},
-  [AST_CLS(AstCleanUpTemps_)] = {clean_up_temps_code_gen},
-  [AST_CLS(AstTmpDecl_)] = {tmp_decl_code_gen},
-  [AST_CLS(AstClassDef_)] = {noop_code_gen},
-  [AST_CLS(AstClassMemberDecl_)] = {noop_code_gen},
-  [AST_CLS(AstClassConstructor_)] = {class_constructor_code_gen},
+  [AST_CLS(AstProgram_)]               = {program_code_gen},
+  [AST_CLS(AstBlock_)]                 = {block_code_gen},
+  [AST_CLS(AstStmt_)]                  = {stmt_code_gen},
+  [AST_CLS(AstExpr_)]                  = {expr_code_gen},
+  [AST_CLS(AstPrintStmt_)]             = {print_code_gen},
+  [AST_CLS(AstUnaryExp_)]              = {unary_code_gen},
+  [AST_CLS(AstBinaryExp_)]             = {binary_code_gen},
+  [AST_CLS(AstPrimaryExp_)]            = {primary_code_gen},
+  [AST_CLS(AstReturnStmt_)]            = {return_code_gen},
+  [AST_CLS(AstIfStmt_)]                = {if_code_gen},
+  [AST_CLS(AstAssertStmt_)]            = {assert_code_gen},
+  [AST_CLS(AstVarDeclStmt_)]           = {var_decl_code_gen},
+  [AST_CLS(AstVarExpr_)]               = {var_expr_code_gen},
+  [AST_CLS(AstIdExpr_)]                = {id_expr_code_gen},
+  [AST_CLS(AstAssignmentExpr_)]        = {assignment_expr_code_gen},
+  [AST_CLS(AstWhileStmt_)]             = {while_stmt_code_gen},
+  [AST_CLS(AstFunctionDef_)]           = {function_def_code_gen},
+  [AST_CLS(AstFunctionBody_)]          = {function_body_code_gen},
+  [AST_CLS(AstFunctionParam_)]         = {function_param_code_gen},
+  [AST_CLS(AstFunctionCall_)]          = {function_call_code_gen},
+  [AST_CLS(AstFunctionCallArgs_)]      = {function_args_code_gen},
+  [AST_CLS(AstFunctionCallArg_)]       = {function_arg_code_gen},
+  [AST_CLS(AstExpressionStmt_)]        = {expression_statement_code_gen},
+  [AST_CLS(AstNoopExpr_)]              = {noop_code_gen},
+  [AST_CLS(AstNoopStmt_)]              = {noop_code_gen},
+  [AST_CLS(AstCleanUpTemps_)]          = {clean_up_temps_code_gen},
+  [AST_CLS(AstTmpDecl_)]               = {tmp_decl_code_gen},
+  [AST_CLS(AstClassDef_)]              = {noop_code_gen},
+  [AST_CLS(AstClassMemberDecl_)]       = {noop_code_gen},
+  [AST_CLS(AstClassConstructor_)]      = {class_constructor_code_gen},
   [AST_CLS(AstClassConstructorParam_)] = {class_constructor_field_code_gen},
-  [AST_CLS(AstDotExpr_)] = {dot_expr_code_gen},
-  [AST_CLS(AstTypeExpr_)] = {noop_code_gen},
+  [AST_CLS(AstDotExpr_)]               = {dot_expr_code_gen},
+  [AST_CLS(AstTypeExpr_)]              = {noop_code_gen},
+  [AST_CLS(AstArrayValueExpr_)]        = {array_value_code_gen},
 };
 
 // Static assert to make sure that all node types are accounted for.
@@ -2113,7 +2112,7 @@ static void unary_code_gen(TacChunk_* chunk, AstNode_* node) {
     if (exp->expr->sem_type.kind == KIND_VAL) {
       // This assumes the symbol lives on the stack or referencing a static, create a weak reference to it.
       emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
-      emit_byte(chunk, OP_MAKE_REF, node->line);
+      emit_byte(chunk, OP_REF_MAKE, node->line);
     } else if (exp->expr->sem_type.kind == KIND_VAR) {
       emit_bytes(chunk, OP_ADDROF_REF, (uint8_t)index, node->line);
     }
@@ -2123,7 +2122,7 @@ static void unary_code_gen(TacChunk_* chunk, AstNode_* node) {
     int64_t size = exp->expr->sem_type.size;
     size = size == 0 ? 1 : size;
     emit_long(chunk, (uint32_t)size, node->line);
-    emit_byte(chunk, OP_MAKE_REF, node->line);
+    emit_byte(chunk, OP_REF_MAKE, node->line);
   } else {
     code_gen(chunk, (AstNode_*)exp->expr);
     // Emit the operator instruction.
@@ -2674,7 +2673,7 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
     int64_t size = sem_type.size;
     size = size == 0 ? 1 : size;
     emit_long(chunk, (uint32_t)size, node->line);
-    emit_byte(chunk, OP_MAKE_REF, node->line);
+    emit_byte(chunk, OP_REF_MAKE, node->line);
     emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
   }
 
@@ -2704,7 +2703,7 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
       } else if (expr->base.top_sem_type.kind == KIND_REF && var->sem_type.kind == KIND_VAL) {
         if (expr->base.sem_type.ref_kind == REF_KIND_WEAK) {
           emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)symbolvar_index(sym), node->line);
-          emit_byte(chunk, OP_MAKE_REF, node->line);
+          emit_byte(chunk, OP_REF_MAKE, node->line);
         } else {
           assertf(false, "Unsupported reference operation");
         }

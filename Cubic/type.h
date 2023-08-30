@@ -47,7 +47,7 @@
 #define IS_TY_FUNCTION(TYPE) IS_TY_OBJ(TYPE, OBJ_TYPE_FUNCTION)
 
 typedef enum {
-  VAL_UNKNOWN = -1,
+  VAL_UNKNOWN,
 
   // Start primitives
   VAL_NIL,
@@ -68,6 +68,10 @@ typedef enum {
 
   VAL_CLASS,
   VAL_OBJ,
+  VAL_ARRAY,
+  VAL_VAR,
+  VAL_IN,
+  VAL_OUT,
 
   __VALUE_TYPE_COUNT__,
 } ValueType;
@@ -76,16 +80,20 @@ typedef enum {
   KIND_UNKNOWN,
 
   // A named variable that is stored on stack or in a struct.
+  // ex. val a := 0
   KIND_VAL,
   
   // A named variable that is stored on the heap that does not need to be
   // explicitly dereferenced.
+  // ex. var a := 0
   KIND_VAR,
 
   // Non-null pointer that does not need to be dereferenced.
+  // ex. function foo (in a : int) ... end
   KIND_REF,
 
   // A named variable that is stored on stack or heap, no ownership.
+  // ex. ptr a : int
   KIND_PTR,
 } ValueKind;
 
@@ -100,6 +108,16 @@ typedef enum {
 } ValueRefKind;
 
 typedef enum {
+  CONST_KIND_UNKNOWN,
+
+  // Mutable. No const restrictions.
+  CONST_KIND_NONE,
+
+  // Immutable. Full const restrictions.
+  CONST_KIND_WHOLE,
+} ValueConstKind;
+
+typedef enum {
   LIFETIME_UNKNOWN,
 
   // Automatic lifetime (will be destructed without user intervention).
@@ -111,6 +129,35 @@ typedef enum {
   // Type is a static constant and can be cached for multiple uses.
   LIFETIME_STATIC,
 } ValueLifetime;
+
+typedef struct Type_ {
+  // The type that is the final result of resolving the symbol.
+  // E.g. return value of a function, the type that a pointer is addressing
+  // to, the field of a given struct.
+  enum ValueType val;
+
+  // How to interpret the type, is it a value, a reference?
+  enum ValueKind kind;
+
+  // If the type is a composite, e.g. maps, lists, then this will be the
+  // sub-types.
+  ListOf_(struct Type_*) component_types;
+
+  // The name of the type.
+  Token_ opt_name;
+} Type_;
+
+extern const Type_ Nil_Ty;
+extern const Type_ Bool_Ty;
+extern const Type_ Int_Ty;
+extern const Type_ Uint_Ty;
+extern const Type_ Float_Ty;
+extern const Type_ Double_Ty;
+
+Type_* make_var_ty(const Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_in_ty(const Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_out_ty(const Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_array_ty(const Type_* el_type, MemoryAllocator_* allocator);
 
 typedef struct RuntimeType_ {
   enum ValueType ty;

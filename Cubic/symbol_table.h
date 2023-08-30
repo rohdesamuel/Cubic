@@ -9,8 +9,8 @@
 #include "symbol.h"
 
 // Frame -> Frame :: 1 -> *
-// Frame -> Scope :: 1 -> *
-// Scope -> Scope :: 1 -> *
+// Frame <- Scope :: 1 -> *
+// Scope <- Scope :: 1 -> *
 // Scope -> Symbol Table :: 1 -> 1
 typedef struct Scope_ {
   struct MemoryAllocator_* allocator;

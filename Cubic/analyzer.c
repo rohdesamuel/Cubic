@@ -432,6 +432,11 @@ void assignment_expr_analysis(AstNode_* n) {
     return;
   }
 
+  if (expr->left->sem_type.const_kind == CONST_KIND_WHOLE) {
+    error(analyzer_, n, "Left-hand side of assignment is const and cannot be assigned to.");
+    return;
+  }
+
   AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
   if (lvalue_expr->base.sem_type.val != rvalue_expr->sem_type.val) {
@@ -772,6 +777,18 @@ void ast_class_constructor_param_analysis(AstNode_* node) {
   field->base.sem_type = field->expr->sem_type;
 }
 
+void array_value_analysis(AstNode_* node) {
+  AstArrayValueExpr_* expr = (AstArrayValueExpr_*)node;
+  SemanticType_* type = &expr->base.sem_type;
+  *type = SemanticType_Unknown;
+
+  type->val = VAL_ARRAY;
+  type->kind = KIND_VAL;
+  type->size = 0;
+
+
+}
+
 AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstProgram_)]                = {program_analysis},
   [AST_CLS(AstBlock_)]                  = {block_analysis},
@@ -806,6 +823,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstClassConstructorParam_)]  = {ast_class_constructor_param_analysis},
   [AST_CLS(AstDotExpr_)]                = {ast_dot_expr_analysis},
   [AST_CLS(AstTypeExpr_)]               = {noop_analysis},
+  [AST_CLS(AstArrayValueExpr_)]         = {array_value_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.

@@ -129,6 +129,9 @@
     <ClCompile Include="random.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="type.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="syntax.txt">

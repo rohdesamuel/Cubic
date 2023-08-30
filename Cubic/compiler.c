@@ -468,8 +468,8 @@ static void codegen_tac(Compiler_* compiler, Chunk_* chunk, const TacChunk_* tac
         emit_byte(chunk, tac->arg_r.offset, line);
         break;
 
-      case OP_MAKE_REF:
-        emit_byte(chunk, OP_MAKE_REF, line);
+      case OP_REF_MAKE:
+        emit_byte(chunk, OP_REF_MAKE, line);
         emit_byte(chunk, tac->dst.frame_offset, line);
         emit_byte(chunk, (uint8_t)tac->arg_l.size, line);
         break;
@@ -542,7 +542,7 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
     if (exp->expr->sem_type.kind == KIND_VAL) {
       // This assumes the symbol lives on the stack or referencing a static, create a weak reference to it.
       emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)index, node->line);
-      emit_byte(chunk, OP_MAKE_REF, node->line);
+      emit_byte(chunk, OP_REF_MAKE, node->line);
     } else if (exp->expr->sem_type.kind == KIND_VAR){
       emit_bytes(chunk, OP_ADDROF_REF, (uint8_t)index, node->line);
     }
@@ -552,7 +552,7 @@ static void unary_code_gen(Chunk_* chunk, AstNode_* node) {
     int64_t size = exp->expr->sem_type.size;
     size = size == 0 ? 1 : size;
     emit_long(chunk, (uint32_t)size, node->line);
-    emit_byte(chunk, OP_MAKE_REF, node->line);
+    emit_byte(chunk, OP_REF_MAKE, node->line);
   } else {
     code_gen(chunk, (AstNode_*)exp->expr);
     // Emit the operator instruction.
@@ -1072,7 +1072,7 @@ static void var_decl_code_gen(Chunk_* chunk, AstNode_* node) {
     int64_t size = sem_type.size;
     size = size == 0 ? 1 : size;
     emit_long(chunk, (uint32_t)size, node->line);
-    emit_byte(chunk, OP_MAKE_REF, node->line);
+    emit_byte(chunk, OP_REF_MAKE, node->line);
     emit_bytes(chunk, OP_SET_VAR, (uint8_t)slot, node->line);
   }
 
@@ -1102,7 +1102,7 @@ static void id_expr_code_gen(Chunk_* chunk, AstNode_* node) {
       } else if (expr->base.top_sem_type.kind == KIND_REF && var->sem_type.kind == KIND_VAL) {
         if (expr->base.sem_type.ref_kind == REF_KIND_WEAK) {
           emit_bytes(chunk, OP_ADDROF_VAR, (uint8_t)symbolvar_index(sym), node->line);
-          emit_byte(chunk, OP_MAKE_REF, node->line);
+          emit_byte(chunk, OP_REF_MAKE, node->line);
         } else {
           assertf(false, "Unsupported reference operation");
         }
@@ -1343,6 +1343,9 @@ void class_constructor_field_code_gen(Chunk_* chunk, AstNode_* node) {
   code_gen(chunk, (AstNode_*)field->expr);
 }
 
+void array_value_code_gen(Chunk_* chunk, AstNode_* node) {
+}
+
 static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstProgram_)]                = {program_code_gen},
   [AST_CLS(AstBlock_)]                  = {block_code_gen},
@@ -1377,6 +1380,7 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstClassConstructorParam_)]  = {class_constructor_field_code_gen},
   [AST_CLS(AstDotExpr_)]                = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)]               = {noop_code_gen},
+  [AST_CLS(AstArrayValueExpr_)]         = {array_value_code_gen},
 };
 // Static assert to make sure that all node types are accounted for.
 STATIC_ASSERT(

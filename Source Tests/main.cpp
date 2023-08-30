@@ -29,6 +29,12 @@ UTEST_F(MyTestFixture, hello_world) {
   ASSERT_STRNEQ(expected, actual, strlen(expected));
 }
 
+UTEST_F(MyTestFixture, arrays) {
+  auto output = run_file(exedir, "arrays.cub");
+  ASSERT_TRUE(output.has_value());
+  ASSERT_EQ(0, output->exit_code);
+}
+
 UTEST_F(MyTestFixture, conditionals) {
   auto output = run_file(exedir, "conditionals.cub");
   ASSERT_TRUE(output.has_value());

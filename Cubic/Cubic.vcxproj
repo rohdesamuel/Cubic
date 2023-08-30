@@ -181,6 +181,7 @@
     <ClCompile Include="symbol_table.c" />
     <ClCompile Include="tac_compiler.c" />
     <ClCompile Include="tokens.c" />
+    <ClCompile Include="type.c" />
     <ClCompile Include="value.c" />
     <ClCompile Include="vm.c" />
   </ItemGroup>

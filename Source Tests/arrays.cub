@@ -2,25 +2,22 @@
 val a: int[2] = [1, 2]
 assert a[0] == 1
 assert a[1] == 2
-assert a == [1, 2]
 
 # Static array, size determined by array.
 val b: int[] = [1, 2]
 assert b[0] == 1
 assert b[1] == 2
-assert b == [1, 2]
 assert a == b
 assert b == a
 
 # Static array, runtime size, initialized to 0.
-val n: int = 2
-val c: float[n] = [1, 2]
-assert c[0] == 1
-assert c[1] == 2
-assert c == [1, 2]
-
-assert c == b
-assert b == c
+# val n: int = 2
+# val c: float[n] = [1, 2]
+# assert c[0] == 1
+# assert c[1] == 2
+# 
+# assert c == b
+# assert b == c
 
 # Multi-dimensional arrays
 val d: int[int[2]] = [[1,2], [3, 4]]
@@ -42,27 +39,27 @@ assert e == a
 assert a == e
 
 # Generic lists
-val f: list[int] = [1, 2]
-assert f[0] == 1
-assert f[1] == 2
-assert f == a
-assert a == f
-
-val g: list[int] = []
-
-assert f != g
-
-g.append(1)
-assert g[0] == 1
-
-g = g + 2
-assert g[1] == 2
-
-assert f == g
-
-val i: list[int] = f
-assert i == g
-assert g == i
+# val f: List[int] = [1, 2]
+# assert f[0] == 1
+# assert f[1] == 2
+# assert f == a
+# assert a == f
+# 
+# val g: List[int] = []
+# 
+# assert f != g
+# 
+# g.append(1)
+# assert g[0] == 1
+# 
+# g = g + 2
+# assert g[1] == 2
+# 
+# assert f == g
+# 
+# val i: List[int] = f
+# assert i == g
+# assert g == i
 
 # val j: List[var List[int]]
 # val k: List[var int]

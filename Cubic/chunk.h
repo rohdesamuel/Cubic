@@ -18,6 +18,8 @@
     OPCODE(OP_RLOAD)  /* val <- *(ref.ptr + frame_offset) */ \
     OPCODE(OP_RLOADA) /* val <- ret.ptr + frame_offset */    \
     OPCODE(OP_RSTORE) /* *(ref.ptr + frame_offset) <- val */ \
+    OPCODE(OP_REF_MAKE)  \
+    OPCODE(OP_REF_DEL)  \
     OPCODE(OP_CONSTANT)  \
     OPCODE(OP_EQ)  \
     OPCODE(OP_GT)  \
@@ -87,14 +89,13 @@
     OPCODE(OP_COPY_REF)  \
     OPCODE(OP_COPY_VAL)  \
     OPCODE(OP_COPY)  \
-    OPCODE(OP_MAKE_REF)  \
     OPCODE(OP_GET_REF)  \
     OPCODE(OP_SET_REF)  \
     OPCODE(OP_STACK_TOP)  \
     OPCODE(OP_ADDROF_VAR)  \
     OPCODE(OP_ADDROF_REF)  \
-    OPCODE(OP_INC_REF)  \
-    OPCODE(OP_DEC_REF)  \
+    OPCODE(OP_REF_INC)  \
+    OPCODE(OP_REF_DEC)  \
     OPCODE(OP_PRINT)  \
     OPCODE(OP_ASSERT)  \
     OPCODE(OP_BEGIN_SCOPE)  \

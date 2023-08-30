@@ -172,15 +172,17 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
     .val = VAL_UNKNOWN,
     .kind = KIND_VAL,
     .obj = OBJ_TYPE_UNKNOWN,
+    .const_kind = CONST_KIND_NONE,
     .name = { 0 },
     .sym = NULL
   };
 
-  if (token.type == TK_VAR) {
-    ret.kind = KIND_REF;
-    advance(parser, scanner);
-    token = parser->previous;
-  }
+  // The following code, once implemented, allows functions to return references.
+  // if (token.type == TK_VAR) {
+  //   ret.kind = KIND_REF;
+  //   advance(parser, scanner);
+  //   token = parser->previous;
+  // }
 
   switch (token.type) {
     case TK_BOOL:        ret.val = VAL_BOOL; ret.size = 1; break;
@@ -306,12 +308,14 @@ static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope
 
   bool is_ref = false;
   ValueRefKind ref_kind = REF_KIND_UNKNOWN;
+  ValueConstKind const_kind = CONST_KIND_NONE;
   if (match(parser, scanner, TK_REF)) {
     is_ref = true;
     ref_kind = REF_KIND_WEAK;
   } else if (match(parser, scanner, TK_IN)) {
     is_ref = true;
     ref_kind = REF_KIND_WEAK;
+    const_kind = CONST_KIND_WHOLE;
   } else if (match(parser, scanner, TK_OUT)) {
     is_ref = true;
     ref_kind = REF_KIND_WEAK;
@@ -327,6 +331,7 @@ static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope
   if (is_ref) {
     param->type.kind = KIND_REF;
     param->type.ref_kind = ref_kind;
+    param->type.const_kind = const_kind;
   }
 
   frame_addparam(scope->frame, &param->name);
@@ -702,6 +707,9 @@ static bool check(Parser_* parser, TokenType type) {
 static AstNode_* Expr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   //AstExpr_* ret = MAKE_AST_NODE(parser->allocator, AstExpr_, scope, parser->current.line);
   AstExpr_* ret = (AstExpr_*)parse_precedence(parser, scanner, PREC_NONE, scope);
+  if (!ret) {
+    return NULL;
+  }
   ret->top_sem_type = SemanticType_Unknown;
   return (AstNode_*)ret;
 }
@@ -778,6 +786,21 @@ static AstNode_* grouping(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   consume(parser, scanner, TK_RPAREN, "Expect ')' after expression.");
 
   return expr;
+}
+
+static AstNode_* ArrayValue(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstArrayValueExpr_* array = MAKE_AST_EXPR(parser->allocator, AstArrayValueExpr_, scope, parser->previous.line);
+  astlist_init(&array->values, parser->allocator);
+  if (match(parser, scanner, TK_RBRACKET)) {
+    return (AstNode_*)array;
+  }
+
+  do {
+    astlist_append(&array->values, Expr(parser, scanner, scope));
+  } while (match(parser, scanner, TK_COMMA));
+
+  consume(parser, scanner, TK_RBRACKET, "Expected ']' at end of array definition.");
+  return (AstNode_*)array;
 }
 
 static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, Scope_* scope) {
@@ -948,7 +971,7 @@ ParseRule_ rules[] = {
   [TK_ID]           = {Id,          NULL,              PREC_NONE},
   [TK_LPAREN]       = {grouping,    FunctionCallArgs,  PREC_CALL},
   [TK_RPAREN]       = {NULL,        NULL,              PREC_NONE},
-  [TK_LBRACKET]     = {NULL,        NULL,              PREC_NONE},
+  [TK_LBRACKET]     = {ArrayValue,  NULL,              PREC_NONE},
   [TK_RBRACKET]     = {NULL,        NULL,              PREC_NONE},
   [TK_LBRACE]       = {NULL,        ClassConstructor,  PREC_CALL},
   [TK_RBRACE]       = {NULL,        NULL,              PREC_NONE},

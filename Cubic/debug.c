@@ -73,7 +73,7 @@ int disassemble_instruction(Chunk chunk, int offset) {
     DEBUG_INSTRUCTION(OP_SET_VAR, byte_instruction);
     DEBUG_INSTRUCTION(OP_DESTROY_VAR, byte_instruction);
 
-    DEBUG_INSTRUCTION(OP_MAKE_REF, simple_instruction);
+    DEBUG_INSTRUCTION(OP_REF_MAKE, simple_instruction);
     DEBUG_INSTRUCTION(OP_GET_REF, byte_instruction);
     DEBUG_INSTRUCTION(OP_SET_REF, byte_instruction);
     DEBUG_INSTRUCTION(OP_ADDROF_VAR, byte_instruction);

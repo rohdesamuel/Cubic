@@ -80,7 +80,25 @@ do
   assert a == 1
 end
 
+do
+  class Vec2
+    x: int
+    y: int
+  end
 
+  function add(
+        in a: Vec2,
+        in b: Vec2
+      ) -> Vec2
+    return Vec2{a.x + b.x, a.y + b.y}
+  end
+
+  val a := Vec2{1, 2}
+  val b := Vec2{3, 4}
+  val c := add(a, b)
+  assert c.x == 4
+  assert c.y == 6
+end
 
 # do
 #   function bar(a: int) -> int

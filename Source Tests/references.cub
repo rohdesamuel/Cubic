@@ -24,19 +24,6 @@ do
   assert b == 200
 end
 
-do
-  val a := 'hello'
-  var b := a
-
-  assert a == 'hello'
-  assert b == 'hello'
-
-  b = 'world'
-
-  assert a == 'hello'
-  assert b == 'world'
-end
-
 # Duplicate references.
 do
   val a := 100

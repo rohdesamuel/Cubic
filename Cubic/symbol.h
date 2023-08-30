@@ -40,7 +40,11 @@ typedef struct SemanticType_ {
   // How to interpret the type, is it an address, a reference?
   enum ValueKind kind;
 
+  // Whether the value is a ref counted object or not.
   enum ValueRefKind ref_kind;
+
+  // Whether the value is mutable.
+  enum ValueConstKind const_kind;
 
   // When to destroy the associated value.
   enum ValueLifetime lifetime;
@@ -126,6 +130,10 @@ typedef struct TmpSymbol_ {
   // Incrementing index from 0 in local scope.  
   int tmp_index;
 } TmpSymbol_;
+
+typedef struct ArraySymbol_ {
+  int a;
+} ArraySymbol_;
 
 typedef struct Symbol_ {
   SymbolType_ type;

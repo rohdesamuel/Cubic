@@ -53,7 +53,7 @@ typedef struct List_ {
 
 #define ListOf_(TY) List_
 
-#define list_of(LIST, TY, ALLOCATOR) (list_init(LIST, sizeof(TY), ALLOCATOR))
+#define list_of(PLIST, TY, ALLOCATOR) (list_init(PLIST, sizeof(TY), ALLOCATOR))
 #define list_ptr(NODE, TY) ((TY*)(&(NODE)->data))
 #define list_val(NODE, TY) (*list_ptr(NODE, TY))
 
