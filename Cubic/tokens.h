@@ -67,5 +67,6 @@ typedef struct Token_ {
 } Token_, * Token;
 
 bool token_eq(Token_ a, Token_ b);
+Token_ token_string(const char* str);
 
 #endif  // TOKENS__H

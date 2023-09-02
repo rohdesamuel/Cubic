@@ -96,6 +96,8 @@ typedef struct LinearAllocator_ {
 
 void memory_initialize();
 
+extern MemoryAllocator_ NoopAllocator;
+
 // Returns the default memory allocator using malloc/free.
 // This is registered with the name "default".
 MemoryAllocator memallocator_default();

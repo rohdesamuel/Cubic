@@ -3,49 +3,7 @@
 
 #include "tokens.h"
 
-#define UNKNOWN_TY       ((RuntimeType_){VAL_UNKNOWN, KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define NIL_TY           ((RuntimeType_){VAL_NIL,     KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define BOOL_TY          ((RuntimeType_){VAL_BOOL,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT_TY           ((RuntimeType_){VAL_INT,     KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT8_TY          ((RuntimeType_){VAL_INT8,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT16_TY         ((RuntimeType_){VAL_INT16,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT32_TY         ((RuntimeType_){VAL_INT32,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define INT64_TY         ((RuntimeType_){VAL_INT64,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UINT_TY          ((RuntimeType_){VAL_UINT,    KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UINT8_TY         ((RuntimeType_){VAL_UINT8,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UNT16_TY         ((RuntimeType_){VAL_UINT16,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UNT32_TY         ((RuntimeType_){VAL_UINT32,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define UNT64_TY         ((RuntimeType_){VAL_UINT64,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define FLOAT_TY         ((RuntimeType_){VAL_FLOAT,   KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define DOUBLE_TY        ((RuntimeType_){VAL_DOUBLE,  KIND_UNKNOWN, OBJ_TYPE_UNKNOWN})
-#define OBJ_TY(OBJ_TYPE) ((RuntimeType_){VAL_OBJ,     KIND_UNKNOWN, OBJ_TYPE})
-#define STRING_TY        OBJ_TY(OBJ_TYPE_STRING)
-#define FUNCTION_TY      OBJ_TY(OBJ_TYPE_FUNCTION)
-
-#define ISA_TY_NUMBER(TYPE)      (type_isanumber(TYPE))
-#define ISA_TY_INTEGER(TYPE)     (type_isainteger(TYPE))
-#define ISA_TY_INT(TYPE)         (type_isaint(TYPE))
-#define ISA_TY_UINT(TYPE)        (type_isauint(TYPE))
-#define ISA_TY_REAL(TYPE)        (type_isareal(TYPE))
-#define IS_TY_UNKNOWN(TYPE) ((TYPE).ty == VAL_UNKNOWN)
-#define IS_TY_NIL(TYPE) ((TYPE).ty == VAL_NIL)
-#define IS_TY_BOOL(TYPE) ((TYPE).ty == VAL_BOOL)
-#define IS_TY_INT(TYPE) ((TYPE).ty == VAL_INT)
-#define IS_TY_INT8(TYPE) ((TYPE).ty == VAL_INT8)
-#define IS_TY_INT16(TYPE) ((TYPE).ty == VAL_INT16)
-#define IS_TY_INT32(TYPE) ((TYPE).ty == VAL_INT32)
-#define IS_TY_INT64(TYPE) ((TYPE).ty == VAL_INT64)
-#define IS_TY_UINT(TYPE) ((TYPE).ty == VAL_UINT)
-#define IS_TY_UINT8(TYPE) ((TYPE).ty == VAL_UINT8)
-#define IS_TY_UNT16(TYPE) ((TYPE).ty == VAL_UINT32)
-#define IS_TY_UNT32(TYPE) ((TYPE).ty == VAL_UINT32)
-#define IS_TY_UNT64(TYPE) ((TYPE).ty == VAL_UINT64)
-#define IS_TY_FLOAT(TYPE) ((TYPE).ty == VAL_FLOAT)
-#define IS_TY_DOUBLE(TYPE) ((TYPE).ty == VAL_DOUBLE)
-#define IS_TY_OBJ(TYPE, OBJ_TYPE) (type_isobj(TYPE, OBJ_TYPE))
-#define IS_TY_STRING(TYPE) IS_TY_OBJ(TYPE, OBJ_TYPE_STRING)
-#define IS_TY_FUNCTION(TYPE) IS_TY_OBJ(TYPE, OBJ_TYPE_FUNCTION)
-
+#if 0
 typedef enum {
   VAL_UNKNOWN,
 
@@ -64,17 +22,22 @@ typedef enum {
   VAL_UINT64,
   VAL_FLOAT,
   VAL_DOUBLE,
+  VAL_STRING,
   // End primitives
 
   VAL_CLASS,
   VAL_OBJ,
   VAL_ARRAY,
   VAL_VAR,
+  VAL_REF,
   VAL_IN,
   VAL_OUT,
 
+  VAL_PLACEHOLDER,
+
   __VALUE_TYPE_COUNT__,
 } ValueType;
+#endif
 
 typedef enum {
   KIND_UNKNOWN,
@@ -98,16 +61,6 @@ typedef enum {
 } ValueKind;
 
 typedef enum {
-  REF_KIND_UNKNOWN,
-
-  // A named variable is stored on stack or heap, not reference counted.
-  REF_KIND_WEAK,
-
-  // A named variable is stored on heap, reference counted.
-  REF_KIND_STRONG,
-} ValueRefKind;
-
-typedef enum {
   CONST_KIND_UNKNOWN,
 
   // Mutable. No const restrictions.
@@ -115,7 +68,7 @@ typedef enum {
 
   // Immutable. Full const restrictions.
   CONST_KIND_WHOLE,
-} ValueConstKind;
+} ConstKind;
 
 typedef enum {
   LIFETIME_UNKNOWN,
@@ -129,86 +82,217 @@ typedef enum {
   // Type is a static constant and can be cached for multiple uses.
   LIFETIME_STATIC,
 } ValueLifetime;
+#define TYPE_CLS(name) TYPE_##name
 
 typedef struct Type_ {
   // The type that is the final result of resolving the symbol.
   // E.g. return value of a function, the type that a pointer is addressing
   // to, the field of a given struct.
-  enum ValueType val;
+  enum TypeCls {
+    // Unknown because type has not been parsed.
+    TYPE_CLS(UnknownType_),
 
-  // How to interpret the type, is it a value, a reference?
-  enum ValueKind kind;
+    // Primitive types.
+    TYPE_CLS(NilType_),
+    TYPE_CLS(BoolType_),
+    TYPE_CLS(IntType_),
+    TYPE_CLS(Int8Type_),
+    TYPE_CLS(Int16Type_),
+    TYPE_CLS(Int32Type_),
+    TYPE_CLS(Int64Type_),
+    TYPE_CLS(UintType_),
+    TYPE_CLS(Uint8Type_),
+    TYPE_CLS(Uint16Type_),
+    TYPE_CLS(Uint32Type_),
+    TYPE_CLS(Uint64Type_),
+    TYPE_CLS(FloatType_),
+    TYPE_CLS(DoubleType_),
+    TYPE_CLS(StringType_),
 
-  // If the type is a composite, e.g. maps, lists, then this will be the
-  // sub-types.
-  ListOf_(struct Type_*) component_types;
+    // Unary types.    
+    TYPE_CLS(ConstType_),
+    TYPE_CLS(InType_),
+    TYPE_CLS(OutType_),
+    TYPE_CLS(VarType_),
+    TYPE_CLS(RefType_),
+    TYPE_CLS(PlaceholderType_),
 
-  // The name of the type.
+    // Compound types.
+    TYPE_CLS(ClassType_),
+    TYPE_CLS(ArrayType_),
+
+    // Functional types.
+    TYPE_CLS(FunctionType_),
+
+    __TYPE_COUNT__,
+  } cls;
+
+  // The size of this type in memory, not following pointers.
+  size_t size;
+
   Token_ opt_name;
 } Type_;
 
-extern const Type_ Nil_Ty;
-extern const Type_ Bool_Ty;
-extern const Type_ Int_Ty;
-extern const Type_ Uint_Ty;
-extern const Type_ Float_Ty;
-extern const Type_ Double_Ty;
+#define DEF_PRIMITIVE_TY(NAME) typedef struct NAME##Type_ { Type_ self; } NAME##Type_;
 
-Type_* make_var_ty(const Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_in_ty(const Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_out_ty(const Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_array_ty(const Type_* el_type, MemoryAllocator_* allocator);
+DEF_PRIMITIVE_TY(Unknown);
+DEF_PRIMITIVE_TY(Nil);
+DEF_PRIMITIVE_TY(Bool);
+DEF_PRIMITIVE_TY(Int);
+DEF_PRIMITIVE_TY(Int8);
+DEF_PRIMITIVE_TY(Int16);
+DEF_PRIMITIVE_TY(Int32);
+DEF_PRIMITIVE_TY(Int64);
+DEF_PRIMITIVE_TY(Uint);
+DEF_PRIMITIVE_TY(Uint8);
+DEF_PRIMITIVE_TY(Uint16);
+DEF_PRIMITIVE_TY(Uint32);
+DEF_PRIMITIVE_TY(Uint64);
+DEF_PRIMITIVE_TY(Float);
+DEF_PRIMITIVE_TY(Double);
+DEF_PRIMITIVE_TY(String);
+
+typedef struct PrimitiveType_ {
+  Type_ self;
+} PrimitiveType_;
+
+typedef struct ArrayType_ {
+  Type_ self;
+  Type_* el_type;
+  size_t count;
+} ArrayType_;
+
+typedef struct VarType_ {
+  Type_ self;
+  Type_* ty;
+} VarType_;
+
+typedef struct InType_ {
+  Type_ self;
+  Type_* ty;
+} InType_;
+
+typedef struct OutType_ {
+  Type_ self;
+  Type_* ty;
+} OutType_;
+
+typedef struct RefType_ {
+  Type_ self;
+  Type_* ty;
+} RefType_;
+
+typedef struct ConstType_ {
+  Type_ self;
+  Type_* ty;
+} ConstType_;
+
+typedef struct ClassType_ {
+  Type_ self;
+
+  ListOf_(Type_*) members;
+  ListOf_(Token_) field_names;
+} ClassType_;
+
+typedef struct FunctionType_ {
+  Type_ self;
+
+  Type_* ret_ty;
+  ListOf_(Type_*) parameters;
+} FunctionType_;
+
+typedef struct PlaceholderType_ {
+  Type_ self;
+  Type_* ty;
+} PlaceholderType_;
+
+extern const NilType_ Nil_Ty;
+extern const BoolType_ Bool_Ty;
+extern const IntType_ Int_Ty;
+extern const UintType_ Uint_Ty;
+extern const FloatType_ Float_Ty;
+extern const DoubleType_ Double_Ty;
+extern const StringType_ String_Ty;
+
+Type_* make_const_ty(Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_var_ty(Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_in_ty(Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_out_ty(Type_* sub_type, MemoryAllocator_* allocator);
+Type_* make_array_ty(Type_* el_type, size_t count, MemoryAllocator_* allocator);
+Type_* make_class_ty(Token_ name, MemoryAllocator_* allocator);
+Type_* make_placeholder_ty(Token_ name, MemoryAllocator_* allocator);
+Type_* make_function_ty(Token_ name, MemoryAllocator_* allocator);
+Type_* type_alloc(MemoryAllocator_* allocator, size_t type_size);
+
+#define type_alloc_ty(ALLOCATOR, TY) ((TY*)type_alloc(ALLOCATOR, sizeof(TY)))
+
+// Fills all placeholders in the given type with types found starting at the
+// given scope.
+bool type_fill(Type_* type, struct Scope_* scope);
+
+// Calculates the size of the given type.
+size_t type_calcsize(Type_* type);
 
 typedef struct RuntimeType_ {
-  enum ValueType ty;
-  enum ValueKind kind;
-  enum ObjType obj;
+  int ty;
 } RuntimeType_;
 
 bool type_iscoercible(RuntimeType_ from, RuntimeType_ to);
 uint32_t type_toint(RuntimeType_ info);
 RuntimeType_ type_fromint(uint32_t n);
 
-// Returns true if both types are equal on all fields.
-inline bool type_equal(RuntimeType_ from, RuntimeType_ to) {
-  return from.ty == to.ty && from.kind == to.kind && from.obj == to.obj;
+bool type_equal(const Type_* a, const Type_* b);
+bool type_assignable(const Type_* from, const Type_* to);
+bool type_coercible(const Type_* from, const Type_* to);
+bool type_isconst(const Type_* ty);
+bool type_isval(const Type_* ty);
+bool type_isaref(const Type_* ty);
+
+#define type_is(PTYPE, CLS) type_is_(PTYPE, TYPE_CLS(CLS))
+inline bool type_is_(const Type_* type, int cls) { return type->cls == cls; }
+
+inline static bool type_isunknown(const Type_* ty) {
+  return ty->cls == TYPE_CLS(UnknownType_);
 }
 
-// Returns true if value and object types are the same.
-inline bool type_equiv(RuntimeType_ from, RuntimeType_ to) {
-  return from.ty == to.ty && from.obj == to.obj;
+inline static bool type_isnil(const Type_* ty) {
+  return ty->cls >= TYPE_CLS(NilType_) && ty->cls <= TYPE_CLS(StringType_);
 }
 
-inline static bool valuetype_isaprimitive(ValueType type) {
-  return type >= VAL_NIL && type <= VAL_DOUBLE;
+inline static bool type_isaprimitive(const Type_* ty) {
+  return ty->cls >= TYPE_CLS(NilType_) && ty->cls <= TYPE_CLS(StringType_);
 }
 
-inline static bool type_isaprimitive(RuntimeType_ info) {
-  return info.ty >= VAL_NIL && info.ty <= VAL_DOUBLE;
+inline static bool type_isabool(const Type_* ty) {
+  return type_is(ty, BoolType_);
 }
 
-inline static bool type_isobj(RuntimeType_ info, enum ObjType obj_type) {
-  return info.ty == VAL_OBJ && info.obj == obj_type;
+inline static bool type_isanumber(const Type_* ty) {
+  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(DoubleType_);
 }
 
-inline static bool type_isanumber(RuntimeType_ info) {
-  return info.ty >= VAL_INT && info.ty <= VAL_DOUBLE;
+inline static bool type_isainteger(const Type_* ty) {
+  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(Uint64Type_);
 }
 
-inline static bool type_isainteger(RuntimeType_ info) {
-  return info.ty >= VAL_INT && info.ty <= VAL_UINT64;
+inline static bool type_issigned(const Type_* ty) {
+  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(Int64Type_);
 }
 
-inline static bool type_isaint(RuntimeType_ info) {
-  return info.ty >= VAL_INT && info.ty <= VAL_INT64;
+inline static bool type_isunsigned(const Type_* ty) {
+  return ty->cls >= TYPE_CLS(UintType_) && ty->cls <= TYPE_CLS(Uint64Type_);
 }
 
-inline static bool type_isauint(RuntimeType_ info) {
-  return info.ty >= VAL_UINT && info.ty <= VAL_UINT64;
+inline static bool type_isareal(const Type_* ty) {
+  return ty->cls == TYPE_CLS(FloatType_) || ty->cls == TYPE_CLS(DoubleType_);
 }
 
-inline static bool type_isareal(RuntimeType_ info) {
-  return info.ty == VAL_FLOAT || info.ty == VAL_DOUBLE;
+inline static bool type_isastring(const Type_* ty) {
+  return type_is(ty, StringType_);
 }
+
+#define type_as(TYPE, EXPR) ((TYPE*)assert_type_is((EXPR), TYPE_CLS(TYPE)))
+#define assert_type_is(TY, VAL_TY) assert_type_is_((Type_*)(TY), VAL_TY)
+Type_* assert_type_is_(Type_* ty, int val);
 
 #endif  // TYPE__H

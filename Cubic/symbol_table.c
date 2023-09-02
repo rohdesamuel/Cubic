@@ -26,7 +26,6 @@ Frame_* frame_root(struct MemoryAllocator_* allocator) {
   *entry_fn = (Symbol_){
     .type = SYMBOL_TYPE_FN,
     .fn = (FunctionSymbol_) {
-      .return_type = SemanticType_Unknown,
       .params = {0}
     },
     .name = entry_name,
@@ -266,7 +265,6 @@ Symbol_* scope_addfn(Scope_* scope, Token_* name) {
   Symbol_ s = (Symbol_){
     .type = SYMBOL_TYPE_FN,
     .fn = (FunctionSymbol_) {
-      .return_type = VAL_UNKNOWN,
       .params = {0}
     },
     .name = *name,
@@ -306,15 +304,16 @@ Symbol_* scope_addclass(Scope_* scope, Token_* name) {
   };
   MemoryAllocator_* allocator = scope->allocator;
   s.cls.constructor = alloc_ty(allocator, Symbol_);
-  s.cls.self_type.size = -1;
-
+  *s.cls.constructor = (Symbol_){
+    .type = SYMBOL_TYPE_FN,
+  };
   
   list_of(&s.cls.constructor->fn.params, Symbol_*, allocator);
   list_of(&s.cls.members, Symbol_*, allocator);
   return scope_add(scope, &s);
 }
 
-Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
+Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, Type_* type) {
   ClassSymbol_* cls_sym = &sym->cls;
   MemoryAllocator_* allocator = sym->parent->allocator;
 
@@ -322,7 +321,6 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
   *field = (Symbol_){
     .type = SYMBOL_TYPE_FIELD,
     .field = {
-      .sem_type = type,
       .name = name,
       .index = cls_sym->members.count,
       .val = NIL_VAL,
@@ -330,7 +328,8 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type) {
     },
     .name = name,
     .parent = sym->parent,
-    .uid = cb_rand()
+    .uid = cb_rand(),
+    .ty = type
   };
 
   list_push(&cls_sym->members, &field);
@@ -353,7 +352,7 @@ Symbol_* scope_find(Scope_* scope, Token_* name) {
   return ret;
 }
 
-Symbol_* scope_search_to_root(Scope_* scope, Token_* name) {
+Symbol_* scope_search_to_root(Scope_* scope, const Token_* name) {
   if (!name || !name->start) {
     return NULL;
   }

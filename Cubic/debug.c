@@ -103,7 +103,7 @@ int disassemble_instruction(Chunk chunk, int offset) {
 static int constant_instruction(const char* name, Chunk chunk, int offset) {
   uint8_t constant = chunk->code[offset + 1];
   printf("%-16s %4d '", name, constant);
-  value_print(chunk->constants.values[constant], INT_TY);
+  //value_print(chunk->constants.values[constant], INT_TY);
   printf("'\n");
   return offset + 2;
 }
@@ -114,7 +114,7 @@ static int constant_long_instruction(const char* name, Chunk chunk, int offset) 
     | (int)(chunk->code[offset + 3]) << 16;
 
   printf("%-16s %4d '", name, constant);
-  value_print(chunk->constants.values[constant], INT_TY);
+  //value_print(chunk->constants.values[constant], INT_TY);
   printf("'\n");
   return offset + 4;
 }
@@ -172,7 +172,7 @@ static int cast_instruction(const char* name, Chunk chunk, int offset) {
 
   RuntimeType_ t = type_fromint(arg);
 
-  printf("%-16s %4d %d %d\n", name, t.ty, t.kind, t.obj);
+  printf("%-16s %d\n", name, t.ty);
 
   return offset + 5;
 }

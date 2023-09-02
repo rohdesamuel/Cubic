@@ -290,7 +290,7 @@ typedef struct AstFunctionCall_ {
 typedef struct AstFunctionCallArgs_ {
   struct AstNode_ base;
   AstList_ args;
-  struct FunctionSymbol_* fn_sym;  
+  struct Symbol_* fn_sym;  
 } AstFunctionCallArgs_;
 
 // FunctionCallArg ::= Expr

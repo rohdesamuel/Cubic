@@ -318,3 +318,13 @@ void linearallocator_deinit(LinearAllocator_* allocator) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+static void* noop_alloc(MemoryAllocator_* base, size_t size) { return NULL; }
+static void noop_dealloc(MemoryAllocator_* base, void* ptr) {}
+static void noop_clear(MemoryAllocator_* base) {}
+
+MemoryAllocator_ NoopAllocator = {
+  .allocate = noop_alloc,
+  .deallocate = noop_dealloc,
+  .clear = noop_clear
+};

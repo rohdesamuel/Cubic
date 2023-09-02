@@ -88,7 +88,7 @@ SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
 Symbol_* scope_find(Scope_* scope, Token_* name);
-Symbol_* scope_search_to_root(Scope_* scope, Token_* name);
+Symbol_* scope_search_to_root(Scope_* scope, const Token_* name);
 VarSymbol_* scope_var(Scope_* scope, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
 
@@ -98,6 +98,6 @@ void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
 int symbolvar_index(Symbol_* var);
 int symboltmp_index(Symbol_* tmp);
 
-Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, SemanticType_ type);
+Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, Type_* type);
 
 #endif  // SYMBOL_TABLE__H
