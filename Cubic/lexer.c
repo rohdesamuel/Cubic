@@ -7,7 +7,7 @@
 std::string TokenToString(const Token& token) {
   using Type = Token::Type;
 
-  switch (token.type) {
+  switch (token.cls) {
     case Type::TK_EOF:
       return "EOF";
     case Type::TK_UNKNOWN:
@@ -93,18 +93,18 @@ Token Lexer::Get() {
 
     if (id == "fn") {
       return Token{
-        .type = Token::Type::TK_FUNCTION,
+        .cls = Token::Type::TK_FUNCTION,
         .str = std::move(id)
       };
     } else if (id == "struct") {
       return Token{
-        .type = Token::Type::TK_STRUCT,
+        .cls = Token::Type::TK_STRUCT,
         .str = std::move(id)
       };
     }
 
     return Token{
-      .type = Token::Type::TK_ID,
+      .cls = Token::Type::TK_ID,
       .str = std::move(id)
     };
   } else if (isdigit(last_char_)) { // Number: [0-9.]+
@@ -122,12 +122,12 @@ Token Lexer::Get() {
         last_char_ = Next();
       } while (isdigit(last_char_));
       return {
-        .type = Token::Type::TK_NUMBER,
+        .cls = Token::Type::TK_NUMBER,
         .str = num_str
       };
     } else {
       return {
-        .type = Token::Type::TK_INTEGER,
+        .cls = Token::Type::TK_INTEGER,
         .str = num_str
       };
     }
@@ -143,64 +143,64 @@ Token Lexer::Get() {
         } while (isdigit(last_char_));
 
         if (num_str == ".") {
-          return {.type = Token::Type::TK_DOT};
+          return {.cls = Token::Type::TK_DOT};
         } else {
           return {
-            .type = Token::Type::TK_NUMBER,
+            .cls = Token::Type::TK_NUMBER,
             .str = num_str
           };
         }
       }
       case ',':
         Swallow();
-        return {.type = Token::TK_COMMA};
+        return {.cls = Token::TK_COMMA};
       case '\'':
         Swallow();
-        return {.type = Token::TK_SINGLEQUOTE};
+        return {.cls = Token::TK_SINGLEQUOTE};
       case '"':
         Swallow();
-        return {.type = Token::TK_DOUBLEQUOTE};
+        return {.cls = Token::TK_DOUBLEQUOTE};
 
       case '(':
         Swallow();
-        return {.type = Token::TK_LPAREN};
+        return {.cls = Token::TK_LPAREN};
       case ')':
         Swallow();
-        return {.type = Token::TK_RPAREN};
+        return {.cls = Token::TK_RPAREN};
 
       case '[':
         Swallow();
-        return {.type = Token::TK_LBRACKET};
+        return {.cls = Token::TK_LBRACKET};
       case ']':
         Swallow();
-        return {.type = Token::TK_RBRACKET};
+        return {.cls = Token::TK_RBRACKET};
 
       case ':':
         Swallow();
-        return {.type = Token::TK_COLON};
+        return {.cls = Token::TK_COLON};
 
       case '=':
         Swallow();
-        return {.type = Token::TK_EQUALS};
+        return {.cls = Token::TK_EQUALS};
       case '-':
         Swallow();
-        return {.type = Token::TK_MINUS};
+        return {.cls = Token::TK_MINUS};
       case '+':
         Swallow();
-        return {.type = Token::TK_PLUS};
+        return {.cls = Token::TK_PLUS};
       case  '*':
         Swallow();
-        return {.type = Token::TK_TIMES};
+        return {.cls = Token::TK_TIMES};
       case '/':
         Swallow();
-        return {.type = Token::TK_DIVIDE};
+        return {.cls = Token::TK_DIVIDE};
 
       case '>':
         Swallow();
-        return {.type = Token::TK_GT};
+        return {.cls = Token::TK_GT};
       case '<':
         Swallow();
-        return {.type = Token::TK_LT};
+        return {.cls = Token::TK_LT};
 
       case '#':
       {
@@ -221,7 +221,7 @@ Token Lexer::Get() {
         int last_char = last_char_;
         Swallow();
         return {
-          .type = Token::Type::TK_UNKNOWN,
+          .cls = Token::Type::TK_UNKNOWN,
           .str = std::string{(char)last_char}
         };
       }

@@ -10,7 +10,7 @@ static Frame_* frame_create(Symbol_* fn_symbol, struct MemoryAllocator_* allocat
 static Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn);
 static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
 static Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
-static Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type);
+static Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type);
 static Symbol_* scope_addfn(Scope_* scope, Token_* name);
 static Symbol_* scope_addclass(Scope_* scope, Token_* name);
 
@@ -30,7 +30,6 @@ Frame_* frame_root(struct MemoryAllocator_* allocator) {
     },
     .name = entry_name,
     .parent = NULL,
-    .uid = cb_rand()
   };
 
   return frame_create(entry_fn, allocator);
@@ -75,14 +74,14 @@ void frame_destroy(Frame_** frame) {
 Symbol_* frame_addparam(Frame_* frame, Token_* name) {
   Scope_* scope = frame->scope;
   SymbolTable_* table = scope->table;  
-  Symbol_* s = frame_addvar(frame, name, scope);
+  Symbol_* s = frame_addvar(frame, name, make_unknown_ty(frame->allocator), scope);
   list_push(&frame->fn_symbol->fn.params, &s);
 
   return s;
 }
 
-Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope) {
-  Symbol_* s = scope_addvar(scope, name, SemanticType_Unknown);
+Symbol_* frame_addvar(Frame_* frame, Token_* name, Type_* type, Scope_* scope) {
+  Symbol_* s = scope_addvar(scope, name, type);
   frame->var_count += 1;
   frame->stack_size += 1;// max(frame->stack_size, scope->frame_offset + scope->table->vars.count);  
   return s;
@@ -104,12 +103,8 @@ Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
   Symbol_* ret = alloc(allocator, sizeof(Symbol_));
   *ret = (Symbol_){
     .type = SYMBOL_TYPE_TMP,
-    .tmp = {
-      .tmp_index = tmp_index,
-    },
     .name = {0},
     .parent = scope,
-    .uid = cb_rand()
   };
 
   list_push(&frame->tmps, &ret);
@@ -243,19 +238,15 @@ Symbol_* scope_add(Scope_* scope, Symbol_* symbol) {
   return (Symbol_*)symbol_addr;
 }
 
-Symbol_* scope_addvar(Scope_* scope, Token_* name, SemanticType_ type) {
+Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type) {
   int scope_index = scope->stack_size++;
 
   Symbol_ s = (Symbol_){
     .type = SYMBOL_TYPE_VAR,
-    .var = (VarSymbol_) {
-      .sem_type = type,
-      .scope_index = scope_index,
-      .frame_index = 0,
-    },
+    .var = (VarSymbol_) {0},
     .name = *name,
     .parent = scope,
-    .uid = cb_rand()
+    .ty = type
   };
 
   return scope_add(scope, &s);
@@ -269,7 +260,6 @@ Symbol_* scope_addfn(Scope_* scope, Token_* name) {
     },
     .name = *name,
     .parent = scope,
-    .uid = cb_rand()
   };
   list_of(&s.fn.params, Symbol_*, scope->allocator);
   return scope_add(scope, &s);
@@ -295,14 +285,14 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
 }
 
 Symbol_* scope_addclass(Scope_* scope, Token_* name) {
+  MemoryAllocator_* allocator = scope->allocator;
   Symbol_ s = (Symbol_){
     .type = SYMBOL_TYPE_CLASS,
     .cls = {0},
     .name = *name,
     .parent = scope,
-    .uid = cb_rand()
+    .ty = make_class_ty(*name, allocator)
   };
-  MemoryAllocator_* allocator = scope->allocator;
   s.cls.constructor = alloc_ty(allocator, Symbol_);
   *s.cls.constructor = (Symbol_){
     .type = SYMBOL_TYPE_FN,
@@ -320,15 +310,8 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, Type_* type) {
   Symbol_* field = alloc(allocator, sizeof(Symbol_));
   *field = (Symbol_){
     .type = SYMBOL_TYPE_FIELD,
-    .field = {
-      .name = name,
-      .index = cls_sym->members.count,
-      .val = NIL_VAL,
-      .cls_sym = sym,
-    },
     .name = name,
     .parent = sym->parent,
-    .uid = cb_rand(),
     .ty = type
   };
 
@@ -389,12 +372,4 @@ FunctionSymbol_* scope_fn(Scope_* scope, Token_* name) {
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue) {
   list_push(&closure->closures, upvalue);
-}
-
-int symbolvar_index(Symbol_* var) {
-  return var->var.frame_index;
-}
-
-int symboltmp_index(Symbol_* tmp) {
-  return tmp->tmp.tmp_index + tmp->parent->frame->max_var_count;
 }

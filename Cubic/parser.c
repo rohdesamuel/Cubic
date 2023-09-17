@@ -165,10 +165,10 @@ Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
   return ret;
 }
 
-static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
+static Type_* parse_type_expr(Parser_* parser, Scanner_* scanner) {
   Token_ token = parser->previous;
 
-  SemanticType_ ret = { 0 };
+  Type_* ret = NULL;
 
   // The following code, once implemented, allows functions to return references.
   // if (token.type == TK_VAR) {
@@ -178,27 +178,31 @@ static SemanticType_ parse_type_expr(Parser_* parser, Scanner_* scanner) {
   // }
 
   switch (token.type) {
-    case TK_BOOL:        ret.ty = &Bool_Ty;   break;
-    case TK_INT:         ret.ty = &Int_Ty;    break;
-    case TK_UINT:        ret.ty = &Uint_Ty;   break;
-    case TK_FLOAT:       ret.ty = &Float_Ty;  break;
-    case TK_DOUBLE:      ret.ty = &Double_Ty; break;
-    case TK_STRING_TYPE: ret.ty = &String_Ty; break;
+    case TK_BOOL:        ret = (Type_*)&Bool_Ty;   break;
+    case TK_INT:         ret = (Type_*)&Int_Ty;    break;
+    case TK_UINT:        ret = (Type_*)&Uint_Ty;   break;
+    case TK_FLOAT:       ret = (Type_*)&Float_Ty;  break;
+    case TK_DOUBLE:      ret = (Type_*)&Double_Ty; break;
+    case TK_STRING_TYPE: ret = (Type_*)&String_Ty; break;
     case TK_FUNCTION:
     {
       error_at_current(parser, "Function typed values are unimplemented.");
       break;
     }
     case TK_ID:
-      ret.ty = make_placeholder_ty(parse_variable(parser, scanner, &token), parser->allocator);
+      ret = make_placeholder_ty(parse_variable(parser, scanner, &token), parser->allocator);
       break;
     default: break;
+  }
+
+  if (!ret) {
+    error(parser, "Encountered unknown token type when trying to parse type expression: %d", token.type);
   }
 
   return ret;
 }
 
-static SemanticType_ parse_type(Parser_* parser, Scanner_* scanner) {
+static Type_* parse_type(Parser_* parser, Scanner_* scanner) {
   advance(parser, scanner);
   return parse_type_expr(parser, scanner);
 }
@@ -291,39 +295,37 @@ static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs, Scope_
 
 static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstFunctionParam_* param = MAKE_AST_NODE(parser->allocator, AstFunctionParam_, scope, parser->current.line);
-  param->type = SemanticType_Unknown;
 
-  Type_* ref_type = NULL;
+  int ref_type = 0;
   if (match(parser, scanner, TK_IN)) {
-    ref_type = type_alloc_ty(parser->allocator, InType_);
+    ref_type = TYPE_CLS(InType_);
   } else if (match(parser, scanner, TK_OUT)) {
-    ref_type = type_alloc_ty(parser->allocator, OutType_);
+    ref_type = TYPE_CLS(OutType_);
   }
 
   consume(parser, scanner, TK_ID, "Expecting parameter name");
   param->name = parse_variable(parser, scanner, &parser->previous);
 
-  if (match(parser, scanner, TK_COLON)) {
-    param->type = parse_type(parser, scanner);
-  }
+  consume(parser, scanner, TK_COLON, "Expecting colon after parameter name.");
+  Type_* type = parse_type(parser, scanner);
 
   if (ref_type) {
-    Type_* sub_type = param->type.ty;
-    if (ref_type->cls == TYPE_CLS(InType_)) {
-      (type_as(InType_, ref_type))->ty = sub_type;
-    } else if (ref_type->cls == TYPE_CLS(OutType_)) {
-      (type_as(OutType_, ref_type))->ty = sub_type;
-    }
-    param->type.ty = ref_type;
+    if (ref_type == TYPE_CLS(InType_)) {
+      type = make_in_ty(type, parser->allocator);
+    } else if (ref_type == TYPE_CLS(OutType_)) {
+      type = make_out_ty(type, parser->allocator);
+    }    
   }
 
-  frame_addparam(scope->frame, &param->name);
+  param->type = type;
+  frame_addparam(scope->frame, &param->name)->ty = type;
 
   return (AstNode_*)param;
 }
 
-static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope, Symbol_* fn_symbol) {
   AstFunctionBody_* body = MAKE_AST_NODE(parser->allocator, AstFunctionBody_, scope, parser->current.line);
+  body->fn_symbol = fn_symbol;
   astlist_init(&body->function_params, parser->allocator);  
   FunctionType_* fn_type = type_as(FunctionType_, body->fn_symbol->ty);
 
@@ -337,8 +339,8 @@ static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope)
       }
 
       AstFunctionParam_* param = (AstFunctionParam_*)FunctionParam(parser, scanner, scope);
-      list_push(&fn_type->parameters, &param->type.ty);
-      astlist_append(&body->function_params, param);
+      list_push(&fn_type->parameters, &param->type);
+      astlist_append(&body->function_params, (AstNode_*)param);
     } while (match(parser, scanner, TK_COMMA));
     consume(parser, scanner, TK_RPAREN, "Expected ')' after arguments.");
   }
@@ -346,9 +348,9 @@ static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope)
   if (match(parser, scanner, TK_ARROW)) {
     body->return_type = parse_type(parser, scanner);
   } else {
-    body->return_type = SemanticType_Nil;
+    body->return_type = (Type_*)&Nil_Ty;
   }
-  fn_type->ret_ty = body->return_type.ty;
+  fn_type->ret_ty = body->return_type;
 
   if (match(parser, scanner, TK_END)) {
     body->stmt = MAKE_AST_NOOP(parser->allocator);
@@ -375,8 +377,7 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
   fn_symbol->ty = make_function_ty(name, parser->allocator);
 
   def->fn_symbol = fn_symbol;
-  def->body = (AstFunctionBody_*)FunctionBody(parser, scanner, fn_scope);
-  def->body->fn_symbol = def->fn_symbol;
+  def->body = (AstFunctionBody_*)FunctionBody(parser, scanner, fn_scope, fn_symbol);
 
   return (AstNode_*)def;
 }
@@ -422,13 +423,8 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
     return NULL;
   }
 
-  Type_* cls_ty = make_class_ty(def->name, parser->allocator);
-  cls_sym->ty = cls_ty;
-
-  def->class_type = (SemanticType_){
-    .ty = cls_ty,
-    .sym = cls_sym,
-  };
+  ClassType_* cls_ty = type_as(ClassType_, cls_sym->ty);
+  def->class_type = cls_sym->ty;
 
   static const char constructor_str[] = "__constructor";
   int name_size = sizeof(constructor_str) + def->name.length;
@@ -436,25 +432,21 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   sprintf_s(constructor_name, name_size, "%.*s%.*s\0", def->name.length, def->name.start, name_size - 1, constructor_str);
 
   FunctionType_* constructor_ty = (FunctionType_*)make_function_ty(token_string("constructor"), parser->allocator);
-  constructor_ty->ret_ty = cls_ty;
+  constructor_ty->ret_ty = cls_sym->ty;
   constructor_ty->self.opt_name = (Token_){ .start = constructor_name, .length = name_size };
-
-  Symbol_* constructor = cls_sym->cls.constructor;
-  constructor->ty = constructor_ty;
-
-  cls_sym->cls.constructor = constructor;
+  cls_ty->constructor = constructor_ty;
 
   Scope_* class_scope = scope_createfrom(scope);
   while (check(parser, TK_ID) || check(parser, TK_VAL) || check(parser, TK_VAR)) {
     AstClassMemberDecl_* decl = (AstClassMemberDecl_*)ClassMemberDecl(parser, scanner, class_scope);
     astlist_append(&def->members, (AstNode_*)decl);
 
-
-    Symbol_* field = classsymbol_addmember(cls_sym, decl->name, decl->sem_type.ty);
-    list_push(&constructor->fn.params, &field);
-    list_push(&constructor_ty->parameters, field->ty);
-
-    decl->sem_type.sym = field;
+    ClassTypeField_ class_field = {
+      .type = decl->field_type,
+      .name = decl->name,
+      .opt_expr = decl->opt_expr,
+    };
+    list_push(&cls_ty->members, &class_field);
 
     if (check(parser, TK_END)) {
       break;
@@ -482,10 +474,11 @@ static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* sco
   decl->name = parse_variable(parser, scanner, &parser->previous);
 
   consume(parser, scanner, TK_COLON, "Expected a ':' after class member name.");
-  decl->sem_type = parse_type(parser, scanner);
-
+  Type_* parsed_type = parse_type(parser, scanner);
   if (kind == TK_VAR) {
-    decl->sem_type.ty = make_var_ty(decl->sem_type.ty, parser->allocator);
+    decl->field_type = make_var_ty(parsed_type, parser->allocator);
+  } else {
+    decl->field_type = parsed_type;
   }
 
   if (match(parser, scanner, TK_EQUAL)) {
@@ -500,25 +493,29 @@ static AstNode_* VarDecl(Parser_* parser, Scanner_* scanner, Scope_* scope, Toke
   consume(parser, scanner, TK_ID, "Expected variable name.");
   stmt->name = parse_variable(parser, scanner, &parser->previous);
 
-  consume(parser, scanner, TK_COLON, "Expected a ':' for a variable declaration.");
+  if (!match(parser, scanner, TK_COLON)) {
+    error(parser, "Expected a ':' for a variable declaration.");
+    stmt->decl_type = make_unknown_ty(parser->allocator);
+    return (AstNode_*)stmt;
+  }
   
   if (check(parser, TK_EQUAL)) {
-    stmt->sem_type = SemanticType_Unknown;
+    stmt->decl_type = make_unknown_ty(parser->allocator);
   } else {
-    stmt->sem_type = parse_type(parser, scanner);
+    stmt->decl_type = parse_type(parser, scanner);
   }
 
   if (decl_token == TK_VAR) {
-    stmt->sem_type.ty = make_var_ty(stmt->sem_type.ty, parser->allocator);
+    stmt->decl_type = make_var_ty(stmt->decl_type, parser->allocator);
   }  
 
   if (match(parser, scanner, TK_EQUAL)) {
     stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
-  } else if (semantictype_isunknown(stmt->sem_type)) {
+  } else if (type_isunknown(stmt->decl_type)) {
     error_at_current(parser, "Expected an expression for a deduced type variable.");
   }
 
-  if (!frame_addvar(scope->frame, &stmt->name, scope)) {
+  if (!frame_addvar(scope->frame, &stmt->name, stmt->decl_type, scope)) {
     error(parser, "variable '%.*s' already declared.", stmt->name.length, stmt->name.start);
   }
 
@@ -703,7 +700,7 @@ static AstNode_* Expr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   if (!ret) {
     return NULL;
   }
-  ret->top_sem_type = SemanticType_Unknown;
+  ret->top_type = (Type_*)&Unknown_Ty;
   return (AstNode_*)ret;
 }
 
@@ -720,11 +717,11 @@ static AstNode_* Number(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 
   if (token.start[token.length - 1] == 'f') {
     float value = strtof(parser->previous.start, NULL);
-    expr->base.sem_type = semantictype_tmp(&Float_Ty);
+    expr->base.type = (Type_*)&Float_Ty;
     expr->value = FLOAT_VAL(value);
   } else {
     double value = strtod(parser->previous.start, NULL);
-    expr->base.sem_type = semantictype_tmp(&Double_Ty);
+    expr->base.type = (Type_*)&Double_Ty;
     expr->value = DOUBLE_VAL(value);
   }
   
@@ -734,42 +731,42 @@ static AstNode_* Number(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 static AstNode_* Integer(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   int64_t value = strtoll(parser->previous.start, NULL, 10);  
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.sem_type = semantictype_tmp(&Int_Ty);
+  expr->base.type = (Type_*)&Int_Ty;
   expr->value = INT_VAL(value);
   return (AstNode_*)expr;
 }
 
 static AstNode_* Nil(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.sem_type = semantictype_tmp(&Nil_Ty);
+  expr->base.type = (Type_*)&Nil_Ty;
   expr->value = NIL_VAL;
   return (AstNode_*)expr;
 }
 
 static AstNode_* True(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.sem_type = semantictype_tmp(&Bool_Ty);
+  expr->base.type = (Type_*)&Bool_Ty;
   expr->value = TRUE_VAL;
   return (AstNode_*)expr;
 }
 
 static AstNode_* False(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.sem_type = semantictype_tmp(&Bool_Ty);
+  expr->base.type = (Type_*)&Bool_Ty;
   expr->value = FALSE_VAL;
   return (AstNode_*)expr;
 }
 
 static AstNode_* String(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
-  expr->base.sem_type = semantictype_static(&String_Ty);
+  expr->base.type = (Type_*)&String_Ty;
   expr->value = OBJ_VAL(objstring_from(parser->previous.start + 1, parser->previous.length - 2));
   return (AstNode_*)expr;
 }
 
 static AstNode_* Type(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstTypeExpr_* type = MAKE_AST_EXPR(parser->allocator, AstTypeExpr_, scope, parser->previous.line);
-  type->base.sem_type = parse_type_expr(parser, scanner);
+  type->base.type = parse_type_expr(parser, scanner);
   return (AstNode_*)type;
 }
 
@@ -795,13 +792,21 @@ static AstNode_* ArrayValue(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   return (AstNode_*)array;
 }
 
+static AstNode_* IndexExpr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstIndexExpr_* array = MAKE_AST_EXPR(parser->allocator, AstIndexExpr_, scope, parser->previous.line);
+  array->base.type = make_unknown_ty(parser->allocator);
+  array->index = (AstExpr_*)Expr(parser, scanner, scope);
+  consume(parser, scanner, TK_RBRACKET, "Expected ']' at end of array definition.");
+  return (AstNode_*)array;
+}
+
 static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   TokenType operator_type = parser->previous.type;
 
   AstUnaryExp_* unary = MAKE_AST_EXPR(parser->allocator, AstUnaryExp_, scope, parser->previous.line);
   unary->op = operator_type;
   unary->expr = (AstExpr_*)parse_precedence(parser, scanner, PREC_UNARY, scope);
-  unary->base.sem_type = SemanticType_Unknown;
+  unary->base.type = make_unknown_ty(parser->allocator);
 
   return (AstNode_*)unary;
 }
@@ -865,7 +870,7 @@ static AstNode_* ClassConstructorParam(Parser_* parser, Scanner_* scanner, Scope
 static AstNode_* ClassConstructor(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstClassConstructor_* constructor = MAKE_AST_EXPR(parser->allocator, AstClassConstructor_, scope, parser->previous.line);
   astlist_init(&constructor->params, parser->allocator);
-
+  
   if (match(parser, scanner, TK_RBRACE)) {
     return (AstNode_*)constructor;
   }
@@ -930,25 +935,31 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       AstClassConstructor_* new_exp = AST_CAST(AstClassConstructor_, infix_rule(parser, scanner, scope));
       if (exp->cls == AST_CLS(AstTypeExpr_)) {
         AstTypeExpr_* type_expr = AST_CAST(AstTypeExpr_, exp);
-        new_exp->base.sem_type = type_expr->base.sem_type;
+        new_exp->base.type = type_expr->base.type;
       } else if (exp->cls == AST_CLS(AstVarExpr_)) {
         AstVarExpr_* var_expr = AST_CAST(AstVarExpr_, exp);
         AstIdExpr_* id_expr = AST_CAST(AstIdExpr_, var_expr->expr);
-        //new_exp->base.sem_type.name = id_expr->name;
+        new_exp->name = id_expr->name;
+        new_exp->base.type = make_placeholder_ty(new_exp->name, parser->allocator);
       }
       dealloc(parser->allocator, exp);
       exp = (AstNode_*)new_exp;
+    } else if (parser->previous.type == TK_LBRACKET) {
+      AstIndexExpr_* new_exp = AST_CAST(AstIndexExpr_, infix_rule(parser, scanner, scope));
+      new_exp->prefix = (AstExpr_*)exp;
+
+      AstVarExpr_* var_exp = MAKE_AST_EXPR(parser->allocator, AstVarExpr_, scope, parser->previous.line);
+      var_exp->expr = (AstExpr_*)new_exp;
+      exp = (AstNode_*)var_exp;
     } else {
       AstBinaryExp_* bin_exp = MAKE_AST_EXPR(parser->allocator, AstBinaryExp_, scope, parser->previous.line);
-      bin_exp->base.sem_type = SemanticType_Unknown;
-      bin_exp->base.sem_type.lifetime = LIFETIME_TMP;
+      bin_exp->base.type = make_unknown_ty(parser->allocator);
       bin_exp->op = parser->previous.type;
       bin_exp->left = (AstExpr_*)exp;
       bin_exp->right = (AstExpr_*)infix_rule(parser, scanner, scope);
 
       AstTmpDecl_* tmp_decl = MAKE_AST_EXPR(parser->allocator, AstTmpDecl_, scope, parser->previous.line);
       tmp_decl->expr = (AstExpr_*)bin_exp;
-      tmp_decl->tmp = frame_addtmp(scope->frame, scope);
 
       exp = (AstNode_*)tmp_decl;
     }
@@ -963,7 +974,7 @@ ParseRule_ rules[] = {
   [TK_ID]           = {Id,          NULL,              PREC_NONE},
   [TK_LPAREN]       = {grouping,    FunctionCallArgs,  PREC_CALL},
   [TK_RPAREN]       = {NULL,        NULL,              PREC_NONE},
-  [TK_LBRACKET]     = {ArrayValue,  NULL,              PREC_NONE},
+  [TK_LBRACKET]     = {ArrayValue,  IndexExpr,         PREC_CALL},
   [TK_RBRACKET]     = {NULL,        NULL,              PREC_NONE},
   [TK_LBRACE]       = {NULL,        ClassConstructor,  PREC_CALL},
   [TK_RBRACE]       = {NULL,        NULL,              PREC_NONE},

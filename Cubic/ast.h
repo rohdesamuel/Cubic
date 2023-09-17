@@ -29,6 +29,7 @@ typedef struct AstNode_ {
     AST_CLS(AstAssertStmt_),
     AST_CLS(AstVarDeclStmt_),
     AST_CLS(AstVarExpr_),
+    AST_CLS(AstIndexExpr_),
     AST_CLS(AstIdExpr_),
     AST_CLS(AstAssignmentExpr_),
     AST_CLS(AstWhileStmt_),
@@ -70,12 +71,12 @@ typedef struct AstExpr_ {
   struct AstExpr_* expr;
 
   // This type is the result of executing this expression.
-  struct SemanticType_ sem_type;
+  struct Type_* type;
 
   // This type is what the result of this expression should be interpreted as.
   // For instance, when automatically dereferencing a reference this type is a
   // value type.
-  struct SemanticType_ top_sem_type;
+  struct Type_* top_type;
 } AstExpr_;
 
 typedef struct AstCleanUpTemps_ {
@@ -86,8 +87,6 @@ typedef struct AstCleanUpTemps_ {
 
 typedef struct AstTmpDecl_ {
   struct AstExpr_ base;
-  struct Symbol_* tmp;
-
   struct AstExpr_* expr;
 } AstTmpDecl_;
 
@@ -137,7 +136,7 @@ typedef struct AstVarDeclStmt_ {
 
   // Owned by Parser allocator.
   Token_ name;
-  struct SemanticType_ sem_type;
+  struct Type_* decl_type;
 
   AstExpr_* expr;
 } AstVarDeclStmt_;
@@ -208,14 +207,15 @@ typedef struct AstIdExpr_ {
 typedef struct AstIndexExpr_ {
   struct AstExpr_ base;
 
-  Token_ name;
+  struct AstExpr_* prefix;
+  struct AstExpr_* index;
 } AstIndexExpr_;
 
 // Var ::= PrefixExpr '.' Id
 typedef struct AstDotExpr_ {
   struct AstExpr_ base;
 
-  Symbol_* cls_sym;
+  Type_* cls_ty;
   struct AstExpr_* prefix;
   Token_ id;
 } AstDotExpr_;
@@ -265,7 +265,7 @@ typedef struct AstFunctionBody_ {
   struct AstNode_ base;
   struct Symbol_* fn_symbol;
   AstList_ function_params;
-  struct SemanticType_ return_type;
+  struct Type_* return_type;
   AstNode_* stmt;
 } AstFunctionBody_;
 
@@ -273,7 +273,7 @@ typedef struct AstFunctionBody_ {
 typedef struct AstFunctionParam_ {
   struct AstNode_ base;
   Token_ name;
-  struct SemanticType_ type;
+  struct Type_* type;
 
 } AstFunctionParam_;
 
@@ -289,6 +289,7 @@ typedef struct AstFunctionCall_ {
 // FunctionCallArgs ::= '(' { FunctionCallArg } ')'
 typedef struct AstFunctionCallArgs_ {
   struct AstNode_ base;
+  struct Type_* fn_type;
   AstList_ args;
   struct Symbol_* fn_sym;  
 } AstFunctionCallArgs_;
@@ -305,7 +306,7 @@ typedef struct AstClassDef_ {
   Token_ name;
   AstList_ members;
 
-  SemanticType_ class_type;
+  Type_* class_type;
 } AstClassDef_;
 
 // ClassMemberDecl_ ::= IdList ':' UnionType ['=' ExprList]
@@ -313,14 +314,15 @@ typedef struct AstClassMemberDecl_ {
   struct AstNode_ base;
 
   Token_ name;
-  struct SemanticType_ sem_type;
+  struct Type_* field_type;
+  Symbol_* field_sym;
   AstExpr_* opt_expr;
 } AstClassMemberDecl_;
 
 // ClassConstructor ::= Id '{' [ClassConstructorParamList] [',' ClassConstructorNamedParamList] '}'
 typedef struct AstClassConstructor_ {
   struct AstExpr_ base;
-
+  Token_ name;
   struct AstList_ params;
 } AstClassConstructor_;
 

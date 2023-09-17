@@ -90,9 +90,11 @@ typedef struct Type_ {
   // to, the field of a given struct.
   enum TypeCls {
     // Unknown because type has not been parsed.
-    TYPE_CLS(UnknownType_),
+    TYPE_CLS(UnknownType_),    
+    TYPE_CLS(Type_),
 
     // Primitive types.
+    __TYPE_PRIMITIVE_START__,
     TYPE_CLS(NilType_),
     TYPE_CLS(BoolType_),
     TYPE_CLS(IntType_),
@@ -108,18 +110,22 @@ typedef struct Type_ {
     TYPE_CLS(FloatType_),
     TYPE_CLS(DoubleType_),
     TYPE_CLS(StringType_),
+    __TYPE_PRIMITIVE_END__,
 
     // Unary types.    
+    __TYPE_UNARY_START__,    
     TYPE_CLS(ConstType_),
     TYPE_CLS(InType_),
     TYPE_CLS(OutType_),
     TYPE_CLS(VarType_),
     TYPE_CLS(RefType_),
-    TYPE_CLS(PlaceholderType_),
+    __TYPE_UNARY_END__,
 
-    // Compound types.
+    // Composite types.
+    __TYPE_COMPOSITE_START__,
     TYPE_CLS(ClassType_),
     TYPE_CLS(ArrayType_),
+    __TYPE_COMPOSITE_END__,
 
     // Functional types.
     TYPE_CLS(FunctionType_),
@@ -127,8 +133,11 @@ typedef struct Type_ {
     __TYPE_COUNT__,
   } cls;
 
+
   // The size of this type in memory, not following pointers.
   size_t size;
+
+  struct Type_* impl;
 
   Token_ opt_name;
 } Type_;
@@ -156,6 +165,11 @@ typedef struct PrimitiveType_ {
   Type_ self;
 } PrimitiveType_;
 
+typedef struct UnaryType_ {
+  Type_ self;
+  Type_* ty;
+} UnaryType_;
+
 typedef struct ArrayType_ {
   Type_ self;
   Type_* el_type;
@@ -163,57 +177,64 @@ typedef struct ArrayType_ {
 } ArrayType_;
 
 typedef struct VarType_ {
-  Type_ self;
-  Type_* ty;
+  UnaryType_ unary;
 } VarType_;
 
 typedef struct InType_ {
-  Type_ self;
-  Type_* ty;
+  UnaryType_ unary;
 } InType_;
 
 typedef struct OutType_ {
-  Type_ self;
-  Type_* ty;
+  UnaryType_ unary;
 } OutType_;
 
 typedef struct RefType_ {
-  Type_ self;
-  Type_* ty;
+  UnaryType_ unary;
 } RefType_;
 
 typedef struct ConstType_ {
-  Type_ self;
-  Type_* ty;
+  UnaryType_ unary;
 } ConstType_;
+
+typedef struct ClassTypeField_ {
+  Type_* type;
+
+  // Name of the field.
+  Token_ name;
+
+  // Byte frame_offset into the outer-most class.
+  size_t offset;
+
+  struct AstExpr_* opt_expr;
+} ClassTypeField_;
 
 typedef struct ClassType_ {
   Type_ self;
 
-  ListOf_(Type_*) members;
-  ListOf_(Token_) field_names;
+  struct FunctionType_* constructor;
+  ListOf_(ClassTypeField_*) members;
 } ClassType_;
 
 typedef struct FunctionType_ {
   Type_ self;
+  struct Symbol_* sym;
 
   Type_* ret_ty;
   ListOf_(Type_*) parameters;
 } FunctionType_;
 
-typedef struct PlaceholderType_ {
-  Type_ self;
-  Type_* ty;
-} PlaceholderType_;
-
+extern const UnknownType_ Unknown_Ty;
 extern const NilType_ Nil_Ty;
 extern const BoolType_ Bool_Ty;
 extern const IntType_ Int_Ty;
+extern const Int32Type_ Int32_Ty;
+extern const Int64Type_ Int64_Ty;
 extern const UintType_ Uint_Ty;
 extern const FloatType_ Float_Ty;
 extern const DoubleType_ Double_Ty;
 extern const StringType_ String_Ty;
 
+Type_* make_unknown_ty(MemoryAllocator_* allocator);
 Type_* make_const_ty(Type_* sub_type, MemoryAllocator_* allocator);
 Type_* make_var_ty(Type_* sub_type, MemoryAllocator_* allocator);
 Type_* make_in_ty(Type_* sub_type, MemoryAllocator_* allocator);
@@ -222,13 +243,19 @@ Type_* make_array_ty(Type_* el_type, size_t count, MemoryAllocator_* allocator);
 Type_* make_class_ty(Token_ name, MemoryAllocator_* allocator);
 Type_* make_placeholder_ty(Token_ name, MemoryAllocator_* allocator);
 Type_* make_function_ty(Token_ name, MemoryAllocator_* allocator);
-Type_* type_alloc(MemoryAllocator_* allocator, size_t type_size);
+Type_* make_symbol_ty(Type_* sym_type, struct Symbol_* sym, MemoryAllocator_* allocator);
+Type_* type_alloc(MemoryAllocator_* allocator, int type_cls, size_t type_size);
 
-#define type_alloc_ty(ALLOCATOR, TY) ((TY*)type_alloc(ALLOCATOR, sizeof(TY)))
+#define type_alloc_ty(ALLOCATOR, TY) ((TY*)type_alloc(ALLOCATOR, TYPE_CLS(TY), sizeof(TY)))
 
 // Fills all placeholders in the given type with types found starting at the
 // given scope.
 bool type_fill(Type_* type, struct Scope_* scope);
+
+// Sets the the given type
+void type_set(Type_* type, Type_* new_type);
+void type_wrap(Type_* type, Type_* wrapper);
+void type_replace(Type_* type, Type_* new_type);
 
 // Calculates the size of the given type.
 size_t type_calcsize(Type_* type);
@@ -238,9 +265,11 @@ typedef struct RuntimeType_ {
 } RuntimeType_;
 
 bool type_iscoercible(RuntimeType_ from, RuntimeType_ to);
+RuntimeType_ type_toruntime(const Type_* ty);
 uint32_t type_toint(RuntimeType_ info);
 RuntimeType_ type_fromint(uint32_t n);
 
+const char* type_tostr(const Type_* ty);
 bool type_equal(const Type_* a, const Type_* b);
 bool type_assignable(const Type_* from, const Type_* to);
 bool type_coercible(const Type_* from, const Type_* to);
@@ -248,19 +277,42 @@ bool type_isconst(const Type_* ty);
 bool type_isval(const Type_* ty);
 bool type_isaref(const Type_* ty);
 
-#define type_is(PTYPE, CLS) type_is_(PTYPE, TYPE_CLS(CLS))
-inline bool type_is_(const Type_* type, int cls) { return type->cls == cls; }
+Type_* type_valtype(Type_* ty);
+void type_class_calcoffsets(Type_* ty);
+Type_* type_class_findmember(const Type_* cls_ty, const Token_* name, size_t* offset);
 
-inline static bool type_isunknown(const Type_* ty) {
-  return ty->cls == TYPE_CLS(UnknownType_);
+#define type_is(PTYPE, CLS) type_is_(PTYPE, TYPE_CLS(CLS))
+inline bool type_is_(const Type_* type, int cls) {
+  if (type->cls == cls) {
+    return true;
+  }
+
+  if (type->cls == TYPE_CLS(Type_)) {
+    type = ((UnaryType_*)type)->ty;
+  }
+  
+  return false;
+}
+
+#define type_cast(TYPE, EXPR) ((TYPE*)(EXPR))
+#define type_as(TYPE, EXPR) ((TYPE*)assert_type_is((EXPR), TYPE_CLS(TYPE)))
+#define assert_type_is(TY, VAL_TY) assert_type_is_((Type_*)(TY), VAL_TY)
+Type_* assert_type_is_(Type_* ty, int val);
+
+void print_type(const Type_* ty);
+
+bool type_isunknown(const Type_* ty);
+
+inline static bool type_isaprimitive(const Type_* ty) {
+  return ty->cls > __TYPE_PRIMITIVE_START__ && ty->cls < __TYPE_PRIMITIVE_END__;
+}
+
+inline static bool type_isunary(const Type_* ty) {
+  return ty->cls > __TYPE_UNARY_START__ && ty->cls < __TYPE_UNARY_END__;
 }
 
 inline static bool type_isnil(const Type_* ty) {
-  return ty->cls >= TYPE_CLS(NilType_) && ty->cls <= TYPE_CLS(StringType_);
-}
-
-inline static bool type_isaprimitive(const Type_* ty) {
-  return ty->cls >= TYPE_CLS(NilType_) && ty->cls <= TYPE_CLS(StringType_);
+  return type_is(ty, NilType_);
 }
 
 inline static bool type_isabool(const Type_* ty) {
@@ -290,9 +342,5 @@ inline static bool type_isareal(const Type_* ty) {
 inline static bool type_isastring(const Type_* ty) {
   return type_is(ty, StringType_);
 }
-
-#define type_as(TYPE, EXPR) ((TYPE*)assert_type_is((EXPR), TYPE_CLS(TYPE)))
-#define assert_type_is(TY, VAL_TY) assert_type_is_((Type_*)(TY), VAL_TY)
-Type_* assert_type_is_(Type_* ty, int val);
 
 #endif  // TYPE__H

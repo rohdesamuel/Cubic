@@ -254,7 +254,7 @@ static InterpretResult run(VM vm) {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
         uint8_t offset = READ_BYTE();
-        frame->slots[dst] = *(Value_*)(frame->slots[src].as.ptr + offset);
+        frame->slots[dst] = *((Value_*)(frame->slots[src].as.ptr) + offset);
         continue;
       }
 
@@ -272,7 +272,7 @@ static InterpretResult run(VM vm) {
         uint8_t dst = READ_BYTE();
         uint8_t src = READ_BYTE();
         uint8_t offset = READ_BYTE();
-        *(Value_*)(frame->slots[dst].as.ptr + offset) = frame->slots[src];
+        *((Value_*)(frame->slots[dst].as.ptr) + offset) = frame->slots[src];
         continue;
       }
 

@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "memory.h"
 #include "symbol_table.h"
+#include "type.h"
 #include "object.h"
 
 #include <stdarg.h>
@@ -102,9 +103,9 @@ void expr_analysis(AstNode_* node) {
     return;
   }
 
-  AS_EXPR(expr->expr)->top_sem_type = expr->top_sem_type;
+  AS_EXPR(expr->expr)->top_type = expr->top_type;
   do_analysis((AstNode_*)expr->expr);
-  expr->sem_type = AS_EXPR(expr->expr)->sem_type;
+  expr->type = AS_EXPR(expr->expr)->type;
 }
 
 void print_analysis(AstNode_* n) {
@@ -115,24 +116,24 @@ void print_analysis(AstNode_* n) {
 void unary_analysis(AstNode_* n) {
   AstUnaryExp_* expr = (AstUnaryExp_*)n;
   
-  expr->expr->top_sem_type = expr->base.top_sem_type;
+  expr->expr->top_type = expr->base.top_type;
   do_analysis((AstNode_*)expr->expr);
-  expr->base.sem_type = AS_EXPR(expr->expr)->sem_type;
+  expr->base.type = AS_EXPR(expr->expr)->type;
   switch (expr->op) {
     case TK_TILDE:
-      if (!type_isanumber(expr->base.sem_type.ty)) {
+      if (!type_isanumber(expr->base.type)) {
         error(analyzer_, n, "expression does not have a number type.");
       }
       break;
 
     case TK_NOT:
-      if (!type_isabool(expr->base.sem_type.ty)) {
+      if (!type_isabool(expr->base.type)) {
         error(analyzer_, n, "expression does not have a boolean type.");
       }
       break;
 
     case TK_MINUS:
-      if (!type_isanumber(expr->base.sem_type.ty)) {
+      if (!type_isanumber(expr->base.type)) {
         error(analyzer_, n, "expression does not have a number type.");
       }
       break;
@@ -145,35 +146,37 @@ void unary_analysis(AstNode_* n) {
 
 void binary_analysis(AstNode_* n) {
   AstBinaryExp_* expr = (AstBinaryExp_*)n;
-  expr->left->top_sem_type = expr->base.top_sem_type;
-  expr->right->top_sem_type = expr->base.top_sem_type;
+  expr->left->top_type = expr->base.top_type;
+  expr->right->top_type = expr->base.top_type;
 
   do_analysis((AstNode_*)expr->left);
   do_analysis((AstNode_*)expr->right);
 
-  SemanticType_ lsem_type = AS_EXPR(expr->left)->sem_type;
-  SemanticType_ rsem_type = AS_EXPR(expr->right)->sem_type;
+  Type_* ltype = AS_EXPR(expr->left)->type;
+  Type_* rtype = AS_EXPR(expr->right)->type;
 
-  if (type_isunknown(lsem_type.ty)) {
+  if (type_isunknown(ltype)) {
     error(analyzer_, n, "left-hand expression type could not be deduced.");
     return;
   }
 
-  if (type_isunknown(rsem_type.ty)) {
+  if (type_isunknown(rtype)) {
     error(analyzer_, n, "right-hand expression type could not be deduced.");
     return;
   }
 
-  if (!type_coercible(rsem_type.ty, lsem_type.ty)) {
+  if (!type_coercible(rtype, ltype)) {
     error(analyzer_, n, "right-hand expression cannot be coerced to left-hand expression.");
   }
 
+  Type_* lval_type = type_valtype(ltype);
+  Type_* rval_type = type_valtype(rtype);
   const Type_* expected_type = NULL;
   switch (expr->op) {
     case TK_AND: 
     case TK_OR:
     case TK_XOR:
-      expr->base.sem_type = semantictype_as((Type_*)&Bool_Ty);
+      expr->base.type = (Type_*)&Bool_Ty;
       expected_type = (Type_*)&Bool_Ty;
       break;
 
@@ -183,21 +186,21 @@ void binary_analysis(AstNode_* n) {
     case TK_LTE:
     case TK_EQUAL_EQUAL:
     case TK_BANG_EQUAL:
-      expr->base.sem_type = semantictype_as((Type_*)&Bool_Ty);
+      expr->base.type = (Type_*)&Bool_Ty;
       break;
 
     case TK_AMPERSAND:
     case TK_PIPE:
     case TK_HAT:
-      expr->base.sem_type = lsem_type;
-      if (!type_isainteger(expr->base.sem_type.ty)) {
+      expr->base.type = lval_type;
+      if (!type_isainteger(lval_type)) {
         error(analyzer_, n, "expected the expression type to be a number.");
       }
       break;
 
     case TK_PLUS:
-      expr->base.sem_type = lsem_type;
-      if (!type_isanumber(expr->base.sem_type.ty) && !type_isastring(expr->base.sem_type.ty)) {
+      expr->base.type = lval_type;
+      if (!type_isanumber(lval_type) && !type_isastring(lval_type)) {
         error(analyzer_, n, "expected the expression type to be a number or a string.");
       }
       break;
@@ -206,8 +209,8 @@ void binary_analysis(AstNode_* n) {
     case TK_STAR:
     case TK_SLASH:
     case TK_DOUBLE_SLASH:
-      expr->base.sem_type = lsem_type;
-      if (!type_isanumber(expr->base.sem_type.ty)) {
+      expr->base.type = lval_type;
+      if (!type_isanumber(lval_type)) {
         error(analyzer_, n, "expected the expression type to be a number.");
       }
       break;
@@ -215,7 +218,7 @@ void binary_analysis(AstNode_* n) {
     case TK_PERCENT:
     case TK_LSHIFT:
     case TK_RSHIFT:
-      expr->base.sem_type = lsem_type;
+      expr->base.type = lval_type;
       expected_type = (const Type_*)&Int_Ty;
       break;
 
@@ -225,48 +228,39 @@ void binary_analysis(AstNode_* n) {
   }
 
   if (expected_type) {
-    if (lsem_type.ty->cls != expected_type->cls) {
+    if (ltype->cls != expected_type->cls) {
       error(analyzer_, n, "left-hand expression does not have expected type of %s.", type_tostr(expected_type));
     }
 
-    if (rsem_type.ty->cls != expected_type->cls) {
+    if (rtype->cls != expected_type->cls) {
       error(analyzer_, n, "right-hand expression does not have expected type of %s.", type_tostr(expected_type));
     }
   }
-
-  if (lsem_type.lifetime == LIFETIME_STATIC && rsem_type.lifetime == LIFETIME_STATIC) {
-    expr->base.sem_type.lifetime = LIFETIME_STATIC;
-  } else {
-    expr->base.sem_type.lifetime = LIFETIME_TMP;
-  }
-
-  semantictype_size(&expr->base.sem_type);
 }
 
 void primary_analysis(AstNode_* n) {
-  AstPrimaryExp_* exp = AST_CAST(AstPrimaryExp_, n);
-
-  semantictype_size(&exp->base.sem_type);
-  assertf(exp->base.sem_type.ty->size > 0, "");
+  //AstPrimaryExp_* exp = AST_CAST(AstPrimaryExp_, n);
 }
 
 void return_analysis(AstNode_* n) {
   AstReturnStmt_* stmt = (AstReturnStmt_*)n;
   Frame_* frame = stmt->base.scope->frame;
-  stmt->expr->top_sem_type.ty = type_as(FunctionType_, frame->fn_symbol->ty)->ret_ty;
+  stmt->expr->top_type = type_as(FunctionType_, frame->fn_symbol->ty)->ret_ty;
 
   do_analysis((AstNode_*)stmt->expr);
-  if (type_coercible(AS_EXPR(stmt->expr)->sem_type.ty, type_as(FunctionType_, frame->fn_symbol->ty)->ret_ty)) {
+  Type_* from = type_valtype(AS_EXPR(stmt->expr)->type);
+  Type_* to = type_valtype(type_as(FunctionType_, frame->fn_symbol->ty)->ret_ty);
+  if (!type_coercible(from, to)) {
     error(analyzer_, n, "Return statement type does not match function type.");
   }  
 }
 
 void if_analysis(AstNode_* n) {
   AstIfStmt_* stmt = (AstIfStmt_*)n;
-  stmt->condition_expr->top_sem_type = semantictype_frominfo((Type_*)&Bool_Ty);
+  stmt->condition_expr->top_type = (Type_*)&Bool_Ty;
 
   do_analysis((AstNode_*)stmt->condition_expr);
-  if (!type_isabool(AS_EXPR(stmt->condition_expr)->sem_type.ty)) {
+  if (!type_isabool(AS_EXPR(stmt->condition_expr)->type)) {
     error(analyzer_, n, "if expression must have a boolean type.");
   }
 
@@ -277,7 +271,7 @@ void if_analysis(AstNode_* n) {
 
   for (AstListNode_* n = stmt->elif_exprs.head; n != NULL; n = n->next) {
     do_analysis(n->node);
-    if (!type_isabool(AS_EXPR(n->node)->sem_type.ty)) {
+    if (!type_isabool(AS_EXPR(n->node)->type)) {
       error(analyzer_, n->node, "elif expression must have a boolean type.");
     }
   }
@@ -288,9 +282,9 @@ void if_analysis(AstNode_* n) {
 
 void assert_analysis(AstNode_* n) {
   AstAssertStmt_* stmt = (AstAssertStmt_*)n;
-  stmt->expr->top_sem_type = semantictype_frominfo((Type_*)&Bool_Ty);
+  stmt->expr->top_type = (Type_*)&Bool_Ty;
   do_analysis((AstNode_*)stmt->expr);
-  if (!type_isabool(AS_EXPR(stmt->expr)->sem_type.ty)) {
+  if (!type_isabool(AS_EXPR(stmt->expr)->type)) {
     error(analyzer_, n, "assert expression must have a boolean type.");
   }
 }
@@ -299,104 +293,79 @@ void var_decl_analysis(AstNode_* n) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)n;
 
   if (stmt->expr) {
-    stmt->expr->top_sem_type = stmt->sem_type;
+    stmt->expr->top_type = stmt->decl_type;
     do_analysis((AstNode_*)stmt->expr);
   }
 
-  if (type_isunknown(stmt->sem_type.ty)) {
+  Type_* val_type = type_valtype(stmt->decl_type);
+  if (type_isunknown(val_type)) {
     if (!stmt->expr) {
       error(analyzer_, n, "type deduced variable must have an expression");
       return;
     }
 
-    if (type_is(stmt->sem_type.ty, VarType_)) {
-      stmt->sem_type.ty = make_var_ty(AS_EXPR(stmt->expr)->sem_type.ty, analyzer_->allocator);
-    } else {
-      stmt->sem_type = AS_EXPR(stmt->expr)->sem_type;
-    }
+    type_set(val_type, stmt->expr->type);
   }
-
-  stmt->sem_type.lifetime = LIFETIME_AUTOMATIC;
+  type_fill(stmt->decl_type, n->scope);
 
   // TODO: implement tuples (and others) for variable declarations.
-  VarSymbol_* var = scope_var(n->scope, &stmt->name);
-  var->sem_type = stmt->sem_type;
-
-  if (type_is(stmt->sem_type.ty, ClassType_)) {
-    ClassType_* ty = type_as(ClassType_, stmt->sem_type.ty);
-    const Token_* ty_name = &ty->self.opt_name;
-    var->sem_type.sym = scope_search_to_root(n->scope, ty_name);
-    if (!var->sem_type.sym) {
-      error(analyzer_, n, "could not find symbol \"%.*s\" for variable type.", ty_name->length, ty_name->start);
-      return;
-    }
-  }
-
-  if (stmt->expr && !semantictype_iscoercible(AS_EXPR(stmt->expr)->sem_type, stmt->sem_type)) {
+  Symbol_* var = scope_find(n->scope, &stmt->name);
+  if (stmt->expr && !type_coercible(AS_EXPR(stmt->expr)->type, val_type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
 
-  semantictype_size(&var->sem_type);
+  type_calcsize(var->ty);
 }
 
 void var_expr_analysis(AstNode_* n) {
   AstVarExpr_* expr = (AstVarExpr_*)n;
-  expr->expr->top_sem_type = expr->base.top_sem_type;
+  expr->expr->top_type = expr->base.top_type;
   do_analysis((AstNode_*)expr->expr);
-  expr->base.sem_type = expr->expr->sem_type;
+  expr->base.type = expr->expr->type;
 }
 
 void id_expr_analysis(AstNode_* n) {
   AstIdExpr_* expr = (AstIdExpr_*)n;
   Symbol_* sym = scope_find(n->scope, &expr->name);
-  if (sym) {
-    switch (sym->type) {
-      case SYMBOL_TYPE_CLASS:
-        expr->base.sem_type = (SemanticType_){
-          .ty = sym->ty,
-          .sym = sym,
-        };
-        break;
-
-      case SYMBOL_TYPE_FN:
-        expr->base.sem_type = (SemanticType_){
-          .ty = type_as(FunctionType_, sym->ty)->ret_ty,
-          .sym = sym,
-        };
-        break;
-
-      case SYMBOL_TYPE_VAR:
-        expr->base.sem_type = sym->var.sem_type;
-        /*if (expr->base.top_sem_type.kind == KIND_VAR) {
-          expr->base.sem_type.kind = KIND_VAR;
-          expr->base.sem_type.ref_kind = REF_KIND_WEAK;
-        }*/
-        break;
-
-      //case SYMBOL_TYPE_CLOSURE:
-      //  expr->base.sem_type = sym->closure.fn->fn.return_type;
-      //  expr->base.sem_type.sym = sym;
-      //  break;
-
-      default:
-        error(analyzer_, n, "Unhandled symbol type: %d", sym->type);
-        break;
-    }
-  } else {
+  if (!sym) {
     error(analyzer_, n, "Could not find variable '%.*s'", expr->name.length, expr->name.start);
-    expr->base.sem_type = SemanticType_Unknown;
+    return;
   }
+
+  if (!sym->ty) {
+    error(analyzer_, n, "Could not find type for variable '%.*s'", expr->name.length, expr->name.start);
+    return;
+  }
+
+  expr->base.type = sym->ty;
 }
+
+void index_expr_analysis(AstNode_* n) {
+  AstIndexExpr_* expr = (AstIndexExpr_*)n;
+  expr->prefix->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
+  do_analysis((AstNode_*)expr->prefix);
+  do_analysis((AstNode_*)expr->index);
+
+  if (!type_isainteger(type_valtype(expr->index->type))) {
+    error(analyzer_, n, "Index expression in array does not evaluate to an integer.");
+    return;
+  }
+
+  if (!type_is(type_valtype(expr->prefix->type), ArrayType_)) {
+    error(analyzer_, n, "Prefix expression does not evaluate to an array.");
+    return;
+  }
+
+  expr->base.type = type_as(ArrayType_, type_valtype(expr->prefix->type))->el_type;
+}
+
 
 void assignment_expr_analysis(AstNode_* n) {
   AstAssignmentExpr_* expr = (AstAssignmentExpr_*)n;
 
-  SemanticType_ top_sem_type = SemanticType_Unknown;
-  top_sem_type.ty = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
-
   // TODO: allow for deconstructing tuples in assignments (and other types).
-  expr->left->top_sem_type = top_sem_type;
-  expr->right->top_sem_type = expr->base.top_sem_type;
+  expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
+  expr->right->top_type = expr->base.top_type;
   do_analysis((AstNode_*)expr->left);
   do_analysis((AstNode_*)expr->right);
 
@@ -405,27 +374,27 @@ void assignment_expr_analysis(AstNode_* n) {
     return;
   }
 
-  if (type_isconst(expr->left->sem_type.ty)) {
+  if (type_isconst(expr->left->type)) {
     error(analyzer_, n, "Left-hand side of assignment is const and cannot be assigned to.");
     return;
   }
 
   AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
-  if (lvalue_expr->base.sem_type.ty->cls != rvalue_expr->sem_type.ty->cls) {
+  if (!type_assignable(rvalue_expr->type, lvalue_expr->base.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
-  expr->base.sem_type = lvalue_expr->base.sem_type;
+  expr->base.type = lvalue_expr->base.type;
 }
 
 void while_stmt_analysis(AstNode_* n) {
   AstWhileStmt_* stmt = (AstWhileStmt_*)n;
-  stmt->condition_expr->top_sem_type = semantictype_frominfo((Type_*)&Bool_Ty);
+  stmt->condition_expr->top_type = (Type_*)&Bool_Ty;
 
   do_analysis((AstNode_*)stmt->condition_expr);
   do_analysis(stmt->block_stmt);
    
-  if (!type_isabool(AS_EXPR(stmt->condition_expr)->sem_type.ty)) {
+  if (!type_isabool(AS_EXPR(stmt->condition_expr)->type)) {
     error(analyzer_, n, "while loop conditional must be a bool.");
   }
 }
@@ -438,21 +407,15 @@ void expression_statement_analysis(AstNode_* n) {
 void function_def_analysis(AstNode_* n) {
   AstFunctionDef_* def = (AstFunctionDef_*)n;  
 
-  FunctionSymbol_* fn = &def->fn_symbol->fn;  
-  def->base.sem_type = (SemanticType_) {
-    .ty = def->fn_symbol->ty,
-    .lifetime = LIFETIME_STATIC,
-    .sym = def->fn_symbol,
-  };
-
+  def->base.type = def->fn_symbol->ty;
   do_analysis((AstNode_*)def->body);  
 }
 
 void function_body_analysis(AstNode_* n) {
   AstFunctionBody_* body = (AstFunctionBody_*)n;
-  FunctionType_* fn_type = type_as(FunctionType_, &body->fn_symbol->ty);
+  FunctionType_* fn_type = type_as(FunctionType_, body->fn_symbol->ty);
   FunctionSymbol_* fn = &body->fn_symbol->fn;
-  fn_type->ret_ty = body->return_type.ty;
+  fn_type->ret_ty = body->return_type;
 
   type_fill(fn_type->ret_ty, n->scope);
   type_calcsize(fn_type->ret_ty);
@@ -468,76 +431,64 @@ void function_param_analysis(AstNode_* n) {
   AstFunctionParam_* param = (AstFunctionParam_*)n;
   
   // TODO: implement parameter type inference.
-  param->type.sym = scope_search_to_root(n->scope, &param->type.ty->opt_name);
-  semantictype_size(&param->type);
-  if (type_isunknown(param->type.ty)) {
-    error(analyzer_, n, "Parameter type inferrece is unimplemented.");
+  Type_* val_type = type_valtype(param->type);
+  type_fill(param->type, n->scope);
+  type_calcsize(param->type);
+  if (type_isunknown(param->type)) {
+    error(analyzer_, n, "Parameter type inference is unimplemented.");
   }
   
-  Symbol_* s = scope_find(n->scope, &param->name);// &n->scope->frame->fn_symbol->fn.params;
+  Symbol_* s = scope_find(n->scope, &param->name);
   if (!s) {
     error(analyzer_, n, "Could not find parameter %.*s", param->name.length, param->name.start);
     return;
   }
-
-  if (s->type != SYMBOL_TYPE_VAR) {
-    error(analyzer_, n, "Parameter type is unimplemented.");
-    return;
-  }
-
-  s->var.sem_type = param->type;
 }
 
 void function_call_analysis(AstNode_* node) {
   AstFunctionCall_* call = (AstFunctionCall_*)node;
-  call->prefix->top_sem_type = call->base.top_sem_type;
-  do_analysis((AstNode_*)call->prefix);  
+  call->prefix->top_type = call->base.top_type;
+  do_analysis((AstNode_*)call->prefix);
 
-  call->base.sem_type = AS_EXPR(call->prefix)->sem_type;
-  Symbol_* sym = call->base.sem_type.sym;
-  Symbol_* fn_sym = symbol_ascallable(sym);
-
-  call->args->fn_sym = fn_sym;
-  do_analysis((AstNode_*)call->args);
-
-  if (!fn_sym) {
-    error(analyzer_, node, "Trying to call variable that is not callable.");
+  if (!type_is(call->prefix->type, FunctionType_)) {
+    error(analyzer_, node, "Function call is not calling a function");
     return;
   }
+
+  FunctionType_* fn_type = type_as(FunctionType_, call->prefix->type);
+  call->base.type = fn_type->ret_ty;
+  call->args->fn_type = (Type_*)fn_type;
+
+  do_analysis((AstNode_*)call->args);
 }
 
 void function_call_arg_analysis(AstNode_* node) {
   AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, node);
   
-  arg->expr->top_sem_type = arg->base.top_sem_type;
+  arg->expr->top_type = arg->base.top_type;
   do_analysis((AstNode_*)arg->expr);
-  arg->base.sem_type = arg->expr->sem_type;
+  arg->base.type = arg->expr->type;
 }
 
 void function_call_args_analysis(AstNode_* node) {
   AstFunctionCallArgs_* args = AST_CAST(AstFunctionCallArgs_, node);
+  FunctionType_* fn_type = type_as(FunctionType_, args->fn_type);
+
   FunctionSymbol_* fn_sym = &args->fn_sym->fn;
 
   if (fn_sym->params.count > UINT8_MAX) {
     error(analyzer_, node, "Parameter count exceeded maximum of 255.");
   }
 
-  List_* params = &args->fn_sym->fn.params;
-  ListNode_* param_node = params->head;
+  ListNode_* param_node = fn_type->parameters.head;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-    Symbol_* param = list_val(param_node, Symbol_*);
-    SemanticType_ param_sem_type = SemanticType_Unknown;
-    if (param->type == SYMBOL_TYPE_VAR) {
-      param_sem_type = param->var.sem_type;
-    } else {
-      error(analyzer_, node, "Encountered unknown parameter type %d.", param->type);
-    }
+    Type_* param_type = list_val(param_node, Type_*);
 
-    AS_EXPR(n->node)->top_sem_type = param_sem_type;
+    AS_EXPR(n->node)->top_type = param_type;
     do_analysis(n->node);
-    SemanticType_ expr_sem_type = AS_EXPR(n->node)->sem_type;
+    Type_* expr_type = AS_EXPR(n->node)->type;
 
-    if (type_assignable(expr_sem_type.ty, param_sem_type.ty)) {
+    if (!type_assignable(expr_type, type_valtype(param_type))) {
       error(analyzer_, n->node, "Expression does not match function parameter type.");
     }
     
@@ -560,9 +511,9 @@ void clean_up_temps_analysis(AstNode_* n) {
 
 void ast_tmp_decl_analysis(AstNode_* n) {
   AstTmpDecl_* decl = (AstTmpDecl_*)n;
-  decl->expr->top_sem_type = decl->base.top_sem_type;
+  decl->expr->top_type = decl->base.top_type;
   do_analysis((AstNode_*)decl->expr);
-  decl->base.sem_type = decl->expr->sem_type;
+  decl->base.type = decl->expr->type;
 }
 
 void ast_class_def_analysis(AstNode_* node) {
@@ -572,13 +523,13 @@ void ast_class_def_analysis(AstNode_* node) {
     do_analysis(n->node);
   }
 
-  Symbol_* cls_sym = def->class_type.sym;
-  if (semantictype_hascycle(&def->class_type)) {
-    error(analyzer_, node, "struct \"%.*s\" has a cycle", cls_sym->name.length, cls_sym->name.start);
-    return;
-  }
+  //if (semantictype_hascycle(&def->class_type)) {
+  //  error(analyzer_, node, "struct \"%.*s\" has a cycle", cls_sym->name.length, cls_sym->name.start);
+  //  return;
+  //}
 
-  semantictype_size(&def->class_type);
+  type_calcsize(def->class_type);
+  type_class_calcoffsets(def->class_type);
 }
 
 static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
@@ -592,8 +543,7 @@ static Value_ fold_constants(Scope_* scope, AstExpr_* expr) {
 
 void ast_class_member_decl_analysis(AstNode_* node) {
   AstClassMemberDecl_* decl = (AstClassMemberDecl_*)node;
-  FieldSymbol_* field = &decl->sem_type.sym->field;
-  Type_* type = decl->sem_type.sym->ty;
+  Type_* type = decl->field_type;
 
   if (!type_fill(type, node->scope)) {
     error(analyzer_, node,
@@ -605,105 +555,79 @@ void ast_class_member_decl_analysis(AstNode_* node) {
     AstExpr_* expr = decl->opt_expr;
     do_analysis((AstNode_*)expr);
 
-    if (!type_isval(expr->sem_type.ty) &&
-      expr->sem_type.lifetime != LIFETIME_STATIC &&
-      expr->sem_type.lifetime != LIFETIME_TMP) {
-
+    if (!type_isval(expr->type)) {
       error(analyzer_, node, "struct member field default value must be a value.");
       return;
     }
-
-    field->val = fold_constants(node->scope, expr);
-    field->has_default_val = true;
-  } else {
-    field->val = NIL_VAL;
-    field->has_default_val = false;
   }
-  field->opt_expr = decl->opt_expr;
 }
 
 void ast_dot_expr_analysis(AstNode_* node) {
   AstDotExpr_* expr = AST_CAST(AstDotExpr_, node);
 
-  expr->prefix->top_sem_type = expr->base.top_sem_type;
+  expr->prefix->top_type = expr->base.top_type;
   do_analysis((AstNode_*)expr->prefix);
 
-
-  SemanticType_ prefix_type = expr->prefix->sem_type;
-  if (!type_is(prefix_type.ty, ClassType_)) {
+  Type_* prefix_type = expr->prefix->type;
+  Type_* val_type = type_valtype(prefix_type);
+  if (!type_is(val_type, ClassType_)) {
     error(analyzer_, (AstNode_*)expr->prefix, "Expected class type for sub-expression.");
     return;
   }
+  ClassType_* cls_type = type_as(ClassType_, val_type);
 
-  if (!prefix_type.sym) {
-    error(analyzer_, (AstNode_*)expr->prefix, "Unknown error: no semantic information for prefix.");
-    return;
-  }
-
-  Symbol_* cls_sym = NULL;
-
-  if (prefix_type.sym->type == SYMBOL_TYPE_VAR) {
-    VarSymbol_* sym = &prefix_type.sym->var;
-    cls_sym = sym->sem_type.sym;
-  } else if (prefix_type.sym->type == SYMBOL_TYPE_CLASS) {
-    cls_sym = prefix_type.sym;
-  } else {
-    error(analyzer_, (AstNode_*)expr->prefix, "Unknown error: unexpected symbol type.");
-    return;
-  }
-
-  Symbol_* found = NULL;
-  for (ListNode_* n = cls_sym->cls.members.head; n != NULL; n = n->next) {
-    Symbol_* field = list_val(n, Symbol_*);
+  Type_* found = NULL;
+  for (ListNode_* n = cls_type->members.head; n != NULL; n = n->next) {
+    ClassTypeField_* field = list_val(n, ClassTypeField_*);
     if (token_eq(field->name, expr->id)) {
-      found = field;
+      found = field->type;
       break;
     }
   }
 
-  if (!found || found->type != SYMBOL_TYPE_FIELD) {
+  if (!found) {
     error(analyzer_, node, "Could not find field '%.*s'", expr->id.length, expr->id.start);
     return;
   }
-  expr->cls_sym = cls_sym;
-  expr->base.sem_type.ty = found->ty;
+  expr->cls_ty = val_type;
+  expr->base.type = found;
 }
 
 void ast_class_constructor_analysis(AstNode_* node) {
   AstClassConstructor_* constructor = (AstClassConstructor_*)node;
+  Symbol_* cls_sym = scope_search_to_root(node->scope, &constructor->name);
 
-  SemanticType_* sem_type = &constructor->base.sem_type;
-  Type_* type = sem_type->ty;
-
-  Symbol_* cls_sym = scope_search_to_root(node->scope, &type->opt_name);
+  Type_* type = constructor->base.type;
   if (!type_fill(type, node->scope)) {
-    error(analyzer_, node, "Could not find class %.*s", type->opt_name.length, type->opt_name.start);
+    error(analyzer_, node, "Could not find class %.*s", constructor->name.length, constructor->name.start);
     return;
   } else {
-    constructor->base.sem_type.ty = cls_sym->ty;
-    constructor->base.sem_type.sym = cls_sym;
+    constructor->base.type = cls_sym->ty;
   }
 
   for (AstListNode_* n = constructor->params.head; n != NULL; n = n->next) {
     AstClassConstructorParam_* field = AST_CAST(AstClassConstructorParam_, n->node);
-    field->base.top_sem_type = constructor->base.sem_type;
+    field->base.top_type = constructor->base.type;
     do_analysis((AstNode_*)field);
   }
 }
 
 void ast_class_constructor_param_analysis(AstNode_* node) {
   AstClassConstructorParam_* field = (AstClassConstructorParam_*)node;
-  field->expr->top_sem_type = field->base.top_sem_type;
+  field->expr->top_type = field->base.top_type;
   do_analysis((AstNode_*)field->expr);
 
   // Check that the field in the constructor parameter actually exists in the class.
-  SemanticType_* type = &field->base.top_sem_type;
+  Type_* cls_type = field->base.top_type;
+  if (!type_is(cls_type, ClassType_)) {
+    error(analyzer_, node, "Trying to construct a non-class type.");
+    return;
+  }
+
   if (field->name.start) {
     bool found = false;
-
-    ClassSymbol_* cls_sym = &type->sym->cls;
-    for (ListNode_* n = cls_sym->members.head; n != NULL; n = n->next) {
-      Symbol_* member = list_val(n, Symbol_*);
+    for (ListNode_* n = type_as(ClassType_, cls_type)->members.head; n != NULL; n = n->next) {
+      ClassTypeField_* member = list_val(n, ClassTypeField_*);
       if (token_eq(member->name, field->name)) {
         found = true;
         break;
@@ -713,24 +637,33 @@ void ast_class_constructor_param_analysis(AstNode_* node) {
     if (!found) {
       error(analyzer_, node, "Constructor field %.*s does not exist in class %.*s.",
         field->name.length, field->name.start,
-        type->ty->opt_name.length, type->ty->opt_name.start);
+        cls_type->opt_name.length, cls_type->opt_name.start);
     }
   }
 
-  field->base.sem_type = field->expr->sem_type;
+  field->base.type = field->expr->type;
 }
 
 void array_value_analysis(AstNode_* node) {
-  /*
-  AstArrayValueExpr_* expr = (AstArrayValueExpr_*)node;
-  SemanticType_* type = &expr->base.sem_type;
-  *type = SemanticType_Unknown;
+  AstArrayValueExpr_* array_expr = (AstArrayValueExpr_*)node;
 
-  type->val = VAL_ARRAY;
-  type->kind = KIND_VAL;
-  type->size = 0;
-  */
+  Type_* el_type = NULL;
+  int count = 0;
+  for (AstListNode_* n = array_expr->values.head; n != NULL; n = n->next) {
+    AstExpr_* expr = (AstExpr_*)n->node;
+    expr->top_type = array_expr->base.top_type;
+    do_analysis(n->node);
+    
+    if (!el_type) {
+      el_type = expr->type;
+    } else if (!type_equal(el_type, expr->type)) {
+      error(analyzer_, node, "Array element type at index %d does not match array type.", count);
+    }
+    ++count;
+  }
 
+  array_expr->base.type = make_array_ty(el_type, count, analyzer_->allocator);
+  type_calcsize(array_expr->base.type);
 }
 
 AnalysisRule_ analysis_rules[] = {
@@ -747,6 +680,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstAssertStmt_)]             = {assert_analysis},
   [AST_CLS(AstVarDeclStmt_)]            = {var_decl_analysis},
   [AST_CLS(AstVarExpr_)]                = {var_expr_analysis},
+  [AST_CLS(AstIndexExpr_)]              = {index_expr_analysis},
   [AST_CLS(AstIdExpr_)]                 = {id_expr_analysis},
   [AST_CLS(AstAssignmentExpr_)]         = {assignment_expr_analysis},
   [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},

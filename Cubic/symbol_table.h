@@ -67,7 +67,7 @@ Frame_* frame_root(struct MemoryAllocator_* allocator);
 Frame_* frame_createfrom(Frame_* frame, Scope_* prev_scope, Symbol_* fn_symbol);
 void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name);
-Symbol_* frame_addvar(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addvar(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope);
 Symbol_* frame_addclass(Frame_* frame, Token_* name, Scope_* scope);
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);

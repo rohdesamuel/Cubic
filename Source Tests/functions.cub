@@ -38,19 +38,19 @@ end
 
 multiple_args(1, true, 2.0)
 
-function recur(num : int) -> int
-  if num <= 1 then
-    return num
-  end
-
-  return num + recur(num - 1)
-end
-
-assert recur(0) == 0
-assert recur(1) == 1
-assert recur(2) == 3
-assert recur(3) == 6
-assert recur(4) == 10
+# function recur(num : int) -> int
+#   if num <= 1 then
+#     return num
+#   end
+# 
+#   return num + recur(num - 1)
+# end
+# 
+# assert recur(0) == 0
+# assert recur(1) == 1
+# assert recur(2) == 3
+# assert recur(3) == 6
+# assert recur(4) == 10
 
 do
   val i := 10

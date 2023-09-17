@@ -95,7 +95,6 @@ typedef struct TypedValue_ {
   RuntimeType_ ty;
 } TypedValue_;
 
-
 typedef struct ValueArray_ {
   int capacity;
   int count;
@@ -108,8 +107,6 @@ void valuearray_free(ValueArray value_array);
 
 void value_print(Value_ value, RuntimeType_ info);
 void value_set(Value_* l, Value_* r);
-
-const char* type_tostr(const Type_* ty);
 
 #define VALUE_VAL_TYPE(info) ((info & 0x00FF0000) >> 16)
 #define VALUE_VAL_KIND(info) ((info & 0x0000FF00) >> 8)
