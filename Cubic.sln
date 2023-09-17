@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Source Tests", "Source Test
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "llvm", "llvm\llvm.vcxproj", "{CA92295C-19C2-40F1-806F-24CD1C60FE57}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cubiclib", "cubiclib\cubiclib.vcxproj", "{3EB3B45F-3A42-41F7-831F-06627535CC5D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{CA92295C-19C2-40F1-806F-24CD1C60FE57}.Release|x64.Build.0 = Release|x64
 		{CA92295C-19C2-40F1-806F-24CD1C60FE57}.Release|x86.ActiveCfg = Release|Win32
 		{CA92295C-19C2-40F1-806F-24CD1C60FE57}.Release|x86.Build.0 = Release|Win32
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Debug|x64.ActiveCfg = Debug|x64
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Debug|x64.Build.0 = Debug|x64
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Debug|x86.ActiveCfg = Debug|Win32
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Debug|x86.Build.0 = Debug|Win32
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Release|x64.ActiveCfg = Release|x64
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Release|x64.Build.0 = Release|x64
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Release|x86.ActiveCfg = Release|Win32
+		{3EB3B45F-3A42-41F7-831F-06627535CC5D}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

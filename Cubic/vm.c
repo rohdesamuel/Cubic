@@ -106,7 +106,7 @@ static InterpretResult run(VM vm) {
     do { \
       uint8_t dst = READ_BYTE(); \
       uint8_t src = READ_BYTE(); \
-      frame->slots[dst].as.##TY = OP frame->slots[src].as.##TY; \
+      frame->slots[dst].as.TY = OP frame->slots[src].as.TY; \
     } while (0)
 
 #define BINARY_OP(OP) \
@@ -122,7 +122,7 @@ static InterpretResult run(VM vm) {
       uint8_t dst = READ_BYTE(); \
       uint8_t l = READ_BYTE(); \
       uint8_t r = READ_BYTE(); \
-      frame->slots[dst].as.##TY = frame->slots[l].as.##TY OP frame->slots[r].as.##TY; \
+      frame->slots[dst].as.TY = frame->slots[l].as.TY OP frame->slots[r].as.TY; \
     } while (0)
 
   for (;;) {

@@ -75,7 +75,7 @@ static void tac_chunk_print_fns(TacChunk_* chunk) {
 static void tac_chunk_print(TacChunk_* chunk) {
 #define PRINT_BINARY_OP(LOC_L, LOC_R, OP_CHAR) \
     location_print(LOC_L); \
-    printf(" " ## OP_CHAR ## " "); \
+    printf(" " OP_CHAR " "); \
     location_print(LOC_R);
 
   int level = 0;
