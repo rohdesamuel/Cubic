@@ -489,7 +489,7 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
   Location_ empty_ret = EMPTY_LOC;
   emit_return(&compiler->chunk, &empty_ret, 0);
 
-  tac_compiler_print(compiler);
+  //tac_compiler_print(compiler);
 }
 
 void tac_compiler_clear(TacCompiler_* compiler) {
@@ -1853,7 +1853,7 @@ static void emit_construct_default_class(TacChunk_* chunk, Type_* cls_ty, const 
   }
   
   for (ListNode_* n = cls_type->members.head; n != NULL; n = n->next) {
-    ClassTypeField_* field = list_val(n, ClassTypeField_*);
+    ClassTypeField_* field = list_ptr(n, ClassTypeField_);
     class_init_member(chunk, dst, cls_ty, field->type, &field->name, line);
   }
 }
@@ -1877,7 +1877,7 @@ static Location_ class_constructor_code_gen(TacChunk_* chunk, AstNode_* node) {
         break;
       }
 
-      ClassTypeField_* member = list_val(current_member_node, ClassTypeField_*);
+      ClassTypeField_* member = list_ptr(current_member_node, ClassTypeField_);
       Location_ val = code_gen(chunk, current_param_node->node);
       class_init_member_to(chunk, &dst, &val, (Type_*)cls_type, &member->name, node->line);
 
@@ -1895,15 +1895,14 @@ static Location_ class_constructor_code_gen(TacChunk_* chunk, AstNode_* node) {
     for (;
          current_member_node != NULL;
          current_member_node = current_member_node->next) {
-      ClassTypeField_* cur_member = list_val(current_member_node, ClassTypeField_*);
+      ClassTypeField_* cur_member = list_ptr(current_member_node, ClassTypeField_);
 
       bool found = false;
       for (AstListNode_* param_node = current_param_node; param_node != NULL; param_node = param_node->next) {
         AstClassConstructorParam_* constructor_param = AST_CAST(AstClassConstructorParam_, param_node->node);
         if (token_eq(constructor_param->name, cur_member->name)) {
-          Symbol_* member = list_val(current_member_node, Symbol_*);
           Location_ val = code_gen(chunk, param_node->node);
-          class_init_member_to(chunk, &dst, &val, (Type_*)cls_type, &member->name, node->line);
+          class_init_member_to(chunk, &dst, &val, (Type_*)cls_type, &cur_member->name, node->line);
           found = true;
           break;
         }

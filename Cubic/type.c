@@ -134,7 +134,7 @@ Type_* make_const_ty(Type_* sub_type, MemoryAllocator_* allocator) {
 Type_* make_function_ty(Token_ name, MemoryAllocator_* allocator) {
   FunctionType_* ret = type_alloc_ty(allocator, FunctionType_);
   ret->ret_ty = (Type_*)&Nil_Ty;
-  list_of(&ret->parameters, Type_*, allocator);
+  list_of(&ret->params, Type_*, allocator);
   return (Type_*)ret;
 }
 
@@ -147,6 +147,56 @@ Type_* type_alloc(MemoryAllocator_* allocator, int type_cls, size_t type_size) {
 
 bool type_isunknown(const Type_* ty) {
   return type_is(type_deref((Type_*)ty), UnknownType_);
+}
+
+bool type_isaprimitive(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls > __TYPE_PRIMITIVE_START__ && ty->cls < __TYPE_PRIMITIVE_END__;
+}
+
+bool type_isunary(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls > __TYPE_UNARY_START__ && ty->cls < __TYPE_UNARY_END__;
+}
+
+bool type_isnil(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return type_is(ty, NilType_);
+}
+
+bool type_isabool(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return type_is(ty, BoolType_);
+}
+
+bool type_isanumber(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(DoubleType_);
+}
+
+bool type_isainteger(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(Uint64Type_);
+}
+
+bool type_issigned(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(Int64Type_);
+}
+
+bool type_isunsigned(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls >= TYPE_CLS(UintType_) && ty->cls <= TYPE_CLS(Uint64Type_);
+}
+
+bool type_isareal(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return ty->cls == TYPE_CLS(FloatType_) || ty->cls == TYPE_CLS(DoubleType_);
+}
+
+bool type_isastring(const Type_* ty) {
+  ty = type_deref((Type_*)ty);
+  return type_is(ty, StringType_);
 }
 
 // Fills all placeholders in the given type with types found starting at the
@@ -237,7 +287,7 @@ size_t type_calcsize(Type_* type) {
     {
       ClassType_* ty = type_as(ClassType_, type);
       for (ListNode_* n = ty->members.head; n != NULL; n = n->next) {
-        size += type_calcsize(list_val(n, ClassTypeField_*)->type);
+        size += type_calcsize(list_val(n, ClassTypeField_).type);
       }
       break;
     }
@@ -345,7 +395,7 @@ bool type_equal(const Type_* a, const Type_* b) {
       FunctionType_* a_fn = type_as(FunctionType_, a);
       FunctionType_* b_fn = type_as(FunctionType_, b);
 
-      if (a_fn->parameters.count != b_fn->parameters.count) {
+      if (a_fn->params.count != b_fn->params.count) {
         return false;
       }
 
@@ -353,9 +403,9 @@ bool type_equal(const Type_* a, const Type_* b) {
         return false;
       }
 
-      ListNode_* a_param = a_fn->parameters.head;
-      ListNode_* b_param = b_fn->parameters.head;
-      for (int i = 0; i < a_fn->parameters.count; ++i) {
+      ListNode_* a_param = a_fn->params.head;
+      ListNode_* b_param = b_fn->params.head;
+      for (int i = 0; i < a_fn->params.count; ++i) {
         if (!type_equal(list_val(a_param, Type_*), list_val(b_param, Type_*))) {
           return false;
         }
@@ -720,9 +770,9 @@ void type_class_calcoffsets(Type_* ty) {
   ClassType_* cls_ty = type_as(ClassType_, ty);
   size_t ret = 0;
   for (ListNode_* n = cls_ty->members.head; n != NULL; n = n->next) {
-    ClassTypeField_* field = list_val(n, ClassTypeField_*);
+    ClassTypeField_* field = list_ptr(n, ClassTypeField_);
     field->offset = ret;
-    ret += list_val(n, Type_*)->size;
+    ret += field->type->size;
   }
 }
 
@@ -730,7 +780,7 @@ Type_* type_class_findmember(const Type_* cls_ty, const Token_* name, size_t* of
   ClassType_* cls_type = type_as(ClassType_, cls_ty);
 
   for (ListNode_* n = cls_type->members.head; n != NULL; n = n->next) {
-    ClassTypeField_* field = list_val(n, ClassTypeField_*);
+    ClassTypeField_* field = list_ptr(n, ClassTypeField_);
     if (field->name.length == name->length && memcmp(field->name.start, name->start, field->name.length) == 0) {
       if (offset) {
         *offset = field->offset;

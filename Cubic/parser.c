@@ -339,7 +339,7 @@ static AstNode_* FunctionBody(Parser_* parser, Scanner_* scanner, Scope_* scope,
       }
 
       AstFunctionParam_* param = (AstFunctionParam_*)FunctionParam(parser, scanner, scope);
-      list_push(&fn_type->parameters, &param->type);
+      list_push(&fn_type->params, &param->type);
       astlist_append(&body->function_params, (AstNode_*)param);
     } while (match(parser, scanner, TK_COMMA));
     consume(parser, scanner, TK_RPAREN, "Expected ')' after arguments.");

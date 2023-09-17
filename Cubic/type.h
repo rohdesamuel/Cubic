@@ -220,7 +220,7 @@ typedef struct FunctionType_ {
   struct Symbol_* sym;
 
   Type_* ret_ty;
-  ListOf_(Type_*) parameters;
+  ListOf_(Type_*) params;
 } FunctionType_;
 
 extern const UnknownType_ Unknown_Ty;
@@ -302,45 +302,15 @@ Type_* assert_type_is_(Type_* ty, int val);
 void print_type(const Type_* ty);
 
 bool type_isunknown(const Type_* ty);
-
-inline static bool type_isaprimitive(const Type_* ty) {
-  return ty->cls > __TYPE_PRIMITIVE_START__ && ty->cls < __TYPE_PRIMITIVE_END__;
-}
-
-inline static bool type_isunary(const Type_* ty) {
-  return ty->cls > __TYPE_UNARY_START__ && ty->cls < __TYPE_UNARY_END__;
-}
-
-inline static bool type_isnil(const Type_* ty) {
-  return type_is(ty, NilType_);
-}
-
-inline static bool type_isabool(const Type_* ty) {
-  return type_is(ty, BoolType_);
-}
-
-inline static bool type_isanumber(const Type_* ty) {
-  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(DoubleType_);
-}
-
-inline static bool type_isainteger(const Type_* ty) {
-  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(Uint64Type_);
-}
-
-inline static bool type_issigned(const Type_* ty) {
-  return ty->cls >= TYPE_CLS(IntType_) && ty->cls <= TYPE_CLS(Int64Type_);
-}
-
-inline static bool type_isunsigned(const Type_* ty) {
-  return ty->cls >= TYPE_CLS(UintType_) && ty->cls <= TYPE_CLS(Uint64Type_);
-}
-
-inline static bool type_isareal(const Type_* ty) {
-  return ty->cls == TYPE_CLS(FloatType_) || ty->cls == TYPE_CLS(DoubleType_);
-}
-
-inline static bool type_isastring(const Type_* ty) {
-  return type_is(ty, StringType_);
-}
+bool type_isaprimitive(const Type_* ty);
+bool type_isunary(const Type_* ty);
+bool type_isnil(const Type_* ty);
+bool type_isabool(const Type_* ty);
+bool type_isanumber(const Type_* ty);
+bool type_isainteger(const Type_* ty);
+bool type_issigned(const Type_* ty);
+bool type_isunsigned(const Type_* ty);
+bool type_isareal(const Type_* ty);
+bool type_isastring(const Type_* ty);
 
 #endif  // TYPE__H

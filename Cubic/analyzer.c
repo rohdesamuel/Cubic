@@ -474,13 +474,11 @@ void function_call_args_analysis(AstNode_* node) {
   AstFunctionCallArgs_* args = AST_CAST(AstFunctionCallArgs_, node);
   FunctionType_* fn_type = type_as(FunctionType_, args->fn_type);
 
-  FunctionSymbol_* fn_sym = &args->fn_sym->fn;
-
-  if (fn_sym->params.count > UINT8_MAX) {
+  if (fn_type->params.count > UINT8_MAX) {
     error(analyzer_, node, "Parameter count exceeded maximum of 255.");
   }
 
-  ListNode_* param_node = fn_type->parameters.head;
+  ListNode_* param_node = fn_type->params.head;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
     Type_* param_type = list_val(param_node, Type_*);
 
@@ -496,10 +494,10 @@ void function_call_args_analysis(AstNode_* node) {
   }
 
   // TODO: allow for optional arguments
-  if (fn_sym->params.count != args->args.count) {
+  if (fn_type->params.count != args->args.count) {
     error(analyzer_, node,
       "Parameter count does not match definition. Expected %d, got %d",
-      fn_sym->params.count, args->args.count);
+      fn_type->params.count, args->args.count);
   }
 }
 
@@ -578,7 +576,7 @@ void ast_dot_expr_analysis(AstNode_* node) {
 
   Type_* found = NULL;
   for (ListNode_* n = cls_type->members.head; n != NULL; n = n->next) {
-    ClassTypeField_* field = list_val(n, ClassTypeField_*);
+    ClassTypeField_* field = list_ptr(n, ClassTypeField_);
     if (token_eq(field->name, expr->id)) {
       found = field->type;
       break;
@@ -627,7 +625,7 @@ void ast_class_constructor_param_analysis(AstNode_* node) {
   if (field->name.start) {
     bool found = false;
     for (ListNode_* n = type_as(ClassType_, cls_type)->members.head; n != NULL; n = n->next) {
-      ClassTypeField_* member = list_val(n, ClassTypeField_*);
+      ClassTypeField_* member = list_ptr(n, ClassTypeField_);
       if (token_eq(member->name, field->name)) {
         found = true;
         break;
