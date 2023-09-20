@@ -306,7 +306,7 @@ static InterpretResult run(VM vm) {
       case OP_REF_MAKE:
       {
         uint8_t dst = READ_BYTE();
-        uint8_t size = READ_BYTE();
+        size_t size = READ_LONGLONG();
         Value_ ret = {
           .as.ref = {
             .pval = calloc(size, sizeof(Value_)),
@@ -324,7 +324,7 @@ static InterpretResult run(VM vm) {
         Value_* var = &frame->slots[slot];
         *var->as.ref.count -= 1;
 
-        if (var->as.ref.count <= 0) {
+        if (*var->as.ref.count <= 0) {
           free(var->as.ref.pval);
           free(var->as.ref.count);
         }

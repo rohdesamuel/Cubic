@@ -423,7 +423,7 @@ static void codegen_tac(Compiler_* compiler, Chunk_* chunk, const TacChunk_* tac
       case OP_REF_MAKE:
         emit_byte(chunk, OP_REF_MAKE, line);
         emit_byte(chunk, tac->dst.frame_offset, line);
-        emit_byte(chunk, (uint8_t)tac->arg_l.size, line);
+        emit_longlong(chunk, tac->arg_l.size, line);
         break;
 
       case OP_REF_DEL:
