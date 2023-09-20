@@ -32,6 +32,7 @@ typedef struct AstNode_ {
     AST_CLS(AstIndexExpr_),
     AST_CLS(AstIdExpr_),
     AST_CLS(AstAssignmentExpr_),
+    AST_CLS(AstInPlaceBinaryStmt_),
     AST_CLS(AstWhileStmt_),
     AST_CLS(AstFunctionDef_),
     AST_CLS(AstFunctionBody_),
@@ -155,10 +156,20 @@ typedef struct AstAssignmentExpr_ {
   AstExpr_* right;
 } AstAssignmentExpr_;
 
+// AssignmentExpr ::= VarList OP ExprList
+typedef struct AstInPlaceBinaryStmt_ {
+  AstExpr_ base;
+
+  TokenType_ op;
+  TokenType_ bin_op;
+  AstExpr_* left;
+  AstExpr_* right;
+} AstInPlaceBinaryStmt_;
+
 // Expr ::= UnaryOp Expr
 typedef struct AstUnaryExp_ {
   struct AstExpr_ base;
-  TokenType op;
+  TokenType_ op;
 
   AstExpr_* expr;
 } AstUnaryExp_;
@@ -166,7 +177,7 @@ typedef struct AstUnaryExp_ {
 // Expr ::= Expr BinaryOp Expr
 typedef struct AstBinaryExp_ {
   struct AstExpr_ base;
-  TokenType op;
+  TokenType_ op;
 
   AstExpr_* left;
   AstExpr_* right;

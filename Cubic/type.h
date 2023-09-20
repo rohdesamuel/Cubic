@@ -277,6 +277,7 @@ bool type_isconst(const Type_* ty);
 bool type_isval(const Type_* ty);
 bool type_isaref(const Type_* ty);
 
+Type_* type_deref(Type_* ty);
 Type_* type_valtype(Type_* ty);
 void type_class_calcoffsets(Type_* ty);
 Type_* type_class_findmember(const Type_* cls_ty, const Token_* name, size_t* offset);

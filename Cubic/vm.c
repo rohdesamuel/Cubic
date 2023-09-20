@@ -318,6 +318,19 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_REF_DEL:
+      {
+        uint8_t slot = READ_BYTE();
+        Value_* var = &frame->slots[slot];
+        *var->as.ref.count -= 1;
+
+        if (var->as.ref.count <= 0) {
+          free(var->as.ref.pval);
+          free(var->as.ref.count);
+        }
+        continue;
+      }
+
       case OP_EQ: BINARY_OP(==); continue;
       case OP_GT:
       {

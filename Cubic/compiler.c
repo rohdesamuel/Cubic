@@ -43,7 +43,7 @@ bool compile(const char* source, Chunk_* chunk) {
   TacCompiler_ tac_compiler;
   Compiler_ compiler;
   Analyzer_ analyzer;
-  pageallocator_init(&allocator, 1ull << 12);
+  pageallocator_init(&allocator, 1ull << 14);
 
   scanner_init(&scanner, source);
   parser_init(&parser, (MemoryAllocator_*)&allocator);
@@ -424,6 +424,11 @@ static void codegen_tac(Compiler_* compiler, Chunk_* chunk, const TacChunk_* tac
         emit_byte(chunk, OP_REF_MAKE, line);
         emit_byte(chunk, tac->dst.frame_offset, line);
         emit_byte(chunk, (uint8_t)tac->arg_l.size, line);
+        break;
+
+      case OP_REF_DEL:
+        emit_byte(chunk, OP_REF_DEL, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
         break;
 
       case OP_ASSERT:

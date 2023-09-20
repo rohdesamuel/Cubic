@@ -1,8 +1,7 @@
-#include "chunk_test.h"
+#include "utest.h"
 
-void scanner_all_tests();
+UTEST_STATE();
 
-int main() {
-  scanner_all_tests();
-  return 0;
+int main(int argc, char** argv) {
+  return utest_main(argc, argv);
 }

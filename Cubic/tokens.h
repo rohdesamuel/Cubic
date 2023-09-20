@@ -9,7 +9,7 @@ typedef enum {
   TK_ID,
 
   // Single-character tokens.
-  TK_LPAREN=10, TK_RPAREN,
+  TK_LPAREN, TK_RPAREN,
   TK_LBRACKET, TK_RBRACKET,
   TK_LBRACE, TK_RBRACE,
   TK_SEMICOLON, TK_COLON,
@@ -27,6 +27,11 @@ typedef enum {
   TK_SLASH, TK_DOUBLE_SLASH,
   TK_DOUBLE_DOT, TK_TRIPLE_DOT,
   TK_QQ, TK_QQE,
+  TK_PLUS_EQUAL, TK_MINUS_EQUAL,
+  TK_AMPERSAND_EQUAL, TK_PIPE_EQUAL,
+  TK_HAT_EQUAL, TK_TILDE_EQUAL,
+  TK_STAR_EQUAL, TK_PERCENT_EQUAL,
+  TK_SLASH_EQUAL, TK_SLASH_SLASH_EQUAL,
 
   // Literals.
   TK_STRING, TK_INTEGER, TK_NUMBER,
@@ -57,10 +62,10 @@ typedef enum {
   TK_ASYNC, TK_AWAIT, TK_YIELD,
 
   __TK_COUNT__
-} TokenType;
+} TokenType_;
 
 typedef struct Token_ {
-  TokenType type;
+  TokenType_ type;
   const char* start;
   int length;
   int line;

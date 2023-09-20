@@ -72,9 +72,6 @@
     <ClCompile Include="lexer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="main.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="scanner.c">
       <Filter>Source Files</Filter>
     </ClCompile>

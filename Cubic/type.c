@@ -73,7 +73,7 @@ const StringType_ String_Ty = {
 
 Type_* type_deref(Type_* type) {
   if (type_is(type, Type_)) {
-    return type_cast(UnaryType_, type)->ty;
+    return type_deref(type_cast(UnaryType_, type)->ty);
   }
   return type;
 }
@@ -472,6 +472,13 @@ bool type_assignable(const Type_* from, const Type_* to) {
 bool type_coercible(const Type_* from, const Type_* to) {
   from = type_valtype((Type_*)from);
   to = type_valtype((Type_*)to);
+
+  if (type_is(from, ArrayType_) && type_is(to, ArrayType_)) {
+    ArrayType_* arr_from = type_as(ArrayType_, from);
+    ArrayType_* arr_to = type_as(ArrayType_, to);
+
+    return arr_from->count == arr_to->count && type_coercible(arr_from->el_type, arr_to->el_type);
+  }
 
   return
     from == to ||

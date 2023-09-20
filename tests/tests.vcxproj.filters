@@ -18,17 +18,17 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="chunk_test.h">
+    <ClCompile Include="scanner_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="scanner_test.c">
+    <ClCompile Include="parser_test.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="tac_compiler_test.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="tests.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="utest.h">
       <Filter>Header Files</Filter>
     </ClInclude>

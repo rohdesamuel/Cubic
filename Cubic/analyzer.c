@@ -17,7 +17,7 @@ typedef struct AnalysisRule_ {
 static AnalysisRule_* get_rule(int info);
 static void error(Analyzer_* analyzer, AstNode_* node, const char* message, ...);
 
-Analyzer_* analyzer_;
+thread_local Analyzer_* analyzer_;
 
 static void do_analysis(AstNode_* node) {
   get_rule(node->cls)->fn(node);
@@ -27,7 +27,7 @@ void analyzer_init(Analyzer_* analyzer, MemoryAllocator_* allocator) {
   *analyzer = (Analyzer_){ 0 };
   analyzer->allocator = allocator;
   analyzer->frame = frame_root(analyzer->allocator);
-  analyzer->scope = analyzer->frame->scope; //scope_create(analyzer->frame, NULL, (MemoryAllocator_*)&analyzer->allocator);
+  analyzer->scope = analyzer->frame->scope;
 }
 
 void analyze(Analyzer_* analyzer, struct AstProgram_* ast) {
@@ -41,39 +41,6 @@ void analyzer_clear(Analyzer_* analyzer) {
   *analyzer = (Analyzer_){ 0 };
   analyzer_ = NULL;
 }
-
-/*static void analyze_frame(Frame_* frame) {
-  int frame_index = 0;
-  frame->fn_closure->closure.frame_index = frame_index++;
-  analyze_scope(frame, frame->scope, frame_index);
-
-  for (ListNode_* n = frame->children.head; n != NULL; n = n->next) {
-    Frame_* f = list_val(n, Frame_*);
-    analyze_frame(f);
-  }
-}
-
-static void analyze_scope(Frame_* frame, Scope_* scope, int frame_index) {
-  List_* vars = &scope->table->vars;
-  for (ListNode_* n = vars->head; n != NULL; n = n->next) {
-    Symbol_* sym = (Symbol_*)n->data;
-    if (sym->type != SYMBOL_TYPE_VAR) {
-      continue;
-    }
-
-    VarSymbol_* var = &sym->var;
-    int size = var->sem_type.val == VAL_CLASS ? (int)var->sem_type.size : 1;
-    var->frame_index = frame_index;
-    frame_index += size;
-  }
-
-  frame->max_stack_size = frame_index > frame->max_stack_size ? frame_index : frame->max_stack_size;
-
-  for (ListNode_* n = scope->children.head; n != NULL; n = n->next) {
-    Scope_* s = list_val(n, Scope_*);
-    analyze_scope(frame, s, frame_index);
-  }
-}*/
 
 void program_analysis(AstNode_* node) {
   AstProgram_* program = (AstProgram_*)node;
@@ -135,6 +102,12 @@ void unary_analysis(AstNode_* n) {
     case TK_MINUS:
       if (!type_isanumber(expr->base.type)) {
         error(analyzer_, n, "expression does not have a number type.");
+      }
+      break;
+
+    case TK_DEL:
+      if (!type_is(expr->base.type, VarType_)) {
+        error(analyzer_, n, "expression is not a reference and cannot be deleted");
       }
       break;
 
@@ -304,9 +277,38 @@ void var_decl_analysis(AstNode_* n) {
       return;
     }
 
+    if (type_is(stmt->expr->type, ArrayType_) && type_as(ArrayType_, stmt->expr->type)->count == 0) {
+      error(analyzer_, n, "trying to intialize type deduced variable with an empty array");
+      return;
+    }
+
     type_set(val_type, stmt->expr->type);
   }
   type_fill(stmt->decl_type, n->scope);
+
+  // An array declared of zero-size, takes the size of the expression.
+  if (type_is(val_type, ArrayType_)) {
+    ArrayType_* array_ty = type_as(ArrayType_, val_type);
+
+    if (stmt->expr && !type_is(type_valtype(stmt->expr->type), ArrayType_)) {
+      error(analyzer_, n, "arrays can only be initialized with an array.");
+      return;
+    }
+
+    if (array_ty->count == 0) {
+      if (!stmt->expr) {
+        error(analyzer_, n, "trying to declare a zero-sized array.");
+        return;
+      }
+
+      if (stmt->expr->base.cls != AST_CLS(AstArrayValueExpr_)) {
+        error(analyzer_, n, "undetermined length arrays can only be initialized with an array list.");
+        return;
+      }
+
+      array_ty->count = AST_CAST(AstArrayValueExpr_, stmt->expr)->values.count;
+    }
+  }
 
   // TODO: implement tuples (and others) for variable declarations.
   Symbol_* var = scope_find(n->scope, &stmt->name);
@@ -384,6 +386,85 @@ void assignment_expr_analysis(AstNode_* n) {
   if (!type_assignable(rvalue_expr->type, lvalue_expr->base.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
+  expr->base.type = lvalue_expr->base.type;
+}
+
+void in_place_binary_stmt_analysis(AstNode_* n) {
+  AstInPlaceBinaryStmt_* expr = (AstInPlaceBinaryStmt_*)n;
+
+  // TODO: allow for deconstructing tuples in assignments (and other types).
+  expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
+  expr->right->top_type = expr->base.top_type;
+  do_analysis((AstNode_*)expr->left);
+  do_analysis((AstNode_*)expr->right);
+
+  Type_* val_type = type_valtype(expr->left->type);
+  if (!type_isanumber(val_type)) {
+    error(analyzer_, n, "expression is not a number type");
+  }
+  
+  if (expr->left->base.cls != AST_CLS(AstVarExpr_)) {
+    error(analyzer_, n, "Left-hand side of assignment cannot be assigned to.");
+    return;
+  }
+
+  if (type_isconst(expr->left->type)) {
+    error(analyzer_, n, "Left-hand side of assignment is const and cannot be assigned to.");
+    return;
+  }
+
+  AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
+  AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
+  if (!type_assignable(rvalue_expr->type, lvalue_expr->base.type)) {
+    error(analyzer_, n, "assignment expression does not match variable type.");
+  }
+
+  switch (expr->op) {
+    case TK_PLUS_EQUAL:
+      expr->bin_op = TK_PLUS;
+      break;
+
+    case TK_MINUS_EQUAL:
+      expr->bin_op = TK_MINUS;
+      break;
+
+    case TK_AMPERSAND_EQUAL:
+      expr->bin_op = TK_AMPERSAND;
+      break;
+
+    case TK_PIPE_EQUAL:
+      expr->bin_op = TK_PIPE;
+      break;
+
+    case TK_HAT_EQUAL:
+      expr->bin_op = TK_HAT;
+      break;
+
+    case TK_TILDE_EQUAL:
+      expr->bin_op = TK_TILDE;
+      break;
+
+    case TK_STAR_EQUAL:
+      expr->bin_op = TK_STAR;
+      break;
+
+    case TK_PERCENT_EQUAL:
+      expr->bin_op = TK_PERCENT;
+      break;
+
+    case TK_SLASH_EQUAL:
+      expr->bin_op = TK_SLASH;
+      break;
+
+    case TK_SLASH_SLASH_EQUAL:
+      expr->bin_op = TK_DOUBLE_SLASH;
+      break;
+
+    default:
+      error(analyzer_, n, "Unknown in-place binary operator: %d", expr->op);
+      break;
+  }
+
   expr->base.type = lvalue_expr->base.type;
 }
 
@@ -646,7 +727,7 @@ void array_value_analysis(AstNode_* node) {
   AstArrayValueExpr_* array_expr = (AstArrayValueExpr_*)node;
 
   Type_* el_type = NULL;
-  int count = 0;
+  int index = 0;
   for (AstListNode_* n = array_expr->values.head; n != NULL; n = n->next) {
     AstExpr_* expr = (AstExpr_*)n->node;
     expr->top_type = array_expr->base.top_type;
@@ -655,13 +736,15 @@ void array_value_analysis(AstNode_* node) {
     if (!el_type) {
       el_type = expr->type;
     } else if (!type_equal(el_type, expr->type)) {
-      error(analyzer_, node, "Array element type at index %d does not match array type.", count);
+      error(analyzer_, node, "Array element type at index %d does not match array type.", index);
     }
-    ++count;
+    ++index;
   }
 
-  array_expr->base.type = make_array_ty(el_type, count, analyzer_->allocator);
-  type_calcsize(array_expr->base.type);
+  array_expr->base.type = make_array_ty(el_type, array_expr->values.count, analyzer_->allocator);
+  if (el_type) {
+    type_calcsize(array_expr->base.type);
+  }
 }
 
 AnalysisRule_ analysis_rules[] = {
@@ -681,6 +764,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstIndexExpr_)]              = {index_expr_analysis},
   [AST_CLS(AstIdExpr_)]                 = {id_expr_analysis},
   [AST_CLS(AstAssignmentExpr_)]         = {assignment_expr_analysis},
+  [AST_CLS(AstInPlaceBinaryStmt_)]      = {in_place_binary_stmt_analysis},
   [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},
   [AST_CLS(AstFunctionDef_)]            = {function_def_analysis},
   [AST_CLS(AstFunctionBody_)]           = {function_body_analysis},
