@@ -128,7 +128,7 @@ static void emit_longlong(Chunk_* chunk, uint64_t s, int line) {
   emit_byte(chunk, (uint8_t)((s & 0x00000000FF000000ll) >> 24), line);
   emit_byte(chunk, (uint8_t)((s & 0x0000000000FF0000ll) >> 16), line);
   emit_byte(chunk, (uint8_t)((s & 0x000000000000FF00ll) >>  8), line);
-  emit_byte(chunk, (uint8_t)(s & 0x00000000000000FFll), line);
+  emit_byte(chunk, (uint8_t)( s & 0x00000000000000FFll), line);
 }
 
 static void emit_constant(Chunk_* chunk, Location_ loc, Value_ value, int line) {
@@ -369,6 +369,13 @@ static void codegen_tac(Compiler_* compiler, Chunk_* chunk, const TacChunk_* tac
         emit_byte(chunk, OP_MOVE, line);
         emit_byte(chunk, tac->dst.frame_offset, line);
         emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        break;
+
+      case OP_LEA:
+        emit_byte(chunk, OP_LEA, line);
+        emit_byte(chunk, tac->dst.frame_offset, line);
+        emit_byte(chunk, tac->arg_l.loc.frame_offset, line);
+        emit_longlong(chunk, tac->arg_r.size, line);
         break;
 
       case OP_MEMCPY:

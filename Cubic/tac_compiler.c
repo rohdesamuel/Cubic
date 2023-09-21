@@ -1565,13 +1565,9 @@ Location_ array_get_as_ptr(TacChunk_* chunk, Location_* array, Location_* index,
 
   Type_* el_type = type_deref(array_ty->el_type);
   size_t el_size = el_type->size * sizeof(Value_);
-  Location_ size = emit_constant(chunk, (TypedValue_) { .ty = type_toruntime((Type_*)&Int_Ty), .val = INT_VAL(el_size) }, 1, line);
-  Location_ offset = tac_alloc_val(chunk, Int_Ty.self.size);  
 
-  emit_tac(chunk, OP_MUL, offset, OP_LOC(*index), OP_LOC(size), line);
-  Location_ el = tac_alloc_ptr(chunk);
-  emit_tac(chunk, OP_ADD, el, OP_LOC(prefix_ptr), OP_LOC(offset), line);
-  return el;
+  emit_tac(chunk, OP_LEA, prefix_ptr, OP_LOC(*index), OP_SIZE(el_size), line);
+  return prefix_ptr;
 }
 
 static Location_ array_get_as_ref(TacChunk_* chunk, Location_* array, Location_* index, ArrayType_* array_ty, int line) {

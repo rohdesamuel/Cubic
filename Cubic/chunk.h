@@ -9,15 +9,16 @@
     OPCODE(OP_NIL)  \
     OPCODE(OP_TRUE)  \
     OPCODE(OP_FALSE)  \
-    OPCODE(OP_MOVE)   /* val <- val */                       \
-    OPCODE(OP_MEMCPY) /* &val[0..n-1] <- &val[0..n-1] */     \
-    OPCODE(OP_MEMSET) /* &val[0..n-1] <- val */              \
-    OPCODE(OP_LOAD)   /* val <- *(val + frame_offset) */     \
-    OPCODE(OP_LOADA)  /* val <- &val + frame_offset */       \
-    OPCODE(OP_STORE)  /* *(val + frame_offset) <- val */     \
-    OPCODE(OP_RLOAD)  /* val <- *(ref.ptr + frame_offset) */ \
-    OPCODE(OP_RLOADA) /* val <- ret.ptr + frame_offset */    \
-    OPCODE(OP_RSTORE) /* *(ref.ptr + frame_offset) <- val */ \
+    OPCODE(OP_MOVE)   /* R(A) <- R(A)                   */ \
+    OPCODE(OP_LEA)    /* R(A) <- R(A) + R(B) * IMM(C)   */ \
+    OPCODE(OP_MEMCPY) /* &R(A)[0..n-1] <- &R(B)[0..n-1] */ \
+    OPCODE(OP_MEMSET) /* &R(A)[0..n-1] <- R(B)          */ \
+    OPCODE(OP_LOAD)   /* R(A) <- *(R(B) + IMM(C))       */ \
+    OPCODE(OP_LOADA)  /* R(A) <- &R(B) + IMM(C)         */ \
+    OPCODE(OP_STORE)  /* *(R(A) + IMM(B)) <- R(C)       */ \
+    OPCODE(OP_RLOAD)  /* R(A) <- *(R(B).ptr + IMM(C))   */ \
+    OPCODE(OP_RLOADA) /* R(A) <- R(B).ptr + IMM(C)      */ \
+    OPCODE(OP_RSTORE) /* *(R(A).ptr + IMM(B)) <- R(C)   */ \
     OPCODE(OP_REF_MAKE)  \
     OPCODE(OP_REF_DEL)  \
     OPCODE(OP_CONSTANT)  \

@@ -240,6 +240,15 @@ static InterpretResult run(VM vm) {
         continue;
       }
 
+      case OP_LEA:
+      {
+        uint8_t dst = READ_BYTE();
+        uint8_t offset = READ_BYTE();
+        uint64_t size = READ_LONGLONG();
+        frame->slots[dst].as.ptr = frame->slots[dst].as.ptr + frame->slots[offset].as.u * size;
+        continue;
+      }
+
       case OP_MEMCPY:
       {
         uint8_t dst = READ_BYTE();
