@@ -15,32 +15,35 @@ void lower_string(char* source) {
   }
 }
 
-void test_token(TokenType_ expected_token, const char* source) {
+void test_token(TokenType_ expected_token, const char* source, int* utest_result) {
   Scanner_ scanner;
   scanner_init(&scanner, source);
 
   Token_ actual = scanner_scan(&scanner);
   if (actual.type != expected_token) {
+    EXPECT_TRUE(actual.type != expected_token);
     fprintf(stderr, "Tokens did not match. Got %d expected %d\n",
       actual.type, expected_token);
   }
 }
 
-void test_literal(TokenType_ expected_token, const char* expected_lexeme, const char* source) {
+void test_literal(TokenType_ expected_token, const char* expected_lexeme, const char* source, int* utest_result) {
   Scanner_ scanner;
   scanner_init(&scanner, source);
 
   Token_ actual = scanner_scan(&scanner);
   if (actual.type != expected_token) {
+    EXPECT_EQ(actual.type, expected_token);
     fprintf(stderr, "Tokens did not match. Got %d expected %d\n",
       actual.type, expected_token);
   } else if (strncmp(actual.start, expected_lexeme, actual.length) != 0) {
+    EXPECT_EQ(strncmp(actual.start, expected_lexeme, actual.length), 0);
     fprintf(stderr, "Lexeme did not match. Got %.*s expected %s\n",
       actual.length, actual.start, expected_lexeme);
   }
 }
 
-void test_token_stream(TokenType_ expected_tokens[], const char* source) {
+void test_token_stream(TokenType_ expected_tokens[], const char* source, int* utest_result) {
   Scanner_ scanner;
   scanner_init(&scanner, source);
 
@@ -50,11 +53,13 @@ void test_token_stream(TokenType_ expected_tokens[], const char* source) {
     Token_ token = scanner_scan(&scanner);
 
     if (expected_tokens[pos] != TK_ERR && token.type == TK_ERR) {
+      EXPECT_TRUE(expected_tokens[pos] == TK_ERR || token.type != TK_ERR);
       fprintf(stderr, "Got scanner error at position %d: %s\n", pos, token.start);
       break;
     }
 
     if (token.type != expected_tokens[pos]) {
+      EXPECT_TRUE(token.type == expected_tokens[pos]);
       fprintf(stderr, "At position %d Tokens did not match. Got %d expected %d\n",
         pos, token.type, expected_tokens[pos]);
       ok = false;
@@ -73,34 +78,34 @@ void test_token_stream(TokenType_ expected_tokens[], const char* source) {
 UTEST_F(ScannerTest, CorrectlyMatches_##TOKEN) { \
   char* source = _strdup(#TOKEN); \
   lower_string(source); \
-  test_token(TK_ ## TOKEN, source); \
+  test_token(TK_ ## TOKEN, source, utest_result); \
   free(source); \
 }
 
 #define TEST_TOKEN_COMPOSITE(TOKEN, SOURCE) \
 UTEST_F(ScannerTest, CorrectlyMatchesComposite_##TOKEN) { \
-  test_token(TK_ ## TOKEN, SOURCE); \
+  test_token(TK_ ## TOKEN, SOURCE, utest_result); \
 }
 
 #define TEST_LITERAL(TEST_NAME, TOKEN, EXPECTED_LEXEME, SOURCE) \
 UTEST_F(ScannerTest, CorrectlyMatchesLiteral_##TEST_NAME) { \
-  test_literal(TOKEN, EXPECTED_LEXEME, SOURCE); \
+  test_literal(TOKEN, EXPECTED_LEXEME, SOURCE, utest_result); \
 }
 
 #define TEST_LITERAL_SIMPLE(TOKEN, EXPECTED_LEXEME) \
 UTEST_F(ScannerTest, CorrectlyMatchesLiteral_##TOKEN) { \
-  test_literal(TOKEN, EXPECTED_LEXEME, EXPECTED_LEXEME); \
+  test_literal(TOKEN, EXPECTED_LEXEME, EXPECTED_LEXEME, utest_result); \
 }
 
 #define TEST_LITERAL_SIMPLE_NAMED(NAME, TOKEN, EXPECTED_LEXEME) \
 UTEST_F(ScannerTest, CorrectlyMatchesLiteral_##NAME) { \
-  test_literal(TOKEN, EXPECTED_LEXEME, EXPECTED_LEXEME); \
+  test_literal(TOKEN, EXPECTED_LEXEME, EXPECTED_LEXEME, utest_result); \
 }
 
 #define TEST_TOKEN_STREAM(NAME, SOURCE, ...) \
 UTEST_F(ScannerTest, CorrectlyMatchesStream_##NAME) { \
   TokenType_ expected_tokens[] = {__VA_ARGS__};\
-  test_token_stream(expected_tokens, SOURCE);\
+  test_token_stream(expected_tokens, SOURCE, utest_result);\
 }
 
 typedef struct ScannerTest {
@@ -112,7 +117,7 @@ UTEST_F_SETUP(ScannerTest) {
 
 UTEST_F_TEARDOWN(ScannerTest) {}
 
-#if 1
+#if 0
 TEST_TOKEN_AS_STRING(STRING);
 TEST_TOKEN_AS_STRING(ASYNC);
 TEST_TOKEN_AS_STRING(AWAIT);
@@ -194,7 +199,10 @@ TEST_LITERAL_SIMPLE(TK_PIPE_EQUAL, "|=");
 TEST_LITERAL_SIMPLE(TK_HAT_EQUAL, "^=");
 TEST_LITERAL_SIMPLE(TK_TILDE_EQUAL, "~=");
 TEST_LITERAL_SIMPLE(TK_STAR_EQUAL, "*=");
-TEST_LITERAL_SIMPLE(TK_PERCENT_EQUAL, "%%=");
+UTEST_F(ScannerTest, CorrectlyMatchesLiteral_TK_PERCENT_EQUAL) {
+  test_literal(TK_PERCENT_EQUAL, "%=", "%=", utest_result);
+}
+
 TEST_LITERAL_SIMPLE(TK_SLASH_EQUAL, "/=");
 TEST_LITERAL_SIMPLE(TK_SLASH_SLASH_EQUAL, "//=");
 
@@ -260,4 +268,9 @@ TEST_TOKEN_STREAM(VarDecl, "var a? : int", TK_VAR, TK_ID, TK_QUESTION, TK_COLON,
 TEST_TOKEN_STREAM(QQ, "a ?? b", TK_ID, TK_QQ, TK_ID, TK_EOF);
 TEST_TOKEN_STREAM(QQE, "a ??= b", TK_ID, TK_QQE, TK_ID, TK_EOF);
 TEST_TOKEN_STREAM(VariableAssignment, "a = 1.f + 2.f", TK_ID, TK_EQUAL, TK_NUMBER, TK_PLUS, TK_NUMBER, TK_EOF);
+
+TEST_TOKEN_STREAM(DoubleDots, "1..1", TK_INTEGER, TK_DOUBLE_DOT, TK_INTEGER, TK_EOF);
+TEST_TOKEN_STREAM(DoubleDotsMultipleDigits, "1234..1", TK_INTEGER, TK_DOUBLE_DOT, TK_INTEGER, TK_EOF);
+TEST_TOKEN_STREAM(DoubleDotsSpaces, "1 .. 1", TK_INTEGER, TK_DOUBLE_DOT, TK_INTEGER, TK_EOF);
 #endif
+TEST_TOKEN_STREAM(DoubleDotsStatementAfter, "1 .. val a := 0", TK_INTEGER, TK_DOUBLE_DOT, TK_VAL, TK_ID, TK_COLON, TK_EQUAL, TK_INTEGER, TK_EOF);

@@ -157,6 +157,7 @@
     <ClCompile Include="parser_test.c" />
     <ClCompile Include="scanner_test.c" />
     <ClCompile Include="tac_compiler_test.c" />
+    <ClCompile Include="type_test.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="utest.h" />

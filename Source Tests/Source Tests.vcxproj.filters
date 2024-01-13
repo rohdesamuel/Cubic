@@ -102,5 +102,14 @@
     <None Include="vars.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="range_expressions.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="generics.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="constraints.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

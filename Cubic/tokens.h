@@ -49,7 +49,7 @@ typedef enum {
   TK_TRUE, TK_FALSE, TK_PASS,
   TK_VAL, TK_VAR, TK_REF, TK_NIL,
   TK_NEW, TK_DEL,
-  TK_ASSERT,
+  TK_ASSERT, TK_TYPE,
 
   // Types
   TK_BOOL,
@@ -73,5 +73,7 @@ typedef struct Token_ {
 
 bool token_eq(Token_ a, Token_ b);
 Token_ token_string(const char* str);
+Token_ token_concat(Token_ l, Token_ r, MemoryAllocator_* allocator);
+uint64_t token_hash(Token_ t);
 
 #endif  // TOKENS__H

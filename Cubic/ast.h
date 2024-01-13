@@ -52,6 +52,11 @@ typedef struct AstNode_ {
     AST_CLS(AstDotExpr_),
     AST_CLS(AstTypeExpr_),
     AST_CLS(AstArrayValueExpr_),
+    AST_CLS(AstRangeExpr_),
+    AST_CLS(AstTypeDef_),
+    AST_CLS(TypeMemberDecl_),
+    AST_CLS(AstGenericParam_),
+    AST_CLS(AstGenericParams_),
     __AST_NODE_COUNT__,
   } cls;
   int line;
@@ -263,7 +268,40 @@ typedef struct AstAssertStmt_ {
   AstExpr_* expr;
 } AstAssertStmt_;
 
-// FunctionDef ::= 'function' [Id] FunctionBody 'end'
+// GenericParam ::= Id [':' UnionType {'&' UnionType} ]
+typedef struct AstGenericParam_ {
+  struct AstNode_ base;
+  Token_ name;
+
+  Type_* type;
+} AstGenericParam_;
+
+// GenericParams ::= '[' GenericParam {',' GenericParam} ']'
+typedef struct AstGenericParams_ {
+  struct AstNode_ base;
+  Token_ generic_str;
+  AstList_ params;
+  ListOf_(ConstraintType_*) type_params;
+} AstGenericParams_;
+
+// TypeMemberDecl ::= [Id ':'] Type {'|' Type}
+typedef struct TypeMemberDecl_ {
+  struct AstNode_ base;
+  Token_ opt_name;
+
+  Type_* type;
+} TypeMemberDecl_;
+
+// TypeDef ::= 'type' Id [GenericParams] {TypeMemberDecl ','} [TypeMemberDecl] 'end'
+typedef struct AstTypeDef_ {
+  struct AstNode_ base;
+  Token_ name;
+  AstGenericParams_* opt_generics;
+  Type_* type;
+  AstList_ members;
+} AstTypeDef_;
+
+// FunctionDef ::= 'function' [Id] [GenericParams] FunctionBody 'end'
 typedef struct AstFunctionDef_ {
   struct AstExpr_ base;
   struct Symbol_* fn_symbol;
@@ -311,14 +349,16 @@ typedef struct AstFunctionCallArg_ {
   AstExpr_* expr;
 } AstFunctionCallArg_;
 
-// ClassDef ::= 'struct' {ClassMemberDecl} 'end'
+// ClassDef ::= 'struct' Id [GenericParams] {ClassMemberDecl} 'end'
 typedef struct AstClassDef_ {
   struct AstNode_ base;
   Token_ name;
+  AstGenericParams_* opt_generics;
   AstList_ members;
 
   Type_* class_type;
 } AstClassDef_;
+
 
 // ClassMemberDecl_ ::= IdList ':' UnionType ['=' ExprList]
 typedef struct AstClassMemberDecl_ {
@@ -330,7 +370,7 @@ typedef struct AstClassMemberDecl_ {
   AstExpr_* opt_expr;
 } AstClassMemberDecl_;
 
-// ClassConstructor ::= Id '{' [ClassConstructorParamList] [',' ClassConstructorNamedParamList] '}'
+// ClassConstructor ::= [Id] '{' [ClassConstructorParamList] [',' ClassConstructorNamedParamList] '}'
 typedef struct AstClassConstructor_ {
   struct AstExpr_ base;
   Token_ name;
@@ -347,6 +387,12 @@ typedef struct AstClassConstructorParam_ {
 typedef struct AstTypeExpr_ {
   struct AstExpr_ base;
 } AstTypeExpr_;
+
+typedef struct AstRangeExpr_ {
+  struct AstExpr_ base;
+  struct AstExpr_* left;
+  struct AstExpr_* right;
+} AstRangeExpr_;
 
 typedef struct Ast_ {
   struct AstProgram_* program;

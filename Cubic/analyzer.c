@@ -18,6 +18,7 @@ static AnalysisRule_* get_rule(int info);
 static void error(Analyzer_* analyzer, AstNode_* node, const char* message, ...);
 
 thread_local Analyzer_* analyzer_;
+thread_local AnalyzerErrors_ error_manager;
 
 static void do_analysis(AstNode_* node) {
   get_rule(node->cls)->fn(node);
@@ -28,6 +29,21 @@ void analyzer_init(Analyzer_* analyzer, MemoryAllocator_* allocator) {
   analyzer->allocator = allocator;
   analyzer->frame = frame_root(analyzer->allocator);
   analyzer->scope = analyzer->frame->scope;
+}
+
+void analyzererrors_init(AnalyzerErrors_* errors, MemoryAllocator_* allocator) {
+  *errors = (AnalyzerErrors_){ 0 };
+  errors->allocator = allocator;
+
+  list_of(&errors->errors, AnalyzerError_, allocator);
+}
+
+void analyzererrors_clear(AnalyzerErrors_* errors) {
+  for (ListNode_* n = errors->errors.head; n != NULL; n = n->next) {
+    AnalyzerError_* err = list_ptr(n, AnalyzerError_);
+    dealloc(errors->allocator, err->error_str);
+  }
+  list_clear(&errors->errors);
 }
 
 void analyze(Analyzer_* analyzer, struct AstProgram_* ast) {
@@ -138,7 +154,7 @@ void binary_analysis(AstNode_* n) {
     return;
   }
 
-  if (!type_coercible(rtype, ltype)) {
+  if (!type_iscoercible(rtype, ltype)) {
     error(analyzer_, n, "right-hand expression cannot be coerced to left-hand expression.");
   }
 
@@ -223,7 +239,7 @@ void return_analysis(AstNode_* n) {
   do_analysis((AstNode_*)stmt->expr);
   Type_* from = type_valtype(AS_EXPR(stmt->expr)->type);
   Type_* to = type_valtype(type_as(FunctionType_, frame->fn_symbol->ty)->ret_ty);
-  if (!type_coercible(from, to)) {
+  if (!type_iscoercible(from, to)) {
     error(analyzer_, n, "Return statement type does not match function type.");
   }  
 }
@@ -267,6 +283,9 @@ void var_decl_analysis(AstNode_* n) {
 
   if (stmt->expr) {
     stmt->expr->top_type = stmt->decl_type;
+    if (stmt->expr->base.cls == AST_CLS(AstClassConstructor_) && !stmt->expr->type) {
+      AST_CAST(AstClassConstructor_, stmt->expr)->base.type = type_valtype(stmt->decl_type);
+    }
     do_analysis((AstNode_*)stmt->expr);
   }
 
@@ -284,9 +303,13 @@ void var_decl_analysis(AstNode_* n) {
 
     type_set(val_type, stmt->expr->type);
   }
-  type_fill(stmt->decl_type, n->scope);
+  if (!type_resolve(stmt->decl_type, n->scope)) {
+    error(analyzer_, n, "could not resolve type %.*s", stmt->decl_type->opt_name.length, stmt->decl_type->opt_name.start);
+    return;
+  }
 
   // An array declared of zero-size, takes the size of the expression.
+  val_type = type_valtype(stmt->decl_type);
   if (type_is(val_type, ArrayType_)) {
     ArrayType_* array_ty = type_as(ArrayType_, val_type);
 
@@ -312,7 +335,7 @@ void var_decl_analysis(AstNode_* n) {
 
   // TODO: implement tuples (and others) for variable declarations.
   Symbol_* var = scope_find(n->scope, &stmt->name);
-  if (stmt->expr && !type_coercible(AS_EXPR(stmt->expr)->type, val_type)) {
+  if (stmt->expr && !type_iscoercible(AS_EXPR(stmt->expr)->type, val_type) && !type_isassignable(AS_EXPR(stmt->expr)->type, val_type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
 
@@ -369,6 +392,17 @@ void assignment_expr_analysis(AstNode_* n) {
   expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
   expr->right->top_type = expr->base.top_type;
   do_analysis((AstNode_*)expr->left);
+  Type_* val_type = type_valtype(expr->left->type);
+  if (expr->right->base.cls == AST_CLS(AstClassConstructor_) && !expr->right->type) {
+    if (!type_is(type_valtype(expr->left->type), ClassType_)) {
+      error(analyzer_, (AstNode_*)expr->right, "Trying to construct a class and assigning to a non-class type.");
+    } else {
+      AstClassConstructor_* cons = AST_CAST(AstClassConstructor_, expr->right);
+
+      cons->name = expr->left->type->opt_name;
+      cons->base.type = expr->left->type;
+    }
+  }
   do_analysis((AstNode_*)expr->right);
 
   if (expr->left->base.cls != AST_CLS(AstVarExpr_)) {
@@ -383,7 +417,7 @@ void assignment_expr_analysis(AstNode_* n) {
 
   AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
-  if (!type_assignable(rvalue_expr->type, lvalue_expr->base.type)) {
+  if (!type_isassignable(rvalue_expr->type, lvalue_expr->base.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
   expr->base.type = lvalue_expr->base.type;
@@ -415,7 +449,7 @@ void in_place_binary_stmt_analysis(AstNode_* n) {
 
   AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
-  if (!type_assignable(rvalue_expr->type, lvalue_expr->base.type)) {
+  if (!type_isassignable(rvalue_expr->type, lvalue_expr->base.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
 
@@ -498,7 +532,7 @@ void function_body_analysis(AstNode_* n) {
   FunctionSymbol_* fn = &body->fn_symbol->fn;
   fn_type->ret_ty = body->return_type;
 
-  type_fill(fn_type->ret_ty, n->scope);
+  type_resolve(fn_type->ret_ty, n->scope);
   type_calcsize(fn_type->ret_ty);
 
   for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
@@ -513,7 +547,7 @@ void function_param_analysis(AstNode_* n) {
   
   // TODO: implement parameter type inference.
   Type_* val_type = type_valtype(param->type);
-  type_fill(param->type, n->scope);
+  type_resolve(param->type, n->scope);
   type_calcsize(param->type);
   if (type_isunknown(param->type)) {
     error(analyzer_, n, "Parameter type inference is unimplemented.");
@@ -567,7 +601,7 @@ void function_call_args_analysis(AstNode_* node) {
     do_analysis(n->node);
     Type_* expr_type = AS_EXPR(n->node)->type;
 
-    if (!type_assignable(expr_type, type_valtype(param_type))) {
+    if (!type_isassignable(expr_type, type_valtype(param_type))) {
       error(analyzer_, n->node, "Expression does not match function parameter type.");
     }
     
@@ -624,7 +658,7 @@ void ast_class_member_decl_analysis(AstNode_* node) {
   AstClassMemberDecl_* decl = (AstClassMemberDecl_*)node;
   Type_* type = decl->field_type;
 
-  if (!type_fill(type, node->scope)) {
+  if (!type_resolve(type, node->scope)) {
     error(analyzer_, node,
       "Could not find type '%.*s' in class member declaration",
       type->opt_name.length, type->opt_name.start);
@@ -677,10 +711,10 @@ void ast_class_constructor_analysis(AstNode_* node) {
   Symbol_* cls_sym = scope_search_to_root(node->scope, &constructor->name);
 
   Type_* type = constructor->base.type;
-  if (!type_fill(type, node->scope)) {
-    error(analyzer_, node, "Could not find class %.*s", constructor->name.length, constructor->name.start);
+  if (!type_resolve(type, node->scope)) {
+    error(analyzer_, node, "Could not find class %.*s", type->opt_name.length, type->opt_name.start);
     return;
-  } else {
+  } else if (!type) {
     constructor->base.type = cls_sym->ty;
   }
 
@@ -697,7 +731,7 @@ void ast_class_constructor_param_analysis(AstNode_* node) {
   do_analysis((AstNode_*)field->expr);
 
   // Check that the field in the constructor parameter actually exists in the class.
-  Type_* cls_type = field->base.top_type;
+  Type_* cls_type = type_valtype(field->base.top_type);
   if (!type_is(cls_type, ClassType_)) {
     error(analyzer_, node, "Trying to construct a non-class type.");
     return;
@@ -735,7 +769,7 @@ void array_value_analysis(AstNode_* node) {
     
     if (!el_type) {
       el_type = expr->type;
-    } else if (!type_equal(el_type, expr->type)) {
+    } else if (!type_isequal(el_type, expr->type)) {
       error(analyzer_, node, "Array element type at index %d does not match array type.", index);
     }
     ++index;
@@ -745,6 +779,31 @@ void array_value_analysis(AstNode_* node) {
   if (el_type) {
     type_calcsize(array_expr->base.type);
   }
+}
+
+void range_expr_analysis(AstNode_* node) {
+}
+
+void type_def_analysis(AstNode_* node) {
+  AstTypeDef_* type_def = (AstTypeDef_*)node;
+
+  for (AstListNode_* n = type_def->members.head; n != NULL; n = n->next) {
+    do_analysis(n->node);
+  }
+
+  type_resolve(type_def->type, node->scope);
+  printf("%.*s ::= ", type_def->name.length, type_def->name.start);
+  print_type(type_def->type);
+  printf("\n");
+}
+
+void type_member_decl_analysis(AstNode_* node) {
+  TypeMemberDecl_* member_decl = (TypeMemberDecl_*)node;
+  type_resolve(member_decl->type, node->scope);
+}
+
+void generic_params_analysis(AstNode_* node) {
+  AstGenericParams_* params = (AstGenericParams_*)node;
 }
 
 AnalysisRule_ analysis_rules[] = {
@@ -784,6 +843,11 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstDotExpr_)]                = {ast_dot_expr_analysis},
   [AST_CLS(AstTypeExpr_)]               = {noop_analysis},
   [AST_CLS(AstArrayValueExpr_)]         = {array_value_analysis},
+  [AST_CLS(AstRangeExpr_)]              = {range_expr_analysis},
+  [AST_CLS(AstTypeDef_)]                = {type_def_analysis},
+  [AST_CLS(TypeMemberDecl_)]            = {type_member_decl_analysis},
+  [AST_CLS(AstGenericParam_)]           = {noop_analysis},
+  [AST_CLS(AstGenericParams_)]          = {generic_params_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.
@@ -807,5 +871,66 @@ static void error(Analyzer_* analyzer, AstNode_* node, const char* message, ...)
   fprintf(stderr, "[line %d] Error: ", node->line);
   vfprintf(stderr, message, args);
   fprintf(stderr, "\n");
+  va_end(args);
+}
+
+void error_add_(AnalyzerErrors_* errors, int line, const char* format, ...) {
+  if (errors->panic_mode) return;
+  errors->has_errors = true;
+
+  char buf[1024] = { 0 };
+  int cursor = 0;
+
+  va_list args;
+  va_start(args, format);
+
+  cursor = sprintf_s(buf, sizeof(buf), "[line %d] Error: ", line);
+  cursor += vsprintf_s(buf, sizeof(buf), format, args);
+  assertf(cursor < sizeof(buf), "Could not write error to log.");
+
+  cursor += sprintf_s(buf, sizeof(buf), "\n");
+  assertf(cursor < sizeof(buf), "Could not write error to log."); 
+
+  buf[cursor] = '\0';
+  cursor += 1;
+  assertf(cursor < sizeof(buf), "Could not write error to log.");
+
+  AnalyzerError_ err = { 0 };
+  err.error_str = alloc(errors->allocator, cursor);
+  memcpy((void*)err.error_str, (void*)buf, cursor);
+
+  list_push(&errors->errors, &err);
+
+  va_end(args);
+}
+
+void error_panic_(AnalyzerErrors_* errors, int line, const char* format, ...) {
+  if (errors->panic_mode) return;
+  errors->panic_mode = true;
+  errors->has_errors = true;
+
+  char buf[1024] = { 0 };
+  int cursor = 0;
+
+  va_list args;
+  va_start(args, format);
+
+  cursor = sprintf_s(buf, sizeof(buf), "[line %d] Error: ", line);
+  cursor += vsprintf_s(buf, sizeof(buf), format, args);
+  assertf(cursor < sizeof(buf), "Could not write error to log.");
+
+  cursor += sprintf_s(buf, sizeof(buf), "\n");
+  assertf(cursor < sizeof(buf), "Could not write error to log.");
+
+  buf[cursor] = '\0';
+  cursor += 1;
+  assertf(cursor < sizeof(buf), "Could not write error to log.");
+
+  AnalyzerError_ err = { 0 };
+  err.error_str = alloc(errors->allocator, cursor);
+  memcpy((void*)err.error_str, (void*)buf, cursor);
+
+  list_push(&errors->errors, &err);
+
   va_end(args);
 }

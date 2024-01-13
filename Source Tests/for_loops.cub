@@ -24,9 +24,3 @@ do
   end
   assert accum == 4
 end
-
-for i = 1 and i < 5 step i = i + 1
-
-for i := 0; i < 5; i = i + 1 do
-
-end

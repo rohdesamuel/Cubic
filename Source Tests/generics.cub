@@ -1,0 +1,135 @@
+function add[T](a: T, b: T) -> T
+  return a + b
+end
+
+assert add(1, 2) == 3
+assert add(4.0, 8.0) == 12.0
+
+class Circle
+  r: float
+
+  name: function(in self) -> string return "Circle" end
+  area: function(in self) -> float return math.pi * self.r * self.r end
+  perimeter: function(in self) -> float return math.pi * self.r * 2 end
+end
+
+class Rectangle
+  w: float
+  h: float
+
+  name: function(in self) -> string return "Rectangle" end
+  area: function(in self) -> float return self.w * self.h end
+  perimeter: function(in self) -> float return 2 * (self.w + self.h) end
+end
+
+function print_shape_info[T](s: T) {
+  print("Shape: {}\nArea: {}\nPerim: {}\n", s.name(), s.area(), s.perimeter())
+end
+
+function max[T] (a: T, b: T)
+  if a >= b then return a
+  else return b end
+end
+
+type Comparable[T]
+  (>=): function(a: T, b: T)
+end
+
+type IsNumeric
+  int | int8 | int16 | int32 | int64 |
+  uint | uint8 | uint16 | uint32 | uint64 |
+  float | double
+end
+
+type Tuple[T, U]
+  int,
+
+end
+
+type Summable
+
+assert max[](1, 2) == 2
+assert max[](2, 1) == 2
+
+type Vec3[T]
+  x, y, z: T
+
+  "+": function(out self, in other: Vec3[T])
+  "-": function(out self, in other: Vec3[T])
+end
+
+class Stack[T]
+  items: T[..] = []
+
+  push: function(out self, in item: T)
+    items.add(item)
+  end
+
+  pop: function(out self) -> T
+    val ret : T = items.back()
+    items.pop()
+    return ret
+  end
+end
+
+class Texture
+  id: int
+  var bytes: byte[..]
+end
+
+val stack : Stack[Texture]
+
+
+# No constraints
+class Pair[K, V]
+  k: K
+  v: V
+end
+
+# Primitive constraints
+class IntPair[K: int, V: int]
+  k: K
+  v: V
+end
+
+# Type class constraints
+type Number
+  int | float
+end
+
+class NumberPair[K: Number, V: Number]
+end
+
+# Conjunctive constraints
+type Hashable
+  hash: ...
+end
+
+type Ord
+  (<=): ...
+  (==): ...
+  (>=): ...
+end
+
+class MapEntry[K: Hashable & Ord, V]
+  k: K
+  v: V
+end
+
+class CustomKey
+  hash: ...
+  (<=): ...
+  (==): ...
+  (>=): ...
+end
+
+val entry : MapEntry[CustomKey, int] = {CustomKey{...}, 0}
+
+
+val n : float | int = 1.f
+
+if n is float then
+  n.float += 1
+elif n is int then
+  n.int += 1
+end

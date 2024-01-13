@@ -328,3 +328,16 @@ MemoryAllocator_ NoopAllocator = {
   .deallocate = noop_dealloc,
   .clear = noop_clear
 };
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+static void* default_alloc(MemoryAllocator_* base, size_t size) { return malloc(size); }
+static void default_dealloc(MemoryAllocator_* base, void* ptr) { free(ptr); }
+static void default_clear(MemoryAllocator_* base) {}
+
+MemoryAllocator_ DefaultAllocator = {
+  .allocate = default_alloc,
+  .deallocate = default_dealloc,
+  .clear = default_clear
+};

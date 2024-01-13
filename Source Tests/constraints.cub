@@ -1,0 +1,30 @@
+type Shape
+  name: function(in self) -> string
+  area: function(in self) -> float
+  perimeter: function(in self) -> float
+end
+
+class Circle is
+  r: float
+
+  name: function(in self) -> string return "Circle" end
+  area: function(in self) -> float return math.pi * self.r * self.r end
+  perimeter: function(in self) -> float return math.pi * self.r * 2 end
+end
+
+class Rectangle is Shape
+  w: float
+  h: float
+
+  name: function(in self) -> string return "Rectangle" end
+  area: function(in self) -> float return self.w * self.h end
+  perimeter: function(in self) -> float return 2 * (self.w + self.h) end
+end
+
+function print_shape_info[T](s: T)
+  print("Shape: {}\nArea: {}\nPerim: {}\n", s.name(), s.area(), s.perimeter())
+end
+
+function area[T](s: T) -> float
+  return s.area()
+end

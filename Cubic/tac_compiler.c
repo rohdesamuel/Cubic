@@ -700,8 +700,7 @@ static void emit_make_ref_from(TacChunk_* chunk, const Location_* dst, const Loc
   emit_tac(chunk, OP_MOVE, *dst, OP_LOC(*src), EMPTY_OPERAND, line);
 }
 
-static Location_ emit_cast(TacChunk_* chunk, Location_ val, const Type_* from, const Type_* to, size_t size, int line) {
-  Location_ dst = tac_alloc_val(chunk, size);
+static Location_ try_emit_cast(TacChunk_* chunk, Location_ val, const Type_* from, const Type_* to, size_t size, int line) {
   OpCode cast_op = OP_NOP;
   switch (from->cls) {
     case TYPE_CLS(DoubleType_):
@@ -735,9 +734,18 @@ static Location_ emit_cast(TacChunk_* chunk, Location_ val, const Type_* from, c
       }
       break;
   }
-  assertf(cast_op != OP_NOP, "Trying an unknown cast. From: %d. To: %d", from->cls, to->cls);
+  if (cast_op == OP_NOP) {
+    return EMPTY_LOC;
+  }
 
+  Location_ dst = tac_alloc_val(chunk, size);
   emit_tac(chunk, cast_op, dst, OP_LOC(val), EMPTY_OPERAND, line);
+  return dst;
+}
+
+static Location_ emit_cast(TacChunk_* chunk, Location_ val, const Type_* from, const Type_* to, size_t size, int line) {
+  Location_ dst = try_emit_cast(chunk, val, from, to, size, line);
+  assertf(!loc_is_empty(dst), "Trying an unknown cast. From: %d. To: %d", from->cls, to->cls);
   return dst;
 }
 
@@ -1531,12 +1539,12 @@ static Location_ id_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   Symbol_* sym = scope_find(node->scope, &expr->name);
 
   switch (sym->type) {
-    case SYMBOL_TYPE_VAR:
+    case SYMBOL_CLS_VAR:
       return sym->var.location;
-    case SYMBOL_TYPE_FN:
+    case SYMBOL_CLS_FN:
       return sym->fn.loc;
 #if 0
-    case SYMBOL_TYPE_CLOSURE:
+    case SYMBOL_CLS_CLOSURE:
       emit_bytes(chunk, OP_GET_VAR, (uint8_t)(sym->closure.frame_index), node->line);
       break;
 #endif
@@ -1634,6 +1642,14 @@ static Location_ assignment_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstAssignmentExpr_* expr = (AstAssignmentExpr_*)node;
   Location_ dst = code_gen(chunk, (AstNode_*)expr->left);
   Location_ src = code_gen(chunk, (AstNode_*)expr->right);
+
+  Type_* ltype = type_valtype(expr->left->type);
+  Type_* rtype = type_valtype(expr->right->type);
+
+  Location_ maybe_tmp = try_emit_cast(chunk, src, rtype, ltype, ltype->size, node->line);
+  if (!loc_is_empty(maybe_tmp)) {
+    src = maybe_tmp;
+  }
 
   emit_set_variable(chunk, &dst, &src, expr->left->type, node->line);
   return dst;
@@ -1946,7 +1962,7 @@ static void emit_construct_default_class(TacChunk_* chunk, Type_* cls_ty, const 
 
 static Location_ class_constructor_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstClassConstructor_* constructor = (AstClassConstructor_*)node;
-  Type_* type = constructor->base.type;
+  Type_* type = type_valtype(constructor->base.type);
   ClassType_* cls_type = type_as(ClassType_, type);
 
   Location_ dst = tac_alloc_val(chunk, type->size);
@@ -2056,6 +2072,11 @@ static Location_ in_place_binary_stmt_code_gen(TacChunk_* chunk, AstNode_* node)
   return dst;
 }
 
+static Location_ range_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
+  return EMPTY_LOC;
+}
+
+
 static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstProgram_)]               = {program_code_gen},
   [AST_CLS(AstBlock_)]                 = {block_code_gen},
@@ -2093,6 +2114,11 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstDotExpr_)]               = {dot_expr_code_gen},
   [AST_CLS(AstTypeExpr_)]              = {noop_code_gen},
   [AST_CLS(AstArrayValueExpr_)]        = {array_value_code_gen},
+  [AST_CLS(AstRangeExpr_)]             = {range_expr_code_gen},
+  [AST_CLS(AstTypeDef_)]               = {noop_code_gen},
+  [AST_CLS(TypeMemberDecl_)]           = {noop_code_gen},
+  [AST_CLS(AstGenericParam_)]          = {noop_code_gen},
+  [AST_CLS(AstGenericParams_)]         = {noop_code_gen},
 };
 
 // Static assert to make sure that all node types are accounted for.

@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "chunk.h"
+#include "tokens.h"
 
 typedef enum {
   LOCATION_TYPE_EMPTY,

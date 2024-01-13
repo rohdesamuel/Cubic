@@ -53,7 +53,7 @@ typedef struct List_ {
 
 #define ListOf_(TY) List_
 
-#define list_of(PLIST, TY, ALLOCATOR) (list_init(PLIST, sizeof(TY), ALLOCATOR))
+#define list_of(PLIST, TY, ALLOCATOR) do {list_init(PLIST, sizeof(TY), ALLOCATOR);} while(0)
 #define list_ptr(NODE, TY) ((TY*)(&(NODE)->data))
 #define list_val(NODE, TY) (*list_ptr(NODE, TY))
 
@@ -97,6 +97,7 @@ typedef struct LinearAllocator_ {
 void memory_initialize();
 
 extern MemoryAllocator_ NoopAllocator;
+extern MemoryAllocator_ DefaultAllocator;
 
 // Returns the default memory allocator using malloc/free.
 // This is registered with the name "default".

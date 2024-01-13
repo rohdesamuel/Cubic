@@ -12,7 +12,8 @@ static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
 static Symbol_* scope_add(Scope_* scope, Symbol_* symbol);
 static Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type);
 static Symbol_* scope_addfn(Scope_* scope, Token_* name);
-static Symbol_* scope_addclass(Scope_* scope, Token_* name);
+static Symbol_* scope_addclass(Scope_* scope, Type_* cls_ty);
+static Symbol_* scope_addtype(Scope_* scope, Token_* name, Type_* type);
 
 Frame_* frame_root(struct MemoryAllocator_* allocator) {
   Token_ entry_name = {
@@ -24,7 +25,7 @@ Frame_* frame_root(struct MemoryAllocator_* allocator) {
 
   Symbol_* entry_fn = alloc_ty(allocator, Symbol_);
   *entry_fn = (Symbol_){
-    .type = SYMBOL_TYPE_FN,
+    .type = SYMBOL_CLS_FN,
     .fn = (FunctionSymbol_) {
       .params = {0}
     },
@@ -91,8 +92,8 @@ Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope) {
   return scope_addfn(scope, name);
 }
 
-Symbol_* frame_addclass(Frame_* frame, Token_* name, Scope_* scope) {
-  return scope_addclass(scope, name);
+Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope) {
+  return scope_addclass(scope, cls_ty);
 }
 
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
@@ -102,7 +103,7 @@ Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
 
   Symbol_* ret = alloc(allocator, sizeof(Symbol_));
   *ret = (Symbol_){
-    .type = SYMBOL_TYPE_TMP,
+    .type = SYMBOL_CLS_TMP,
     .name = {0},
     .parent = scope,
   };
@@ -110,6 +111,10 @@ Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
   list_push(&frame->tmps, &ret);
   
   return ret;
+}
+
+Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope) {
+  return scope_addtype(scope, name, type);
 }
 
 void frame_enterscope(Frame_* frame, Scope_* scope) {
@@ -242,7 +247,7 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type) {
   int scope_index = scope->stack_size++;
 
   Symbol_ s = (Symbol_){
-    .type = SYMBOL_TYPE_VAR,
+    .type = SYMBOL_CLS_VAR,
     .var = (VarSymbol_) {0},
     .name = *name,
     .parent = scope,
@@ -254,7 +259,7 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type) {
 
 Symbol_* scope_addfn(Scope_* scope, Token_* name) {
   Symbol_ s = (Symbol_){
-    .type = SYMBOL_TYPE_FN,
+    .type = SYMBOL_CLS_FN,
     .fn = (FunctionSymbol_) {
       .params = {0}
     },
@@ -269,7 +274,7 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   scope->stack_size++;
 
   Symbol_ s = {
-    .type = SYMBOL_TYPE_CLOSURE,
+    .type = SYMBOL_CLS_CLOSURE,
     .closure = {
       .fn = fn,
       .closures = {0},
@@ -284,22 +289,36 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   return scope_add(scope, &s);
 }
 
-Symbol_* scope_addclass(Scope_* scope, Token_* name) {
+Symbol_* scope_addclass(Scope_* scope, Type_* cls_ty) {
   MemoryAllocator_* allocator = scope->allocator;
   Symbol_ s = (Symbol_){
-    .type = SYMBOL_TYPE_CLASS,
+    .type = SYMBOL_CLS_CLASS,
     .cls = {0},
-    .name = *name,
+    .name = cls_ty->opt_name,
     .parent = scope,
-    .ty = make_class_ty(*name, allocator)
+    .ty = cls_ty
   };
   s.cls.constructor = alloc_ty(allocator, Symbol_);
   *s.cls.constructor = (Symbol_){
-    .type = SYMBOL_TYPE_FN,
+    .type = SYMBOL_CLS_FN,
   };
   
   list_of(&s.cls.constructor->fn.params, Symbol_*, allocator);
   list_of(&s.cls.members, Symbol_*, allocator);
+  return scope_add(scope, &s);
+}
+
+Symbol_* scope_addtype(Scope_* scope, Token_* name, Type_* type) {
+  int scope_index = scope->stack_size++;
+
+  Symbol_ s = (Symbol_){
+    .type = SYMBOL_CLS_TYPE,
+    .type_def = (TypeDefSymbol_) {0},
+    .name = *name,
+    .parent = scope,
+    .ty = type
+  };
+
   return scope_add(scope, &s);
 }
 
@@ -309,7 +328,7 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, Type_* type) {
 
   Symbol_* field = alloc(allocator, sizeof(Symbol_));
   *field = (Symbol_){
-    .type = SYMBOL_TYPE_FIELD,
+    .type = SYMBOL_CLS_FIELD,
     .name = name,
     .parent = sym->parent,
     .ty = type
@@ -354,7 +373,7 @@ Symbol_* scope_search_to_root(Scope_* scope, const Token_* name) {
 
 VarSymbol_* scope_var(Scope_* scope, Token_* name) {
   Symbol_* ret = scope_find(scope, name);
-  if (!ret || ret->type != SYMBOL_TYPE_VAR) {
+  if (!ret || ret->type != SYMBOL_CLS_VAR) {
     return NULL;
   }
 
@@ -363,7 +382,7 @@ VarSymbol_* scope_var(Scope_* scope, Token_* name) {
 
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name) {
   Symbol_* ret = scope_find(scope, name);
-  if (!ret || ret->type != SYMBOL_TYPE_FN) {
+  if (!ret || ret->type != SYMBOL_CLS_FN) {
     return NULL;
   }
 

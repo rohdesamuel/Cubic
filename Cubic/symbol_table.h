@@ -69,8 +69,9 @@ void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope);
-Symbol_* frame_addclass(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope);
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
+Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 void frame_assignindices(Frame_* frame);
 
 void frame_enterscope(Frame_* frame, Scope_* scope);
@@ -85,6 +86,8 @@ void scope_destroy(Scope_** scope);
 
 SymbolTable_* symboltable_create(struct MemoryAllocator_* allocator);
 SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
+SymbolTable_* symboltable_copy(SymbolTable_* table);
+SymbolTable_* symboltable_add(SymbolTable_* table);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
 Symbol_* scope_find(Scope_* scope, Token_* name);

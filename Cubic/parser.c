@@ -50,9 +50,13 @@ static AstNode_* Id(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
-static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionCallArgs(Parser_* parser, Scanner_* scanner, Scope_* scope);
 static AstNode_* FunctionCallArg(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* TypeDef(Parser_* parser, Scanner_* scanner, Scope_* scope);
+static AstNode_* GenericParams(Parser_* parser, Scanner_* scanner, Scope_* scope);
+
+static bool parse_value(Parser_* parser, Value_* ret);
+static bool parse_value_expr(Parser_* parser, Value_* ret);
 
 static void advance(Parser_* parser, Scanner_* scanner);
 static void consume(Parser_* parser, Scanner_* scanner, TokenType_ type, const char* message);
@@ -158,7 +162,7 @@ AstNode_* parse(Parser_* parser, Scanner_* scanner, struct Scope_* root_scope, c
   return (AstNode_*)root;
 }
 
-Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
+static Token_ parse_variable(Parser_* parser, Token token) {
   Token_ ret = *token;
   ret.start = alloc(parser->allocator, ret.length);
   memcpy((char*)ret.start, token->start, token->length);
@@ -166,18 +170,10 @@ Token_ parse_variable(Parser_* parser, Scanner_* scanner, Token token) {
   return ret;
 }
 
-static Type_* parse_type_expr(Parser_* parser, Scanner_* scanner) {
+static Type_* parse_unary_type(Parser_* parser, Scanner_* scanner) {
   Token_ token = parser->previous;
 
   Type_* ret = NULL;
-
-  // The following code, once implemented, allows functions to return references.
-  // if (token.type == TK_VAR) {
-  //   ret.kind = KIND_REF;
-  //   advance(parser, scanner);
-  //   token = parser->previous;
-  // }
-
   switch (token.type) {
     case TK_BOOL:        ret = (Type_*)&Bool_Ty;   break;
     case TK_INT:         ret = (Type_*)&Int_Ty;    break;
@@ -185,29 +181,66 @@ static Type_* parse_type_expr(Parser_* parser, Scanner_* scanner) {
     case TK_FLOAT:       ret = (Type_*)&Float_Ty;  break;
     case TK_DOUBLE:      ret = (Type_*)&Double_Ty; break;
     case TK_STRING_TYPE: ret = (Type_*)&String_Ty; break;
+    case TK_NIL:         ret = (Type_*)&Nil_Ty;    break;
+      // case TK_VAR:         ret = make_var_ty(NULL, parser->allocator);
     case TK_FUNCTION:
     {
       error_at_current(parser, "Function typed values are unimplemented.");
-      break;
+      return NULL;
     }
     case TK_ID:
-      ret = make_placeholder_ty(parse_variable(parser, scanner, &token), parser->allocator);
+      ret = make_placeholder_ty(parse_variable(parser, &token), parser->allocator);
       break;
-    default: break;
+    default:
+      error(parser, "encountered unknown token type when parsing type.");
+      return NULL;
   }
 
+  Token_ maybe_id = parser->previous;
   if (match(parser, scanner, TK_LBRACKET)) {
-    size_t count = 0;
-    if (match(parser, scanner, TK_INTEGER)) {
-      count = strtoll(parser->previous.start, NULL, 10);
-    }
+    GenericOrArrayType_* generic_type = NULL;
+    if (type_isplaceholder(ret)) {
+      generic_type = (GenericOrArrayType_*)make_array_or_generic_ty(ret->opt_name, parser->allocator);
+      generic_type->unary.self.opt_name = token;
+      generic_type->arg_str.start = parser->previous.start;
+      generic_type->arg_str.line = parser->previous.line;
+      generic_type->full_name.start = maybe_id.start;
+      generic_type->full_name.line = maybe_id.line;
 
+
+      do {
+        advance(parser, scanner);
+        TypeArgument_ arg = { 0 };
+        if (parse_value(parser, &arg.val)) {
+          arg.is_val = true;
+        } else {
+          arg.type = parse_unary_type(parser, scanner);
+          arg.is_type = true;
+        }
+        list_push(&generic_type->args, &arg);
+      } while (match(parser, scanner, TK_COMMA));
+      type_set(ret, (Type_*)generic_type);
+    } else {
+      size_t count = 0;
+      if (match(parser, scanner, TK_INTEGER)) {
+        count = strtoll(parser->previous.start, NULL, 10);
+      }
+
+      ret = make_array_ty(ret, count, parser->allocator);
+    }
+    
     if (!match(parser, scanner, TK_RBRACKET)) {
-      error(parser, "array type malformed, expected ']' at end of type.");
+      error(parser, "type malformed, expected ']' at end of type.");
       return ret;
     }
 
-    ret = make_array_ty(ret, count, parser->allocator);
+    if (generic_type) {
+      generic_type->arg_str.length = (int)(parser->previous.start + parser->previous.length - generic_type->arg_str.start);
+      generic_type->arg_str = parse_variable(parser, &generic_type->arg_str);
+
+      generic_type->full_name.length = (int)(parser->previous.start + parser->previous.length - generic_type->full_name.start);
+      generic_type->full_name = parse_variable(parser, &generic_type->full_name);
+    }
   }
 
   if (!ret) {
@@ -215,6 +248,62 @@ static Type_* parse_type_expr(Parser_* parser, Scanner_* scanner) {
   }
 
   return ret;
+}
+
+static Type_* parse_singleton_or_union_type(Parser_* parser, Scanner_* scanner) {
+  Type_* single_type = NULL;
+  Type_* union_type = NULL;
+  bool is_union = false;
+  do {
+    if (is_union && !union_type) {
+      union_type = make_union_ty(parser->allocator, 0);
+      uniontype_add(union_type, single_type);
+    }
+
+    if (union_type) {
+      advance(parser, scanner);
+    }
+
+    single_type = parse_unary_type(parser, scanner);
+
+    if (union_type) {
+      uniontype_add(union_type, single_type);
+    }
+
+    is_union = true;
+  } while (match(parser, scanner, TK_PIPE));
+
+  return union_type ? union_type : single_type;
+}
+
+static Type_* parse_singleton_or_tuple_type(Parser_* parser, Scanner_* scanner) {
+  Type_* single_type = NULL;
+  Type_* tuple_type = NULL;
+  bool is_tuple = false;
+  do {
+    if (is_tuple && !tuple_type) {
+      tuple_type = make_tuple_ty(parser->allocator, 0);
+      tupletype_add(tuple_type, single_type);
+    }
+
+    if (tuple_type) {
+      advance(parser, scanner);
+    }
+
+    single_type = parse_singleton_or_union_type(parser, scanner);
+
+    if (tuple_type) {
+      tupletype_add(tuple_type, single_type);
+    }
+
+    is_tuple = true;
+  } while (match(parser, scanner, TK_COMMA));
+
+  return tuple_type ? tuple_type : single_type;
+}
+
+static Type_* parse_type_expr(Parser_* parser, Scanner_* scanner) {
+  return parse_singleton_or_union_type(parser, scanner);
 }
 
 static Type_* parse_type(Parser_* parser, Scanner_* scanner) {
@@ -242,6 +331,7 @@ void synchronize(Parser_* parser, Scanner_* scanner) {
       case TK_SEMICOLON:
       case TK_EOF:
       case TK_FUNCTION:
+      case TK_TYPE:
         return;
       default:
         ;
@@ -295,17 +385,64 @@ static AstNode_* BlockStatement(Parser_* parser, Scanner_* scanner, Scope_* scop
   return block;
 }
 
-static bool in_assign_first(TokenType_ type) {
-  return
-    type == TK_ID ||
-    type == TK_LPAREN;
-}
-
 static void ExprList(Parser_* parser, Scanner_* scanner, AstList_* exprs, Scope_* scope) {
   TokenType_ tk = parser->current.type;
   do {
     astlist_append(exprs, Expr(parser, scanner, scope));
   } while (match(parser, scanner, TK_COMMA));
+}
+
+static AstNode_* GenericParam(Parser_* parser, Scanner_* scanner, int index, Scope_* scope) {
+  if (!match(parser, scanner, TK_ID)) {
+    error(parser, "");
+    return NULL;
+  }
+
+  AstGenericParam_* param = MAKE_AST_NODE(parser->allocator, AstGenericParam_, scope, parser->current.line);
+  param->name = parse_variable(parser, &parser->previous);
+
+  ConstraintType_* constraint = (ConstraintType_*)make_constraint_ty(parser->allocator, param->name, 0);
+  param->type = (Type_*)constraint;
+  frame_addtype(scope->frame, &param->name, param->type, scope);
+
+  if (match(parser, scanner, TK_COLON)) {
+    advance(parser, scanner);
+    do {
+      Type_* type = parse_unary_type(parser, scanner);
+      list_push(&constraint->self.types, &type);
+    } while (match(parser, scanner, TK_AMPERSAND));
+  }
+
+  return (AstNode_*)param;
+}
+
+static AstNode_* GenericParams(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  if (!match(parser, scanner, TK_LBRACKET)) {
+    return NULL;
+  }
+
+  AstGenericParams_* params = MAKE_AST_NODE(parser->allocator, AstGenericParams_, scope, parser->current.line);
+  params->generic_str = (Token_){ 0 };
+  params->generic_str.start = parser->previous.start;
+  params->generic_str.line = parser->previous.line;
+  astlist_init(&params->params, parser->allocator);  
+  list_of(&params->type_params, ConstraintType_*, parser->allocator);
+
+  int param_index = 0;
+  do {
+    AstNode_* param = GenericParam(parser, scanner, param_index, scope);
+    if (param) {
+      astlist_append(&params->params, param);
+      list_push(&params->type_params, &AST_CAST(AstGenericParam_, param)->type);
+    }
+    ++param_index;
+  } while (match(parser, scanner, TK_COMMA));
+
+  consume(parser, scanner, TK_RBRACKET, "expected ']' at end of generic parameters");
+  params->generic_str.length = (int)(
+    parser->previous.start + parser->previous.length - params->generic_str.start);
+
+  return (AstNode_*)params;
 }
 
 static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope) {
@@ -319,7 +456,7 @@ static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope
   }
 
   consume(parser, scanner, TK_ID, "Expecting parameter name");
-  param->name = parse_variable(parser, scanner, &parser->previous);
+  param->name = parse_variable(parser, &parser->previous);
 
   consume(parser, scanner, TK_COLON, "Expecting colon after parameter name.");
   Type_* type = parse_type(parser, scanner);
@@ -381,7 +518,7 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
 
   Token_ name;
   if (match(parser, scanner, TK_ID)) {
-    name = parse_variable(parser, scanner, &parser->previous);
+    name = parse_variable(parser, &parser->previous);
   } else {
     name = (Token_) { 0 };
   }
@@ -424,57 +561,6 @@ static AstNode_* ReturnStatement(Parser_* parser, Scanner_* scanner, Scope_* sco
   return (AstNode_*)stmt;
 }
 
-static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstClassDef_* def = MAKE_AST_NODE(parser->allocator, AstClassDef_, scope, parser->current.line);
-  astlist_init(&def->members, parser->allocator); 
-
-  consume(parser, scanner, TK_ID, "Class definition must include a name.");
-  def->name = parse_variable(parser, scanner, &parser->previous);
-  Symbol_* cls_sym = frame_addclass(scope->frame, &def->name, scope);
-
-  // consume(parser, scanner, TK_IS, "Expected 'is' after class name.");
-  if (!cls_sym) {
-    error(parser, "class '%.*s already defined.'", def->name.length, def->name.start);
-    return NULL;
-  }
-
-  ClassType_* cls_ty = type_as(ClassType_, cls_sym->ty);
-  def->class_type = cls_sym->ty;
-
-  static const char constructor_str[] = "__constructor";
-  int name_size = sizeof(constructor_str) + def->name.length;
-  char* constructor_name = alloc(parser->allocator, name_size);
-  sprintf_s(constructor_name, name_size, "%.*s%.*s\0", def->name.length, def->name.start, name_size - 1, constructor_str);
-
-  FunctionType_* constructor_ty = (FunctionType_*)make_function_ty(token_string("constructor"), parser->allocator);
-  constructor_ty->ret_ty = cls_sym->ty;
-  constructor_ty->self.opt_name = (Token_){ .start = constructor_name, .length = name_size };
-  cls_ty->constructor = constructor_ty;
-
-  Scope_* class_scope = scope_createfrom(scope);
-  while (check(parser, TK_ID) || check(parser, TK_VAL) || check(parser, TK_VAR)) {
-    AstClassMemberDecl_* decl = (AstClassMemberDecl_*)ClassMemberDecl(parser, scanner, class_scope);
-    astlist_append(&def->members, (AstNode_*)decl);
-
-    ClassTypeField_ class_field = {
-      .type = decl->field_type,
-      .name = decl->name,
-      .opt_expr = decl->opt_expr,
-    };
-    list_push(&cls_ty->members, &class_field);
-
-    if (check(parser, TK_END)) {
-      break;
-    }
-
-    match(parser, scanner, TK_COMMA);
-  }
-
-  consume(parser, scanner, TK_END, "Expected 'end' at the end of a class definition.");
-
-  return (AstNode_*)def;
-}
-
 static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstClassMemberDecl_* decl = MAKE_AST_NODE(parser->allocator, AstClassMemberDecl_, scope, parser->current.line);
 
@@ -486,7 +572,7 @@ static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* sco
   }
 
   consume(parser, scanner, TK_ID, "Class field must include a name.");
-  decl->name = parse_variable(parser, scanner, &parser->previous);
+  decl->name = parse_variable(parser, &parser->previous);
 
   consume(parser, scanner, TK_COLON, "Expected a ':' after class member name.");
   Type_* parsed_type = parse_type(parser, scanner);
@@ -503,10 +589,54 @@ static AstNode_* ClassMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* sco
   return (AstNode_*)decl;
 }
 
+static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstClassDef_* def = MAKE_AST_NODE(parser->allocator, AstClassDef_, scope, parser->current.line);
+  astlist_init(&def->members, parser->allocator); 
+
+  consume(parser, scanner, TK_ID, "Class definition must include a name.");
+  def->name = parse_variable(parser, &parser->previous);
+  def->opt_generics = (AstGenericParams_*)GenericParams(parser, scanner, scope);
+  def->class_type = make_class_ty(def->name, parser->allocator);
+  ClassType_* cls_ty = type_as(ClassType_, def->class_type);
+  Type_* generic_ty = NULL;
+  Symbol_* cls_sym = NULL;
+  if (def->opt_generics) {
+    generic_ty = make_generic_ty(def->class_type, &def->opt_generics->type_params, parser->allocator);
+    cls_sym = frame_addtype(scope->frame, &def->class_type->opt_name, generic_ty, scope);
+  } else {
+    cls_sym = frame_addclass(scope->frame, def->class_type, scope);
+  }
+
+  // consume(parser, scanner, TK_IS, "Expected 'is' after class name.");
+  if (!cls_sym) {
+    error(parser, "class '%.*s already defined.'", def->name.length, def->name.start);
+    return NULL;
+  }
+
+  Scope_* class_scope = scope_createfrom(scope);
+  cls_ty->scope = class_scope;
+  while (check(parser, TK_ID) || check(parser, TK_VAL) || check(parser, TK_VAR)) {
+    AstClassMemberDecl_* decl = (AstClassMemberDecl_*)ClassMemberDecl(parser, scanner, class_scope);
+    astlist_append(&def->members, (AstNode_*)decl);
+
+    type_class_addmember(def->class_type, decl->name, decl->field_type, decl->opt_expr);
+
+    if (check(parser, TK_END)) {
+      break;
+    }
+
+    match(parser, scanner, TK_COMMA);
+  }
+
+  consume(parser, scanner, TK_END, "Expected 'end' at the end of a class definition.");
+
+  return (AstNode_*)def;
+}
+
 static AstNode_* VarDecl(Parser_* parser, Scanner_* scanner, Scope_* scope, TokenType_ decl_token) {  
   AstVarDeclStmt_* stmt = MAKE_AST_STMT(parser->allocator, AstVarDeclStmt_, scope, parser->current.line);
   consume(parser, scanner, TK_ID, "Expected variable name.");
-  stmt->name = parse_variable(parser, scanner, &parser->previous);
+  stmt->name = parse_variable(parser, &parser->previous);
 
   if (!match(parser, scanner, TK_COLON)) {
     error(parser, "Expected a ':' for a variable declaration.");
@@ -522,10 +652,13 @@ static AstNode_* VarDecl(Parser_* parser, Scanner_* scanner, Scope_* scope, Toke
 
   if (decl_token == TK_VAR) {
     stmt->decl_type = make_var_ty(stmt->decl_type, parser->allocator);
-  }  
+  }
 
   if (match(parser, scanner, TK_EQUAL)) {
     stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
+    if (stmt->expr->base.cls == AST_CLS(AstClassConstructor_)) {
+      AST_CAST(AstClassConstructor_, stmt->expr)->name = stmt->name;
+    }
   } else if (type_isunknown(stmt->decl_type)) {
     error_at_current(parser, "Expected an expression for a deduced type variable.");
   }
@@ -662,6 +795,13 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       break;
     }
 
+    case TK_TYPE:
+    {
+      advance(parser, scanner);
+      ret->stmt = TypeDef(parser, scanner, scope);
+      break;
+    }
+
     case TK_PASS:
     case TK_SEMICOLON:
     case TK_EOF:
@@ -719,6 +859,52 @@ static AstNode_* Expr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   return (AstNode_*)ret;
 }
 
+static bool parse_value(Parser_* parser, Value_* ret) {
+  Token_ tk = parser->previous;
+  switch (parser->previous.type) {
+    case TK_NIL:
+      *ret = NIL_VAL;
+      break;
+
+    case TK_TRUE:
+      *ret = TRUE_VAL;
+      break;
+
+    case TK_FALSE:
+      *ret = FALSE_VAL;
+      break;
+
+    case TK_STRING:
+      *ret = OBJ_VAL(objstring_from(tk.start + 1, tk.length - 2));
+      break;
+
+    case TK_NUMBER:
+      if (tk.start[tk.length - 1] == 'f') {
+        *ret = FLOAT_VAL(strtof(tk.start, NULL));
+      } else {
+        *ret = DOUBLE_VAL(strtod(tk.start, NULL));
+      }
+      break;
+
+    case TK_INTEGER:
+      *ret = INT_VAL(strtoll(tk.start, NULL, 10));
+      break;
+
+    default:
+      return false;
+  }
+
+  return true;
+}
+
+static bool parse_value_expr(Parser_* parser, Value_* val) {
+  bool ret = parse_value(parser, val);
+  if (!ret) {
+    error(parser, "Trying to parse unknown token as value: %d", parser->previous.type);
+  }
+  return ret;
+}
+
 static AstPrintStmt_* Print(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrintStmt_* stmt = MAKE_AST_STMT(parser->allocator, AstPrintStmt_, scope, parser->current.line);
   stmt->expr = (AstExpr_*)Expr(parser, scanner, scope);
@@ -733,11 +919,11 @@ static AstNode_* Number(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   if (token.start[token.length - 1] == 'f') {
     float value = strtof(parser->previous.start, NULL);
     expr->base.type = (Type_*)&Float_Ty;
-    expr->value = FLOAT_VAL(value);
+    parse_value_expr(parser, &expr->value);
   } else {
     double value = strtod(parser->previous.start, NULL);
     expr->base.type = (Type_*)&Double_Ty;
-    expr->value = DOUBLE_VAL(value);
+    parse_value_expr(parser, &expr->value);
   }
   
   return (AstNode_*)expr;
@@ -747,7 +933,7 @@ static AstNode_* Integer(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   int64_t value = strtoll(parser->previous.start, NULL, 10);
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
   expr->base.type = (Type_*)&Int_Ty;
-  expr->value = INT_VAL(value);
+  parse_value_expr(parser, &expr->value);
   return (AstNode_*)expr;
 }
 
@@ -775,7 +961,7 @@ static AstNode_* False(Parser_* parser, Scanner_* scanner, Scope_* scope) {
 static AstNode_* String(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstPrimaryExp_* expr = MAKE_AST_EXPR(parser->allocator, AstPrimaryExp_, scope, parser->previous.line);
   expr->base.type = (Type_*)&String_Ty;
-  expr->value = OBJ_VAL(objstring_from(parser->previous.start + 1, parser->previous.length - 2));
+  parse_value_expr(parser, &expr->value);
   return (AstNode_*)expr;
 }
 
@@ -844,7 +1030,7 @@ static AstNode_* Id(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   AstVarExpr_* var_expr = MAKE_AST_EXPR(parser->allocator, AstVarExpr_, scope, parser->previous.line);
   AstIdExpr_* expr = MAKE_AST_EXPR(parser->allocator, AstIdExpr_, scope, parser->previous.line);
   var_expr->expr = (AstExpr_*)expr;
-  expr->name = parse_variable(parser, scanner, &parser->previous);
+  expr->name = parse_variable(parser, &parser->previous);
   return (AstNode_*)var_expr;
 }
 
@@ -890,7 +1076,7 @@ static AstNode_* ClassConstructorParam(Parser_* parser, Scanner_* scanner, Scope
 }
 
 static AstNode_* ClassConstructor(Parser_* parser, Scanner_* scanner, Scope_* scope) {
-  AstClassConstructor_* constructor = MAKE_AST_EXPR(parser->allocator, AstClassConstructor_, scope, parser->previous.line);
+  AstClassConstructor_* constructor = MAKE_AST_EXPR(parser->allocator, AstClassConstructor_, scope, parser->previous.line);  
   astlist_init(&constructor->params, parser->allocator);
   
   if (match(parser, scanner, TK_RBRACE)) {
@@ -917,6 +1103,67 @@ static AstNode_* ClassConstructor(Parser_* parser, Scanner_* scanner, Scope_* sc
 
   consume(parser, scanner, TK_RBRACE, "Expected a '}' to terminate a struct constructor.");
   return (AstNode_*)constructor;
+}
+
+static TypeMemberDecl_* TypeMemberDecl(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  TypeMemberDecl_* member = MAKE_AST_STMT(parser->allocator, TypeMemberDecl_, scope, parser->previous.line);
+
+  Type_* member_type = NULL;
+  if (match(parser, scanner, TK_ID)) {
+    if (check(parser, TK_COLON)) {
+      Token_ name = parse_variable(parser, &parser->previous);
+      member_type = make_field_ty(name, NULL, parser->allocator);
+      advance(parser, scanner);
+    }
+  }
+
+  advance(parser, scanner);
+  Type_* type = parse_type_expr(parser, scanner);
+  if (member_type) {
+    type_as(FieldType_, member_type)->self.ty = type;
+  } else {
+    member_type = type;
+  }
+
+  member->type = member_type;
+
+  return member;
+}
+
+static AstNode_* TypeDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstTypeDef_* type_def = MAKE_AST_STMT(parser->allocator, AstTypeDef_, scope, parser->previous.line);
+  astlist_init(&type_def->members, parser->allocator);
+  type_def->name = parse_variable(parser, &parser->current);
+  advance(parser, scanner);
+
+  type_def->opt_generics = (AstGenericParams_*)GenericParams(parser, scanner, scope);
+
+  if (match(parser, scanner, TK_END)) {
+    type_def->type = (Type_*)&Nil_Ty;
+    return (AstNode_*)type_def;
+  }
+  advance(parser, scanner);
+  type_def->type = parse_singleton_or_tuple_type(parser, scanner);
+  consume(parser, scanner, TK_END, "Expected 'end' at the end of a type definition.");
+
+  if (!frame_addtype(scope->frame, &type_def->name, type_def->type, scope)) {
+    error(parser, "Duplicate type definition for %.*s", type_def->name.length, type_def->name.start);
+  }
+
+  return (AstNode_*)type_def;
+}
+
+static AstNode_* RangeExpr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  return NULL;
+}
+
+static AstNode_* PrefixRangeExpr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstRangeExpr_* expr = MAKE_AST_EXPR(parser->allocator, AstRangeExpr_, scope, parser->previous.line);
+  
+  expr->left = NULL;
+  expr->right = (AstExpr_*)Expr(parser, scanner, scope);
+
+  return (AstNode_*)expr;
 }
 
 static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence, Scope_* scope) {
@@ -950,7 +1197,7 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       AstDotExpr_* new_exp = MAKE_AST_EXPR(parser->allocator, AstDotExpr_, scope, parser->previous.line);
       var_exp->expr = (AstExpr_*)new_exp;
       new_exp->prefix = (AstExpr_*)exp;
-      new_exp->id = parse_variable(parser, scanner, &parser->current);
+      new_exp->id = parse_variable(parser, &parser->current);
       advance(parser, scanner);
       exp = (AstNode_*)var_exp;
     } else if (parser->previous.type == TK_LBRACE) {
@@ -986,6 +1233,13 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       tmp_decl->expr = (AstExpr_*)bin_exp;
 
       exp = (AstNode_*)tmp_decl;
+    } else if (parser->previous.type == TK_DOUBLE_DOT) {
+      AstRangeExpr_* expr = MAKE_AST_EXPR(parser->allocator, AstRangeExpr_, scope, parser->previous.line);
+
+      expr->left = (AstExpr_*)exp;
+      expr->right = (AstExpr_*)Expr(parser, scanner, scope);
+
+      exp = (AstNode_*)expr;
     } else {
       AstBinaryExp_* bin_exp = MAKE_AST_EXPR(parser->allocator, AstBinaryExp_, scope, parser->previous.line);
       bin_exp->base.type = make_unknown_ty(parser->allocator);
@@ -1004,104 +1258,105 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
 }
 
 static ParseRule_ rules[] = {
-  [TK_EOF]               = {NULL,        NULL,              PREC_NONE},
-  [TK_ERR]               = {NULL,        NULL,              PREC_NONE},
-  [TK_ID]                = {Id,          NULL,              PREC_NONE},
-  [TK_LPAREN]            = {grouping,    FunctionCallArgs,  PREC_CALL},
-  [TK_RPAREN]            = {NULL,        NULL,              PREC_NONE},
-  [TK_LBRACKET]          = {ArrayValue,  IndexExpr,         PREC_CALL},
-  [TK_RBRACKET]          = {NULL,        NULL,              PREC_NONE},
-  [TK_LBRACE]            = {NULL,        ClassConstructor,  PREC_CALL},
-  [TK_RBRACE]            = {NULL,        NULL,              PREC_NONE},
-  [TK_SEMICOLON]         = {NULL,        NULL,              PREC_NONE},
-  [TK_COLON]             = {NULL,        NULL,              PREC_NONE},
-  [TK_DOT]               = {NULL,        BinaryOp,          PREC_CALL},
-  [TK_COMMA]             = {NULL,        NULL,              PREC_NONE},
-  [TK_PLUS]              = {NULL,        BinaryOp,          PREC_TERM},
-  [TK_MINUS]             = {UnaryOp,     BinaryOp,          PREC_TERM},
-  [TK_AMPERSAND]         = {NULL,        BinaryOp,          PREC_BITWISE_AND},
-  [TK_PIPE]              = {NULL,        BinaryOp,          PREC_BITWISE_OR},
-  [TK_HAT]               = {NULL,        BinaryOp,          PREC_BITWISE_XOR},
-  [TK_TILDE]             = {UnaryOp,     NULL,              PREC_UNARY},
-  [TK_STAR]              = {NULL,        BinaryOp,          PREC_FACTOR},
-  [TK_PERCENT]           = {NULL,        BinaryOp,          PREC_FACTOR},
-  [TK_QUESTION]          = {NULL,        NULL,              PREC_NONE},
-  [TK_BANG]              = {NULL,        NULL,              PREC_NONE},
-  [TK_BANG_EQUAL]        = {NULL,        BinaryOp,          PREC_EQUALITY},
-  [TK_EQUAL]             = {NULL,        BinaryOp,          PREC_ASSIGNMENT},
-  [TK_EQUAL_EQUAL]       = {NULL,        BinaryOp,          PREC_EQUALITY},
-  [TK_GT]                = {NULL,        BinaryOp,          PREC_COMPARISON},
-  [TK_GTE]               = {NULL,        BinaryOp,          PREC_COMPARISON},
-  [TK_RSHIFT]            = {NULL,        BinaryOp,          PREC_SHIFT},
-  [TK_LT]                = {NULL,        BinaryOp,          PREC_COMPARISON},
-  [TK_LTE]               = {NULL,        BinaryOp,          PREC_COMPARISON},
-  [TK_LSHIFT]            = {NULL,        BinaryOp,          PREC_SHIFT},
-  [TK_ARROW]             = {NULL,        NULL,              PREC_NONE},
-  [TK_FAT_ARROW]         = {NULL,        NULL,              PREC_NONE},
-  [TK_SLASH]             = {NULL,        BinaryOp,          PREC_FACTOR},
-  [TK_DOUBLE_SLASH]      = {NULL,        BinaryOp,          PREC_FACTOR},
-  [TK_DOUBLE_DOT]        = {NULL,        NULL,              PREC_NONE},
-  [TK_TRIPLE_DOT]        = {NULL,        NULL,              PREC_NONE},
-  [TK_QQ]                = {NULL,        NULL,              PREC_NONE},
-  [TK_QQE]               = {NULL,        NULL,              PREC_NONE},
-  [TK_PLUS_EQUAL]        = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_MINUS_EQUAL]       = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_AMPERSAND_EQUAL]   = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_PIPE_EQUAL]        = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_HAT_EQUAL]         = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_TILDE_EQUAL]       = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_STAR_EQUAL]        = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_PERCENT_EQUAL]     = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_SLASH_EQUAL]       = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_SLASH_SLASH_EQUAL] = {NULL,        InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_STRING]            = {String,      NULL,              PREC_NONE},
-  [TK_INTEGER]           = {Integer,     NULL,              PREC_NONE},
-  [TK_NUMBER]            = {Number,      NULL,              PREC_NONE},
-  [TK_DO]                = {NULL,        NULL,              PREC_NONE},
-  [TK_END]               = {NULL,        NULL,              PREC_NONE},
-  [TK_IF]                = {NULL,        NULL,              PREC_NONE},
-  [TK_THEN]              = {NULL,        NULL,              PREC_NONE},
-  [TK_ELIF]              = {NULL,        NULL,              PREC_NONE},
-  [TK_ELSE]              = {NULL,        NULL,              PREC_NONE},
-  [TK_FOR]               = {NULL,        NULL,              PREC_NONE},
-  [TK_IN]                = {NULL,        NULL,              PREC_NONE},
-  [TK_STEP]              = {NULL,        NULL,              PREC_NONE},
-  [TK_WHILE]             = {NULL,        NULL,              PREC_NONE},
-  [TK_REPEAT]            = {NULL,        NULL,              PREC_NONE},
-  [TK_UNTIL]             = {NULL,        NULL,              PREC_NONE},
-  [TK_CLASS]             = {NULL,        NULL,              PREC_NONE},
-  [TK_IS]                = {NULL,        NULL,              PREC_NONE},
-  [TK_MATCH]             = {NULL,        NULL,              PREC_NONE},
-  [TK_CASE]              = {NULL,        NULL,              PREC_NONE},
-  [TK_FUNCTION]          = {FunctionDef, NULL,              PREC_FUNCTION},
-  [TK_RETURN]            = {NULL,        NULL,              PREC_NONE},
-  [TK_PRINT]             = {NULL,        NULL,              PREC_NONE},
-  [TK_AND]               = {NULL,        BinaryOp,          PREC_AND},
-  [TK_OR]                = {NULL,        BinaryOp,          PREC_OR},
-  [TK_XOR]               = {NULL,        BinaryOp,          PREC_XOR},
-  [TK_NOT]               = {UnaryOp,     NULL,              PREC_UNARY},
-  [TK_TRUE]              = {True,        NULL,              PREC_NONE},
-  [TK_FALSE]             = {False,       NULL,              PREC_NONE},
-  [TK_PASS]              = {NULL,        NULL,              PREC_NONE},
-  [TK_VAL]               = {NULL,        NULL,              PREC_NONE},
-  [TK_VAR]               = {NULL,        NULL,              PREC_NONE},
-  [TK_REF]               = {NULL,        NULL,              PREC_NONE},
-  [TK_NIL]               = {Nil,         NULL,              PREC_NONE},
-  [TK_NEW]               = {UnaryOp,     NULL,              PREC_UNARY},
-  [TK_DEL]               = {UnaryOp,     NULL,              PREC_UNARY},
-  [TK_ASSERT]            = {NULL,        NULL,              PREC_NONE},
-  [TK_BOOL]              = {NULL,        NULL,              PREC_NONE},
-  [TK_INT]               = {Type,        NULL,              PREC_NONE},
-  [TK_UINT]              = {Type,        NULL,              PREC_NONE},
-  [TK_FLOAT]             = {Type,        NULL,              PREC_NONE},
-  [TK_DOUBLE]            = {Type,        NULL,              PREC_NONE},
-  [TK_STRING_TYPE]       = {Type,        NULL,              PREC_NONE},
-  [TK_LIST]              = {Type,        NULL,              PREC_NONE},
-  [TK_MAP]               = {Type,        NULL,              PREC_NONE},
-  [TK_SET]               = {Type,        NULL,              PREC_NONE},
-  [TK_ASYNC]             = {NULL,        NULL,              PREC_NONE},
-  [TK_AWAIT]             = {NULL,        NULL,              PREC_NONE},
-  [TK_YIELD]             = {NULL,        NULL,              PREC_NONE},
+  [TK_EOF]               = {NULL,             NULL,              PREC_NONE},
+  [TK_ERR]               = {NULL,             NULL,              PREC_NONE},
+  [TK_ID]                = {Id,               NULL,              PREC_NONE},
+  [TK_LPAREN]            = {grouping,         FunctionCallArgs,  PREC_CALL},
+  [TK_RPAREN]            = {NULL,             NULL,              PREC_NONE},
+  [TK_LBRACKET]          = {ArrayValue,       IndexExpr,         PREC_CALL},
+  [TK_RBRACKET]          = {NULL,             NULL,              PREC_NONE},
+  [TK_LBRACE]            = {ClassConstructor, ClassConstructor,  PREC_CALL},
+  [TK_RBRACE]            = {NULL,             NULL,              PREC_NONE},
+  [TK_SEMICOLON]         = {NULL,             NULL,              PREC_NONE},
+  [TK_COLON]             = {NULL,             NULL,              PREC_NONE},
+  [TK_DOT]               = {NULL,             BinaryOp,          PREC_CALL},
+  [TK_COMMA]             = {NULL,             NULL,              PREC_NONE},
+  [TK_PLUS]              = {NULL,             BinaryOp,          PREC_TERM},
+  [TK_MINUS]             = {UnaryOp,          BinaryOp,          PREC_TERM},
+  [TK_AMPERSAND]         = {NULL,             BinaryOp,          PREC_BITWISE_AND},
+  [TK_PIPE]              = {NULL,             BinaryOp,          PREC_BITWISE_OR},
+  [TK_HAT]               = {NULL,             BinaryOp,          PREC_BITWISE_XOR},
+  [TK_TILDE]             = {UnaryOp,          NULL,              PREC_UNARY},
+  [TK_STAR]              = {NULL,             BinaryOp,          PREC_FACTOR},
+  [TK_PERCENT]           = {NULL,             BinaryOp,          PREC_FACTOR},
+  [TK_QUESTION]          = {NULL,             NULL,              PREC_NONE},
+  [TK_BANG]              = {NULL,             NULL,              PREC_NONE},
+  [TK_BANG_EQUAL]        = {NULL,             BinaryOp,          PREC_EQUALITY},
+  [TK_EQUAL]             = {NULL,             BinaryOp,          PREC_ASSIGNMENT},
+  [TK_EQUAL_EQUAL]       = {NULL,             BinaryOp,          PREC_EQUALITY},
+  [TK_GT]                = {NULL,             BinaryOp,          PREC_COMPARISON},
+  [TK_GTE]               = {NULL,             BinaryOp,          PREC_COMPARISON},
+  [TK_RSHIFT]            = {NULL,             BinaryOp,          PREC_SHIFT},
+  [TK_LT]                = {NULL,             BinaryOp,          PREC_COMPARISON},
+  [TK_LTE]               = {NULL,             BinaryOp,          PREC_COMPARISON},
+  [TK_LSHIFT]            = {NULL,             BinaryOp,          PREC_SHIFT},
+  [TK_ARROW]             = {NULL,             NULL,              PREC_NONE},
+  [TK_FAT_ARROW]         = {NULL,             NULL,              PREC_NONE},
+  [TK_SLASH]             = {NULL,             BinaryOp,          PREC_FACTOR},
+  [TK_DOUBLE_SLASH]      = {NULL,             BinaryOp,          PREC_FACTOR},
+  [TK_DOUBLE_DOT]        = {NULL,             RangeExpr,         PREC_NONE},
+  [TK_TRIPLE_DOT]        = {NULL,             NULL,              PREC_NONE},
+  [TK_QQ]                = {NULL,             NULL,              PREC_NONE},
+  [TK_QQE]               = {NULL,             NULL,              PREC_NONE},
+  [TK_PLUS_EQUAL]        = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_MINUS_EQUAL]       = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_AMPERSAND_EQUAL]   = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_PIPE_EQUAL]        = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_HAT_EQUAL]         = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_TILDE_EQUAL]       = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_STAR_EQUAL]        = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_PERCENT_EQUAL]     = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_SLASH_EQUAL]       = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_SLASH_SLASH_EQUAL] = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
+  [TK_STRING]            = {String,           NULL,              PREC_NONE},
+  [TK_INTEGER]           = {Integer,          NULL,              PREC_NONE},
+  [TK_NUMBER]            = {Number,           NULL,              PREC_NONE},
+  [TK_DO]                = {NULL,             NULL,              PREC_NONE},
+  [TK_END]               = {NULL,             NULL,              PREC_NONE},
+  [TK_IF]                = {NULL,             NULL,              PREC_NONE},
+  [TK_THEN]              = {NULL,             NULL,              PREC_NONE},
+  [TK_ELIF]              = {NULL,             NULL,              PREC_NONE},
+  [TK_ELSE]              = {NULL,             NULL,              PREC_NONE},
+  [TK_FOR]               = {NULL,             NULL,              PREC_NONE},
+  [TK_IN]                = {NULL,             NULL,              PREC_NONE},
+  [TK_STEP]              = {NULL,             NULL,              PREC_NONE},
+  [TK_WHILE]             = {NULL,             NULL,              PREC_NONE},
+  [TK_REPEAT]            = {NULL,             NULL,              PREC_NONE},
+  [TK_UNTIL]             = {NULL,             NULL,              PREC_NONE},
+  [TK_CLASS]             = {NULL,             NULL,              PREC_NONE},
+  [TK_IS]                = {NULL,             NULL,              PREC_NONE},
+  [TK_MATCH]             = {NULL,             NULL,              PREC_NONE},
+  [TK_CASE]              = {NULL,             NULL,              PREC_NONE},
+  [TK_FUNCTION]          = {FunctionDef,      NULL,              PREC_FUNCTION},
+  [TK_RETURN]            = {NULL,             NULL,              PREC_NONE},
+  [TK_PRINT]             = {NULL,             NULL,              PREC_NONE},
+  [TK_AND]               = {NULL,             BinaryOp,          PREC_AND},
+  [TK_OR]                = {NULL,             BinaryOp,          PREC_OR},
+  [TK_XOR]               = {NULL,             BinaryOp,          PREC_XOR},
+  [TK_NOT]               = {UnaryOp,          NULL,              PREC_UNARY},
+  [TK_TRUE]              = {True,             NULL,              PREC_NONE},
+  [TK_FALSE]             = {False,            NULL,              PREC_NONE},
+  [TK_PASS]              = {NULL,             NULL,              PREC_NONE},
+  [TK_VAL]               = {NULL,             NULL,              PREC_NONE},
+  [TK_VAR]               = {NULL,             NULL,              PREC_NONE},
+  [TK_REF]               = {NULL,             NULL,              PREC_NONE},
+  [TK_NIL]               = {Nil,              NULL,              PREC_NONE},
+  [TK_NEW]               = {UnaryOp,          NULL,              PREC_UNARY},
+  [TK_DEL]               = {UnaryOp,          NULL,              PREC_UNARY},
+  [TK_ASSERT]            = {NULL,             NULL,              PREC_NONE},
+  [TK_TYPE]              = {NULL,             NULL,              PREC_NONE},
+  [TK_BOOL]              = {NULL,             NULL,              PREC_NONE},
+  [TK_INT]               = {Type,             NULL,              PREC_NONE},
+  [TK_UINT]              = {Type,             NULL,              PREC_NONE},
+  [TK_FLOAT]             = {Type,             NULL,              PREC_NONE},
+  [TK_DOUBLE]            = {Type,             NULL,              PREC_NONE},
+  [TK_STRING_TYPE]       = {Type,             NULL,              PREC_NONE},
+  [TK_LIST]              = {Type,             NULL,              PREC_NONE},
+  [TK_MAP]               = {Type,             NULL,              PREC_NONE},
+  [TK_SET]               = {Type,             NULL,              PREC_NONE},
+  [TK_ASYNC]             = {NULL,             NULL,              PREC_NONE},
+  [TK_AWAIT]             = {NULL,             NULL,              PREC_NONE},
+  [TK_YIELD]             = {NULL,             NULL,              PREC_NONE},
 };
 // Static assert to make sure that all token types are accounted for.
 STATIC_ASSERT(
@@ -1120,7 +1375,7 @@ static void error_at(Parser_* parser, Token_* token, const char* const message, 
   fprintf(stderr, "[line %d] Error", token->line);
 
   if (token->type == TK_EOF) {
-    fprintf(stderr, " at end");
+    fprintf(stderr, " at EOF: ");
   }
   else if (token->type == TK_ERR) {
     // Nothing.

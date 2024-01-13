@@ -8,6 +8,7 @@
 #include <ctype.h>
 
 
+static void reverse(Scanner scanner);
 static char advance(Scanner scanner);
 static bool isatend(Scanner scanner);
 static Token_ make_token(Scanner scanner, TokenType_ info);
@@ -20,6 +21,7 @@ static char peek_next(Scanner scanner);
 
 static Token_ match_string(Scanner scanner, char string_token);
 static Token_ match_number(Scanner scanner);
+static Token_ match_integer(Scanner scanner);
 static Token_ match_fractional(Scanner scanner);
 static Token_ match_identifier(Scanner scanner);
 static TokenType_ identifier_type(Scanner scanner);
@@ -46,7 +48,18 @@ Token_ scanner_scan(Scanner scanner) {
 
   char c = advance(scanner);
   if (isalpha(c) || c == '_') return match_identifier(scanner);
-  if (isdigit(c)) return match_number(scanner);
+  if (isdigit(c)) {
+    while (isdigit(peek(scanner))) advance(scanner);
+    if (match(scanner, '.')) {
+      if (match(scanner, '.')) {
+        reverse(scanner);
+        reverse(scanner);
+        return make_token(scanner, TK_INTEGER);
+      }
+      reverse(scanner);
+    }
+    return match_number(scanner);
+  }
 
   switch (c) {
     // Single-character tokens.
@@ -119,44 +132,65 @@ Token_ scanner_scan(Scanner scanner) {
     
     case '+':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_PLUS_EQUAL);
-      else return make_token(scanner, TK_PLUS);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_PLUS_EQUAL);
+      }
+      return make_token(scanner, TK_PLUS);
     }
 
     case '&':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_AMPERSAND_EQUAL);
-      else return make_token(scanner, TK_AMPERSAND);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_AMPERSAND_EQUAL);
+      }
+      return make_token(scanner, TK_AMPERSAND);
     }
 
     case '|':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_PIPE_EQUAL);
-      else return make_token(scanner, TK_PIPE);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_PIPE_EQUAL);
+      }
+      return make_token(scanner, TK_PIPE);
     }
 
     case '^':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_HAT_EQUAL);
-      else return make_token(scanner, TK_HAT);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_HAT_EQUAL);
+      }
+      return make_token(scanner, TK_HAT);
     }
 
     case '~':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_TILDE_EQUAL);
-      else return make_token(scanner, TK_TILDE);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_TILDE_EQUAL);
+      }
+      return make_token(scanner, TK_TILDE);
     }
 
     case '*':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_STAR_EQUAL);
-      else return make_token(scanner, TK_STAR);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_STAR_EQUAL);
+      }
+      return make_token(scanner, TK_STAR);
     }
 
     case '%':
     {
-      if (match(scanner, '=')) return make_token(scanner, TK_PERCENT_EQUAL);
-      else return make_token(scanner, TK_PERCENT);
+      if (peek(scanner) == '=') {
+        advance(scanner);
+        return make_token(scanner, TK_PERCENT_EQUAL);
+      }
+      return make_token(scanner, TK_PERCENT);
     }
 
     // -, ->
@@ -178,8 +212,9 @@ Token_ scanner_scan(Scanner scanner) {
         case '/':
         {
           advance(scanner);
-          if (match(scanner, '=')) {
-            make_token(scanner, TK_SLASH_SLASH_EQUAL);
+          if (peek(scanner) == '=') {
+            advance(scanner);
+            return make_token(scanner, TK_SLASH_SLASH_EQUAL);
           } else {
             return make_token(scanner, TK_DOUBLE_SLASH);
           }
@@ -221,6 +256,10 @@ Token_ scanner_scan(Scanner scanner) {
 static char advance(Scanner scanner) {
   scanner->current++;
   return scanner->current[-1];
+}
+
+static void reverse(Scanner scanner) {
+  scanner->current--;
 }
 
 static Token_ make_token(Scanner scanner, TokenType_ info) {
@@ -340,6 +379,12 @@ static Token_ match_number(Scanner scanner) {
   }
 
   return make_token(scanner, info);
+}
+
+static Token_ match_integer(Scanner scanner) {
+  while (isdigit(peek(scanner))) advance(scanner);
+
+  return make_token(scanner, TK_INTEGER);
 }
 
 static Token_ match_fractional(Scanner scanner) {
@@ -534,6 +579,7 @@ static TokenType_ identifier_type(Scanner scanner) {
         switch (scanner->start[1]) {
           case 'h': return check_keyword(scanner, 2, 2, "en", TK_THEN);
           case 'r': return check_keyword(scanner, 2, 2, "ue", TK_TRUE);
+          case 'y': return check_keyword(scanner, 2, 2, "pe", TK_TYPE);
         }
       }
       break;

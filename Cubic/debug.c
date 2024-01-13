@@ -1,5 +1,6 @@
 #include "debug.h"
 #include "object.h"
+#include "value.h"
 
 #include <stdio.h>
 

@@ -13,22 +13,24 @@ typedef struct Value_ Value_;
 
 typedef enum {
   // A symbol that is a value or has a reference on the stack.
-  SYMBOL_TYPE_VAR,
+  SYMBOL_CLS_VAR,
 
   // A symbol holding return and parameter typing.
-  SYMBOL_TYPE_FN,
+  SYMBOL_CLS_FN,
 
   // A symbol holding member typing.
-  SYMBOL_TYPE_CLASS,
+  SYMBOL_CLS_CLASS,
 
   // A field within a struct.
-  SYMBOL_TYPE_FIELD,
+  SYMBOL_CLS_FIELD,
 
-  SYMBOL_TYPE_CLOSURE,
+  SYMBOL_CLS_CLOSURE,
 
   // A symbol that lives on the stack temporarily during an expression
   // evaluation. 
-  SYMBOL_TYPE_TMP,
+  SYMBOL_CLS_TMP,
+
+  SYMBOL_CLS_TYPE,
 } SymbolCls_;
 
 #define MAKE_SEMANTIC_INFO(TYPE) ((SemanticType_){.info = (TYPE), .sym = NULL})
@@ -62,6 +64,10 @@ typedef struct ArraySymbol_ {
   int a;
 } ArraySymbol_;
 
+typedef struct TypeDefSymbol_ {
+  int unused;
+} TypeDefSymbol_;
+
 typedef struct Symbol_ {
   SymbolCls_ type;
 
@@ -74,7 +80,8 @@ typedef struct Symbol_ {
     VarSymbol_ var;
     FunctionSymbol_ fn;
     ClosureSymbol_ closure;
-  };  
+    TypeDefSymbol_ type_def;
+  };
 } Symbol_;
 
 #endif  // SYMBOL__H

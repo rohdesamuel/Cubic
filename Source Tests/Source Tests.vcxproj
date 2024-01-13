@@ -186,8 +186,10 @@
   <ItemGroup>
     <None Include="arrays.cub" />
     <None Include="closures.cub" />
+    <None Include="constraints.cub" />
     <None Include="fib.cub" />
     <None Include="functions.cub" />
+    <None Include="generics.cub" />
     <None Include="global_variables.cub" />
     <None Include="for_loops.cub" />
     <None Include="lambdas.cub" />
@@ -196,6 +198,7 @@
     <None Include="operators.cub" />
     <None Include="optionals.cub" />
     <None Include="precedence.cub" />
+    <None Include="range_expressions.cub" />
     <None Include="references.cub" />
     <None Include="scope.cub" />
     <None Include="local_variables.cub" />

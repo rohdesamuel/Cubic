@@ -2,7 +2,7 @@
 #define VALUE__H
 
 #include "common.h"
-#include "type.h"
+#include "runtime_type.h"
 
 #define AS_BOOL(value)         ((value).as.b)
 #define AS_INT(value)          ((value).as.i)

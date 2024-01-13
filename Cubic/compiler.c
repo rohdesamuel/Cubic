@@ -47,6 +47,7 @@ bool compile(const char* source, Chunk_* chunk) {
 
   scanner_init(&scanner, source);
   parser_init(&parser, (MemoryAllocator_*)&allocator);
+  analyzererrors_init(&error_manager, (MemoryAllocator_*)&allocator);
   analyzer_init(&analyzer, (MemoryAllocator_*)&allocator);
   tac_compiler_init(&tac_compiler, (MemoryAllocator_*)&allocator);
   compiler_init(&compiler, (MemoryAllocator_*)&allocator);

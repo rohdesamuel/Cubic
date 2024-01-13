@@ -55,7 +55,7 @@ FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Block
 VarDecl ::= IdList ':' (UnionType ['=' ExprList] | '=' ExprList)
 ValDecl ::= 'val' VarDecl
 RefDecl ::= 'var' VarDecl
-ClassDef ::= 'class' {ClassMemberDecl} 'end'
+ClassDef ::= 'class' Id [ '[' Id ':'  ']' ] {ClassMemberDecl} 'end'
 ClassMemberDecl ::= [pub] [('val' | 'var')] IdList ':' UnionType ['=' ExprList]
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -121,6 +121,7 @@ Expr ::= Primary
     | FunctionDef
     | PrefixExpr
     | Expr BinaryOp Expr
+    | Expr .. Expr
     | UnaryOp Var
     | 'await' Expr
     | 'async' Expr
@@ -128,6 +129,7 @@ Expr ::= Primary
     | ClassConstructor
 
 AssignmentExpr ::= VarList '=' ExprList
+RangeExpr ::= 
 
 Primary ::= 'nil'
     | 'false'
