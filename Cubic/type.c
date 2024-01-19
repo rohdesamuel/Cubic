@@ -119,6 +119,7 @@ const StringType_ String_Ty = {
 };
 
 static Type_* type_replace_decltype(Type_* ty, Type_* replace_with, MemoryAllocator_* allocator);
+static void generictype_bindargs(Type_* generic_ty, List_* type_args, Frame_* frame, Scope_* scope);
 
 Type_* type_deref(Type_* type) {
   if (type_is(type, Type_)) {
@@ -134,20 +135,12 @@ Type_* make_unknown_ty(MemoryAllocator_* allocator) {
 
   return (Type_*)ret;
 }
-Type_* copy_unknown_ty(Type_* ty, MemoryAllocator_* allocator) {
-  Type_* ret = make_unknown_ty(allocator);
-  *ret = *ty;
-  return ret;
-}
 
 Type_* make_placeholder_ty(Token_ name, MemoryAllocator_* allocator) {
   Type_* ret = make_unknown_ty(allocator);
   ret->opt_name = name;
 
   return (Type_*)ret;
-}
-Type_* copy_placeholder_ty(Type_* ty, MemoryAllocator_* allocator) {
-  return copy_unknown_ty(ty, allocator);
 }
 
 Type_* make_primitive_ty(int primitive_type, MemoryAllocator_* allocator) {
@@ -158,21 +151,10 @@ Type_* make_primitive_ty(int primitive_type, MemoryAllocator_* allocator) {
 
   return (Type_*)ret;
 }
-Type_* copy_primitive_ty(Type_* ty, MemoryAllocator_* allocator) {
-  Type_* ret = alloc(allocator, sizeof(Type_));
-  *ret = *ty;
-  return ret;
-}
 
 Type_* make_const_ty(Type_* sub_type, MemoryAllocator_* allocator) {
   ConstType_* ret = type_alloc_ty(allocator, ConstType_);
   ret->unary.ty = sub_type;
-  return (Type_*)ret;
-}
-Type_* copy_const_ty(Type_* ty, MemoryAllocator_* allocator) {
-  ConstType_* ret = type_alloc_ty(allocator, ConstType_);
-  *(Type_*)ret = *ty;
-  ret->unary.ty = type_copy(type_cast(ConstType_, ty)->unary.ty, allocator);
   return (Type_*)ret;
 }
 
@@ -181,22 +163,10 @@ Type_* make_var_ty(Type_* sub_type, MemoryAllocator_* allocator) {
   ret->unary.ty = sub_type;
   return (Type_*)ret;
 }
-Type_* copy_var_ty(Type_* ty, MemoryAllocator_* allocator) {
-  VarType_* ret = type_alloc_ty(allocator, VarType_);
-  *(Type_*)ret = *ty;
-  ret->unary.ty = type_copy(type_cast(VarType_, ty)->unary.ty, allocator);
-  return (Type_*)ret;
-}
 
 Type_* make_ref_ty(Type_* sub_type, MemoryAllocator_* allocator) {
   RefType_* ret = type_alloc_ty(allocator, RefType_);
   ret->unary.ty = sub_type;
-  return (Type_*)ret;
-}
-Type_* copy_ref_ty(Type_* ty, MemoryAllocator_* allocator) {
-  RefType_* ret = type_alloc_ty(allocator, RefType_);
-  *(Type_*)ret = *ty;
-  ret->unary.ty = type_copy(type_cast(RefType_, ty)->unary.ty, allocator);
   return (Type_*)ret;
 }
 
@@ -205,22 +175,10 @@ Type_* make_in_ty(Type_* sub_type, MemoryAllocator_* allocator) {
   ret->unary.ty = sub_type;
   return (Type_*)ret;
 }
-Type_* copy_in_ty(Type_* ty, MemoryAllocator_* allocator) {
-  InType_* ret = type_alloc_ty(allocator, InType_);
-  *(Type_*)ret = *ty;
-  ret->unary.ty = type_copy(type_cast(InType_, ty)->unary.ty, allocator);
-  return (Type_*)ret;
-}
 
 Type_* make_out_ty(Type_* sub_type, MemoryAllocator_* allocator) {
   OutType_* ret = type_alloc_ty(allocator, OutType_);
   ret->unary.ty = sub_type;
-  return (Type_*)ret;
-}
-Type_* copy_out_ty(Type_* ty, MemoryAllocator_* allocator) {
-  OutType_* ret = type_alloc_ty(allocator, OutType_);
-  *(Type_*)ret = *ty;
-  ret->unary.ty = type_copy(type_cast(OutType_, ty)->unary.ty, allocator);
   return (Type_*)ret;
 }
 
@@ -228,11 +186,6 @@ Type_* make_array_ty(Type_* el_type, size_t count, MemoryAllocator_* allocator) 
   ArrayType_* ret = type_alloc_ty(allocator, ArrayType_);
   ret->el_type = el_type;
   ret->count = count;
-  return (Type_*)ret;
-}
-Type_* copy_array_ty(Type_* ty, MemoryAllocator_* allocator) {
-  ArrayType_* ret = type_alloc_ty(allocator, ArrayType_);
-  *(ArrayType_*)ret = *type_cast(ArrayType_, ty);
   return (Type_*)ret;
 }
 
@@ -253,40 +206,12 @@ Type_* make_class_ty(Token_ name, MemoryAllocator_* allocator) {
 
   return (Type_*)ret;
 }
-Type_* copy_class_ty(Type_* ty, MemoryAllocator_* allocator) {
-  ClassType_* ret = type_alloc_ty(allocator, ClassType_);
-  ClassType_* from = type_as(ClassType_, ty);
-  *(Type_*)ret = *ty;
-
-  list_of(&ret->members, ClassTypeField_, allocator);
-
-  static const char constructor_str[] = "__constructor";
-  int name_size = sizeof(constructor_str) + ret->self.opt_name.length;
-  char* constructor_name = alloc(allocator, name_size);
-  sprintf_s(constructor_name, name_size, "%.*s%.*s\0", ret->self.opt_name.length, ret->self.opt_name.start, name_size - 1, constructor_str);
-
-  ret->constructor = type_as(FunctionType_, type_copy((Type_*)from->constructor, allocator));
-
-  for (ListNode_* n = from->members.head; n != NULL; n = n->next) {
-    ClassTypeField_ field = list_val(n, ClassTypeField_);
-    field.type = type_copy(field.type, allocator);
-    list_push(&ret->members, &field);
-  }
-
-  return (Type_*)ret;
-}
 
 Type_* make_function_ty(Token_ name, MemoryAllocator_* allocator) {
   FunctionType_* ret = type_alloc_ty(allocator, FunctionType_);
+  ret->self.opt_name = name;
   ret->ret_ty = (Type_*)&Nil_Ty;
   list_of(&ret->params, Type_*, allocator);
-  return (Type_*)ret;
-}
-Type_* copy_function_ty(Type_* ty, MemoryAllocator_* allocator) {
-  ArrayType_* ret = type_alloc_ty(allocator, ArrayType_);
-  *(Type_*)ret = *ty;
-  ret->el_type = type_cast(ArrayType_, ty)->el_type;
-  ret->count = type_cast(ArrayType_, ty)->count;
   return (Type_*)ret;
 }
 
@@ -340,11 +265,11 @@ Type_* make_constraint_ty(MemoryAllocator_* allocator, Token_ name, int n, ...) 
 }
 
 Type_* make_field_ty(Token_ field_name, Type_* sub_type, MemoryAllocator_* allocator) {
-  FieldType_* field = type_alloc_ty(allocator, FieldType_);
-  field->name = field_name;
-  field->self.ty = sub_type;
+  FieldType_* ret = type_alloc_ty(allocator, FieldType_);
+  ret->name = field_name;
+  ret->self.ty = sub_type;
 
-  return (Type_*)field;
+  return (Type_*)ret;
 }
 
 Type_* make_array_or_generic_ty(Token_ name, MemoryAllocator_* allocator) {
@@ -355,37 +280,22 @@ Type_* make_array_or_generic_ty(Token_ name, MemoryAllocator_* allocator) {
   return (Type_*)ret;
 }
 
-Type_* make_generic_ty(Type_* prototype, List_* type_params, MemoryAllocator_* allocator) {
+Type_* make_generic_ty(Type_* prototype, List_* type_params, struct Scope_* scope, MemoryAllocator_* allocator) {
   GenericType_* ret = type_alloc_ty(allocator, GenericType_);
   ret->unary.self.opt_name = prototype->opt_name;
   ret->prototype = prototype;
   ret->params = *type_params;
-  return (Type_*)ret;
-}
-Type_* copy_generic_ty(Type_* ty, MemoryAllocator_* allocator) {
-  GenericType_* ret = type_alloc_ty(allocator, GenericType_);
-  *(Type_*)ret = *ty;
-
-  GenericType_* from = type_as(GenericType_, ty);
-  ret->prototype = from->prototype;
-  list_of(&ret->params, ConstraintType_*, allocator);
-
-  for (ListNode_* n = from->params.head; n != NULL; n = n->next) {
-    ConstraintType_* constraint = list_val(n, ConstraintType_*);
-    
-  }
-
+  ret->scope = scope;
   return (Type_*)ret;
 }
 
-
-
-Type_* make_genericimpl_ty(Type_* generic_ty, ListOf_(TypeArgument_)* type_args, MemoryAllocator_* allocator) {
+Type_* make_genericimpl_ty(Type_* generic_ty, ListOf_(TypeArgument_)* type_args, struct Scope_* scope, MemoryAllocator_* allocator) {
   GenericImplType_* ret = type_alloc_ty(allocator, GenericImplType_);
   ret->unary.self.opt_name = generic_ty->opt_name;
   ret->generic_type = type_as(GenericType_, generic_ty);
   ret->args_count = ret->generic_type->params.count;
   ret->args = alloc(allocator, ret->args_count * sizeof(ret->args[0]));
+  ret->scope = scope_createfrom(scope);
 
   size_t index = 0;
   for (ListNode_* arg = type_args->head; arg != NULL; arg = arg->next) {
@@ -395,6 +305,8 @@ Type_* make_genericimpl_ty(Type_* generic_ty, ListOf_(TypeArgument_)* type_args,
     ret->args[index] = type_arg.type;
     ++index;
   }
+
+  generictype_bindargs(generic_ty, type_args, ret->scope->frame, ret->scope);
 
   return (Type_*)ret;
 }
@@ -483,7 +395,7 @@ static bool constrainttype_satisfied(ConstraintType_* constraints_ty, Type_* ty)
   return true;
 }
 
-static bool analyze_generic(const Type_* generic_ty, List_* type_args) {
+static bool analyze_generic(const Type_* generic_ty, List_* type_args, Scope_* scope) {
   GenericType_* generic = type_as(GenericType_, generic_ty);
   List_* type_params = &generic->params;
 
@@ -501,6 +413,13 @@ static bool analyze_generic(const Type_* generic_ty, List_* type_args) {
     if (!arg->is_type) {
       printf("Type argument is not type");
       return false;
+    }
+
+    for (ListNode_* constraint_n = constraints->self.types.head;
+      constraint_n != NULL;
+      constraint_n = constraint_n->next) {
+      Type_* ty = list_val(constraint_n, Type_*);
+      type_resolve(ty, scope);
     }
 
     Type_* arg_ty = arg->type;
@@ -527,115 +446,20 @@ static void generictype_bindargs(Type_* generic_ty, List_* type_args, Frame_* fr
   }
 }
 
-static Type_* type_copy(Type_* ty, MemoryAllocator_* allocator) {
-  if (!ty) {
-    return NULL;
-  }
-
-  Type_* ret = NULL;
-
-  if (type_isunknown(ty)) {
-    ret = make_unknown_ty(allocator);
-    *ret = *ty;
-  } else if (type_isaprimitive(ty)) {
-    ret = make_primitive_ty(ty->cls, allocator);
-    *ret = *ty;
-  } else if (type_is(ty, Type_)) {
-    ret = alloc_ty(allocator, UnaryType_);
-    *ret = *ty;
-    type_cast(UnaryType_, ret)->ty = type_copy(type_cast(UnaryType_, ty)->ty, allocator);
-  }
-
-  switch (ty->cls) {
-    case TYPE_CLS(ConstType_):
-      ret = make_const_ty(type_copy(type_cast(ConstType_, ty)->unary.ty, allocator), allocator);
-      break;
-
-    case TYPE_CLS(InType_):
-      ret = make_in_ty(type_copy(type_cast(InType_, ty)->unary.ty, allocator), allocator);
-      break;
-
-    case TYPE_CLS(OutType_):
-      ret = make_out_ty(type_copy(type_cast(OutType_, ty)->unary.ty, allocator), allocator);
-      break;
-
-    case TYPE_CLS(VarType_):
-      ret = make_var_ty(type_copy(type_cast(VarType_, ty)->unary.ty, allocator), allocator);
-      break;
-
-    case TYPE_CLS(RefType_):
-      ret = make_ref_ty(type_copy(type_cast(RefType_, ty)->unary.ty, allocator), allocator);
-      break;
-
-    case TYPE_CLS(GenericOrArrayType_):
-    {
-      ret = make_array_or_generic_ty(ty->opt_name, allocator);
-      GenericOrArrayType_* new_ty = type_cast(GenericOrArrayType_, ret);
-      GenericOrArrayType_* old_ty = type_cast(GenericOrArrayType_, ty);
-
-      new_ty->arg_str = old_ty->arg_str;
-      new_ty->full_name = old_ty->full_name;
-      for (ListNode_* n = old_ty->args.head; n != NULL; n = n->next) {
-        list_push(&new_ty->args, list_ptr(n, TypeArgument_));
-      }
-      new_ty->unary.ty = type_copy(old_ty->unary.ty, allocator);
-    }
-      break;
-
-    case TYPE_CLS(GenericImplType_):
-    {
-#if 0
-      ret = make_genericimpl_ty(ty->opt_name, allocator);
-      GenericImplType_* new_ty = type_cast(GenericImplType_, ret);
-      GenericImplType_* old_ty = type_cast(GenericImplType_, ty);
-      
-      new_ty->args_count = old_ty->args_count;
-
-      new_ty->arg_str = old_ty->arg_str;
-      new_ty->full_name = old_ty->full_name;
-      for (ListNode_* n = old_ty->args.head; n != NULL; n = n->next) {
-        list_push(&new_ty->args, list_ptr(n, TypeArgument_));
-      }
-      new_ty->unary.ty = type_copy(old_ty->unary.ty, allocator);
-#endif
-    }
-      break;
-
-    case TYPE_CLS(GenericType_):
-      break;
-
-    case TYPE_CLS(FieldType_):
-      break;
-
-    case TYPE_CLS(ClassType_):
-      break;
-
-    case TYPE_CLS(ArrayType_):
-      break;
-
-    case TYPE_CLS(UnionType_):
-      break;
-
-    case TYPE_CLS(ConstraintType_):
-      break;
-
-    case TYPE_CLS(TupleType_):
-      break;
-
-  }
-
-
-  assertf(ret, "Could not copy type.");
-
-  return ret;
-}
-
 static Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_args, Token_ name_tk, MemoryAllocator_* allocator, Scope_* scope) {
+  for (ListNode_* arg_n = type_args->head; arg_n != NULL; arg_n = arg_n->next) {
+    TypeArgument_* arg = list_ptr(arg_n, TypeArgument_);
+    type_resolve(arg->type, scope);
+    if (type_is(type_valtype(arg->type), ConstraintType_)) {
+      return ty;
+    }
+  }
+
   GenericImplType_* impl = NULL;
   if (type_is(ty, GenericImplType_)) {
     impl = type_cast(GenericImplType_, ty);
   } else {
-    impl = type_cast(GenericImplType_, make_genericimpl_ty(ty, type_args, allocator));
+    impl = type_cast(GenericImplType_, make_genericimpl_ty(ty, type_args, scope, allocator));
   }
 
   if (impl->unary.ty) {
@@ -644,7 +468,7 @@ static Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_arg
 
   bool can_specialize = true;
   for (size_t i = 0; i < impl->args_count; ++i) {
-    can_specialize &= type_resolve(impl->args[i], scope);
+    can_specialize &= type_resolve(impl->args[i], scope);// && !type_is(type_valtype(impl->args[i]), ConstraintType_);
   }
 
   if (!can_specialize) {
@@ -653,7 +477,7 @@ static Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_arg
 
   Type_* ret = NULL;
   GenericType_* generic_ty = impl->generic_type;
-  Type_* prototype = generic_ty->prototype;
+  Type_* prototype = type_valtype(generic_ty->prototype);
 
   switch (prototype->cls) {
     case TYPE_CLS(ClassType_):
@@ -710,15 +534,102 @@ static Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_arg
         type_class_addmember((Type_*)cls_ty, field->name, new_field_ty, NULL);
       }
 
-      //generictype_findimpl(generic_ty, cls_ty->scope);
       ret = (Type_*)cls_ty;
       break;
     }
 
+    case TYPE_CLS(UnionType_):
+    {
+      const UnionType_* proto = type_as(UnionType_, prototype);
+      UnionType_* union_ty = (UnionType_*)make_union_ty(allocator, 0);
+
+      Type_* selected_type = NULL;
+      for (ListNode_* n = proto->self.types.head; n != NULL; n = n->next) {
+        Type_* union_subty = list_val(n, Type_*);
+        Type_* val_ty = type_valtype(union_subty);
+
+        if (type_is(val_ty, ConstraintType_)) {
+          Symbol_* sym = scope_find(impl->scope, &union_subty->opt_name);
+          assertf(sym, "Could not find type");
+          union_subty = sym->ty;
+        } else if (type_is(val_ty, GenericType_)) {
+          GenericType_* val_generic_ty = type_cast(GenericType_, val_ty);
+
+          ListOf_(TypeArgument_) args;
+          list_of(&args, TypeArgument_, &DefaultAllocator);
+
+          for (ListNode_* p = val_generic_ty->params.head; p != NULL; p = p->next) {
+            ConstraintType_* param = list_val(p, ConstraintType_*);
+            Symbol_* sym = scope_find(impl->scope, &param->self.self.opt_name);
+            assertf(sym->type == SYMBOL_CLS_TYPE, "Symbol is not a type");
+
+            TypeArgument_ arg = {
+              .type = sym->ty,
+              .is_type = true,
+            };
+
+            list_push(&args, &arg);
+          }
+
+          union_subty = generictype_specialize(val_ty, &args, union_subty->opt_name, allocator, impl->scope);
+          list_clear(&args);
+        } else if (type_is(val_ty, GenericImplType_)) {
+          GenericImplType_* impl_ty = type_as(GenericImplType_, val_ty);
+          if (impl_ty->unary.ty) {
+            union_subty = impl_ty->unary.ty;
+          } else {
+            GenericImplType_* val_generic_ty = type_cast(GenericImplType_, val_ty);
+
+            ListOf_(TypeArgument_) args;
+            list_of(&args, TypeArgument_, &DefaultAllocator);
+
+            for (ListNode_* p = val_generic_ty->generic_type->params.head; p != NULL; p = p->next) {
+              ConstraintType_* param = list_val(p, ConstraintType_*);
+              Symbol_* sym = scope_find(impl->scope, &param->self.self.opt_name);
+              assertf(sym->type == SYMBOL_CLS_TYPE, "Symbol is not a type");
+
+              TypeArgument_ arg = {
+                .type = sym->ty,
+                .is_type = true,
+              };
+
+              list_push(&args, &arg);
+            }
+
+            union_subty = generictype_specialize(val_ty, &args, union_subty->opt_name, allocator, impl->scope);
+            val_generic_ty->unary.ty = (Type_*)union_subty;
+            list_clear(&args);
+          }
+        }
+
+        list_push(&union_ty->self.types, &union_subty);
+      }
+
+      ret = (Type_*)union_ty;
+
+      break;
+    }
+    
     case TYPE_CLS(FunctionType_):
       break;
 
-    case TYPE_CLS(Type_):
+    case TYPE_CLS(ConstraintType_):
+    {
+      assertf(type_is(type_valtype(prototype), ConstraintType_), "Could not specialize.");
+      Symbol_* sym = scope_find(impl->scope, &prototype->opt_name);
+      assertf(sym, "Could not find type");
+      ret = sym->ty;
+      break;
+    }
+
+    case TYPE_CLS(GenericType_):
+    {
+      ret = generictype_specialize(prototype, type_args, prototype->opt_name, allocator, impl->scope);
+      break;
+    }
+
+    default:
+      assertf(false, "Trying to specialize an unsupported type for generics.");
       break;
   }
 
@@ -840,7 +751,7 @@ bool type_resolve(Type_* type, struct Scope_* scope) {
         type_cast(UnaryType_, type)->ty = sym->ty;
       } else {
         GenericType_* generic_ty = type_as(GenericType_, sym->ty);        
-        if (!analyze_generic((Type_*)generic_ty, &ty->args)) {
+        if (!analyze_generic((Type_*)generic_ty, &ty->args, scope)) {
           return false;
         }
         type_cast(UnaryType_, type)->ty = generictype_specialize(
@@ -976,7 +887,12 @@ size_t type_calcsize(Type_* type) {
 
     case TYPE_CLS(GenericType_):
     {
-      GenericType_* ty = type_as(GenericType_, type);
+      break;
+    }
+
+    case TYPE_CLS(GenericImplType_):
+    {
+      GenericImplType_* ty = type_as(GenericImplType_, type);
       size = type_calcsize(ty->unary.ty);
       break;
     }
@@ -1124,8 +1040,7 @@ bool uniontype_has(const Type_* union_ty, const Type_* ty) {
 
 bool uniontype_isassignable(const Type_* from, const Type_* to) {
   if (type_is(from, UnionType_) && !type_is(to, UnionType_)) {
-    Type_* selected_type = type_as(UnionType_, from)->selected_type;
-    return selected_type && type_isassignable(from, to);
+    return uniontype_has((Type_*)type_as(UnionType_, from), to);
   } else if (!type_is(from, UnionType_) && type_is(to, UnionType_)) {
     return uniontype_has((Type_*)type_as(UnionType_, to), from);
   }
@@ -1214,6 +1129,10 @@ bool type_iscoercible(const Type_* from, const Type_* to) {
     ArrayType_* arr_to = type_as(ArrayType_, to);
 
     return arr_from->count == arr_to->count && type_iscoercible(arr_from->el_type, arr_to->el_type);
+  }
+
+  if (type_is(to, UnionType_) || type_is(from, UnionType_)) {
+    return uniontype_isassignable(from, to);
   }
 
   return
@@ -1659,6 +1578,10 @@ Type_* type_valtype(Type_* ty) {
     return type_valtype(type_cast(UnaryType_, ty)->ty);
   }
 
+  if (type_is(ty, UnionType_)) {
+    return type_cast(UnionType_, ty)->selected_type ? type_valtype(type_cast(UnionType_, ty)->selected_type) : ty;
+  }
+
   return ty;
 }
 
@@ -1776,4 +1699,28 @@ void tupletype_add(Type_* ty, Type_* new) {
 void uniontype_add(Type_* ty, Type_* new) {
   UnionType_* type = type_as(UnionType_, ty);
   list_push(&type->self.types, &new);
+}
+
+Type_* uniontype_findassignable(const Type_* ty, const Type_* assign_ty) {
+  UnionType_* union_ty = type_as(UnionType_, ty);
+  for (ListNode_* n = union_ty->self.types.head; n != NULL; n = n->next) {
+    Type_* n_ty = list_val(n, Type_*);
+    if (type_isassignable(assign_ty, n_ty)) {
+      return n_ty;
+    }
+  }
+
+  return NULL;
+}
+
+Type_* uniontype_select(const Type_* ty, const Type_* assign_ty) {
+  Type_* ret = NULL;
+  UnionType_* union_ty = type_as(UnionType_, ty);
+  if (assign_ty) {
+    ret = uniontype_findassignable(ty, assign_ty);
+  } else if (uniontype_has(ty, (const Type_*)&Nil_Ty)) {
+    ret = (Type_*)&Nil_Ty;
+  }
+
+  return ret;
 }

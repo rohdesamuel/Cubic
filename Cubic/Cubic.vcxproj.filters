@@ -135,6 +135,9 @@
     <ClCompile Include="hash.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="errors.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="syntax.txt">
@@ -215,6 +218,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="hash.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="errors.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

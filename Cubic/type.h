@@ -235,12 +235,14 @@ typedef struct GenericImplType_ {
   struct GenericType_* generic_type;
   Type_** args;
   size_t args_count;
+  struct Scope_* scope;
 } GenericImplType_;
 
 typedef struct GenericType_ {
   UnaryType_ unary;
   Type_* prototype;
   ListOf_(ConstraintType_*) params;
+  struct Scope_* scope;
 } GenericType_;
 
 typedef struct GenericOrArrayType_ {
@@ -287,7 +289,7 @@ typedef struct ClassType_ {
 
 typedef struct FunctionType_ {
   Type_ self;
-  struct Symbol_* sym;
+  //struct Symbol_* sym;
 
   Type_* ret_ty;
   ListOf_(Type_*) params;
@@ -301,14 +303,6 @@ Type_* make_in_ty(Type_* sub_type, MemoryAllocator_* allocator);
 Type_* make_out_ty(Type_* sub_type, MemoryAllocator_* allocator);
 Type_* make_array_ty(Type_* el_type, size_t count, MemoryAllocator_* allocator);
 
-Type_* copy_unknown_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_const_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_var_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_ref_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_in_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_out_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_array_ty(Type_* ty, MemoryAllocator_* allocator);
-
 // Class types are singletons. For each class type, there is only one Type_*
 // instance.
 Type_* make_class_ty(Token_ name, MemoryAllocator_* allocator);
@@ -320,18 +314,7 @@ Type_* make_tuple_ty(MemoryAllocator_* allocator, int n, ...);
 Type_* make_union_ty(MemoryAllocator_* allocator, int n, ...);
 Type_* make_constraint_ty(MemoryAllocator_* allocator, Token_ name, int n, ...);
 Type_* make_field_ty(Token_ field_name, Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_generic_ty(Type_* prototype, List_* type_args, MemoryAllocator_* allocator);
-
-Type_* copy_class_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_placeholder_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_function_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_symbol_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_array_or_generic_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_tuple_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_union_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_constraint_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_field_ty(Type_* ty, MemoryAllocator_* allocator);
-Type_* copy_generic_ty(Type_* ty, MemoryAllocator_* allocator);
+Type_* make_generic_ty(Type_* prototype, List_* type_args, struct Scope_* scope, MemoryAllocator_* allocator);
 
 
 Type_* type_alloc(MemoryAllocator_* allocator, int type_cls, size_t type_size);
@@ -342,8 +325,6 @@ Type_* type_alloc(MemoryAllocator_* allocator, int type_cls, size_t type_size);
 // given scope. Returns true if type was resolved successfully, e.g. was able
 // to find the class.
 bool type_resolve(Type_* type, struct Scope_* scope);
-
-Type_* type_copy(Type_* ty, MemoryAllocator_* allocator);
 
 // Sets the the given type
 void type_set(Type_* type, Type_* new_type);
@@ -370,6 +351,9 @@ void type_class_addmember(Type_* cls_ty, Token_ name, Type_* type, struct AstExp
 
 void tupletype_add(Type_* ty, Type_* new);
 void uniontype_add(Type_* ty, Type_* new);
+Type_* uniontype_findassignable(const Type_* ty, const Type_* assign_ty);
+bool uniontype_has(const Type_* union_ty, const Type_* ty);
+Type_* uniontype_select(const Type_* ty, const Type_* assign_ty);
 Type_* generictype_findimpl(Type_* generic_ty, struct Scope_* scope);
 Type_* generictype_findimpl_i(Type_* generic_ty, uint64_t type_id);
 

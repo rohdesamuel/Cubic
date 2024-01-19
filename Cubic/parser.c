@@ -406,9 +406,9 @@ static AstNode_* GenericParam(Parser_* parser, Scanner_* scanner, int index, Sco
   frame_addtype(scope->frame, &param->name, param->type, scope);
 
   if (match(parser, scanner, TK_COLON)) {
-    advance(parser, scanner);
     do {
-      Type_* type = parse_unary_type(parser, scanner);
+      advance(parser, scanner);
+      Type_* type = parse_singleton_or_union_type(parser, scanner);
       list_push(&constraint->self.types, &type);
     } while (match(parser, scanner, TK_AMPERSAND));
   }
@@ -470,7 +470,7 @@ static AstNode_* FunctionParam(Parser_* parser, Scanner_* scanner, Scope_* scope
   }
 
   param->type = type;
-  frame_addparam(scope->frame, &param->name)->ty = type;
+  frame_addparam(scope->frame, &param->name, type)->ty = type;
 
   return (AstNode_*)param;
 }
@@ -523,13 +523,11 @@ static AstNode_* FunctionDef(Parser_* parser, Scanner_* scanner, Scope_* scope) 
     name = (Token_) { 0 };
   }
 
-  Symbol_* fn_symbol = frame_addfn(scope->frame, &name, scope);
-  Frame_* fn_frame = frame_createfrom(scope->frame, scope, fn_symbol);
+  Frame_* fn_frame = frame_createfrom(scope->frame, scope, make_function_ty(name, parser->allocator));
   Scope_* fn_scope = fn_frame->scope;
-  fn_symbol->ty = make_function_ty(name, parser->allocator);
-
-  def->fn_symbol = fn_symbol;
-  def->body = (AstFunctionBody_*)FunctionBody(parser, scanner, fn_scope, fn_symbol);
+  scope_addexisting(scope, fn_frame->fn_symbol);
+  def->fn_symbol = fn_frame->fn_symbol;
+  def->body = (AstFunctionBody_*)FunctionBody(parser, scanner, fn_scope, def->fn_symbol);
 
   return (AstNode_*)def;
 }
@@ -598,10 +596,9 @@ static AstNode_* ClassDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   def->opt_generics = (AstGenericParams_*)GenericParams(parser, scanner, scope);
   def->class_type = make_class_ty(def->name, parser->allocator);
   ClassType_* cls_ty = type_as(ClassType_, def->class_type);
-  Type_* generic_ty = NULL;
   Symbol_* cls_sym = NULL;
   if (def->opt_generics) {
-    generic_ty = make_generic_ty(def->class_type, &def->opt_generics->type_params, parser->allocator);
+    Type_* generic_ty = make_generic_ty(def->class_type, &def->opt_generics->type_params, scope, parser->allocator);
     cls_sym = frame_addtype(scope->frame, &def->class_type->opt_name, generic_ty, scope);
   } else {
     cls_sym = frame_addclass(scope->frame, def->class_type, scope);
@@ -1137,7 +1134,6 @@ static AstNode_* TypeDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   advance(parser, scanner);
 
   type_def->opt_generics = (AstGenericParams_*)GenericParams(parser, scanner, scope);
-
   if (match(parser, scanner, TK_END)) {
     type_def->type = (Type_*)&Nil_Ty;
     return (AstNode_*)type_def;
@@ -1146,7 +1142,15 @@ static AstNode_* TypeDef(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   type_def->type = parse_singleton_or_tuple_type(parser, scanner);
   consume(parser, scanner, TK_END, "Expected 'end' at the end of a type definition.");
 
-  if (!frame_addtype(scope->frame, &type_def->name, type_def->type, scope)) {
+  Symbol_* type_sym = NULL;
+  if (type_def->opt_generics) {
+    Type_* generic_ty = make_generic_ty(type_def->type, &type_def->opt_generics->type_params, scope, parser->allocator);
+    type_sym = frame_addtype(scope->frame, &type_def->name, generic_ty, scope);
+  } else {
+    type_sym = frame_addtype(scope->frame, &type_def->name, type_def->type, scope);
+  }
+
+  if (!type_sym) {
     error(parser, "Duplicate type definition for %.*s", type_def->name.length, type_def->name.start);
   }
 

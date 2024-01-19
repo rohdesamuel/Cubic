@@ -18,7 +18,7 @@ static AnalysisRule_* get_rule(int info);
 static void error(Analyzer_* analyzer, AstNode_* node, const char* message, ...);
 
 thread_local Analyzer_* analyzer_;
-thread_local AnalyzerErrors_ error_manager;
+thread_local ErrorsContainer_ analyzer_errors;
 
 static void do_analysis(AstNode_* node) {
   get_rule(node->cls)->fn(node);
@@ -31,17 +31,17 @@ void analyzer_init(Analyzer_* analyzer, MemoryAllocator_* allocator) {
   analyzer->scope = analyzer->frame->scope;
 }
 
-void analyzererrors_init(AnalyzerErrors_* errors, MemoryAllocator_* allocator) {
-  *errors = (AnalyzerErrors_){ 0 };
+void errorscontainer_init(ErrorsContainer_* errors, MemoryAllocator_* allocator) {
+  *errors = (ErrorsContainer_){ 0 };
   errors->allocator = allocator;
 
-  list_of(&errors->errors, AnalyzerError_, allocator);
+  list_of(&errors->errors, Error_, allocator);
 }
 
-void analyzererrors_clear(AnalyzerErrors_* errors) {
+void errorscontainer_clear(ErrorsContainer_* errors) {
   for (ListNode_* n = errors->errors.head; n != NULL; n = n->next) {
-    AnalyzerError_* err = list_ptr(n, AnalyzerError_);
-    dealloc(errors->allocator, err->error_str);
+    Error_* err = list_ptr(n, Error_);
+    dealloc(errors->allocator, (char*)err->error_str);
   }
   list_clear(&errors->errors);
 }
@@ -417,6 +417,7 @@ void assignment_expr_analysis(AstNode_* n) {
 
   AstVarExpr_* lvalue_expr = (AstVarExpr_*)expr->left;
   AstExpr_* rvalue_expr = (AstExpr_*)expr->right;
+
   if (!type_isassignable(rvalue_expr->type, lvalue_expr->base.type)) {
     error(analyzer_, n, "assignment expression does not match variable type.");
   }
@@ -871,66 +872,5 @@ static void error(Analyzer_* analyzer, AstNode_* node, const char* message, ...)
   fprintf(stderr, "[line %d] Error: ", node->line);
   vfprintf(stderr, message, args);
   fprintf(stderr, "\n");
-  va_end(args);
-}
-
-void error_add_(AnalyzerErrors_* errors, int line, const char* format, ...) {
-  if (errors->panic_mode) return;
-  errors->has_errors = true;
-
-  char buf[1024] = { 0 };
-  int cursor = 0;
-
-  va_list args;
-  va_start(args, format);
-
-  cursor = sprintf_s(buf, sizeof(buf), "[line %d] Error: ", line);
-  cursor += vsprintf_s(buf, sizeof(buf), format, args);
-  assertf(cursor < sizeof(buf), "Could not write error to log.");
-
-  cursor += sprintf_s(buf, sizeof(buf), "\n");
-  assertf(cursor < sizeof(buf), "Could not write error to log."); 
-
-  buf[cursor] = '\0';
-  cursor += 1;
-  assertf(cursor < sizeof(buf), "Could not write error to log.");
-
-  AnalyzerError_ err = { 0 };
-  err.error_str = alloc(errors->allocator, cursor);
-  memcpy((void*)err.error_str, (void*)buf, cursor);
-
-  list_push(&errors->errors, &err);
-
-  va_end(args);
-}
-
-void error_panic_(AnalyzerErrors_* errors, int line, const char* format, ...) {
-  if (errors->panic_mode) return;
-  errors->panic_mode = true;
-  errors->has_errors = true;
-
-  char buf[1024] = { 0 };
-  int cursor = 0;
-
-  va_list args;
-  va_start(args, format);
-
-  cursor = sprintf_s(buf, sizeof(buf), "[line %d] Error: ", line);
-  cursor += vsprintf_s(buf, sizeof(buf), format, args);
-  assertf(cursor < sizeof(buf), "Could not write error to log.");
-
-  cursor += sprintf_s(buf, sizeof(buf), "\n");
-  assertf(cursor < sizeof(buf), "Could not write error to log.");
-
-  buf[cursor] = '\0';
-  cursor += 1;
-  assertf(cursor < sizeof(buf), "Could not write error to log.");
-
-  AnalyzerError_ err = { 0 };
-  err.error_str = alloc(errors->allocator, cursor);
-  memcpy((void*)err.error_str, (void*)buf, cursor);
-
-  list_push(&errors->errors, &err);
-
   va_end(args);
 }

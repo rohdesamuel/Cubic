@@ -702,6 +702,10 @@ static void emit_make_ref_from(TacChunk_* chunk, const Location_* dst, const Loc
 
 static Location_ try_emit_cast(TacChunk_* chunk, Location_ val, const Type_* from, const Type_* to, size_t size, int line) {
   OpCode cast_op = OP_NOP;
+  if (from->cls == to->cls) {
+    return EMPTY_LOC;
+  }
+
   switch (from->cls) {
     case TYPE_CLS(DoubleType_):
       switch (to->cls) {

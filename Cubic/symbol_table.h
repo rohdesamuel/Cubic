@@ -64,11 +64,11 @@ typedef struct SymbolTable_ {
 } SymbolTable_;
 
 Frame_* frame_root(struct MemoryAllocator_* allocator);
-Frame_* frame_createfrom(Frame_* frame, Scope_* prev_scope, Symbol_* fn_symbol);
+Frame_* frame_createfrom(Frame_* frame, Scope_* prev_scope, Type_* fn_type);
 void frame_destroy(Frame_** frame);
-Symbol_* frame_addparam(Frame_* frame, Token_* name);
+Symbol_* frame_addparam(Frame_* frame, Token_* name, Type_* type);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
-Symbol_* frame_addfn(Frame_* frame, Token_* name, Scope_* scope);
+Symbol_* frame_addfn(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope);
 Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
 Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
@@ -94,7 +94,8 @@ Symbol_* scope_find(Scope_* scope, Token_* name);
 Symbol_* scope_search_to_root(Scope_* scope, const Token_* name);
 VarSymbol_* scope_var(Scope_* scope, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
-
+Symbol_* scope_addnew(Scope_* scope, Symbol_* symbol);
+bool scope_addexisting(Scope_* scope, Symbol_* symbol);
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
 
