@@ -337,7 +337,8 @@ size_t type_calcsize(Type_* type);
 
 const char* type_tostr(const Type_* ty);
 bool type_isequal(const Type_* a, const Type_* b);
-bool type_isassignable(const Type_* from, const Type_* to);
+bool type_isassignable(const Type_* ty);
+bool type_isassignable_to(const Type_* from, const Type_* to);
 bool type_iscoercible(const Type_* from, const Type_* to);
 bool type_isconst(const Type_* ty);
 bool type_isval(const Type_* ty);
@@ -356,6 +357,7 @@ bool uniontype_has(const Type_* union_ty, const Type_* ty);
 Type_* uniontype_select(const Type_* ty, const Type_* assign_ty);
 Type_* generictype_findimpl(Type_* generic_ty, struct Scope_* scope);
 Type_* generictype_findimpl_i(Type_* generic_ty, uint64_t type_id);
+Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_args, Token_ name_tk, struct MemoryAllocator_* allocator, struct Scope_* scope);
 
 #define type_is(PTYPE, CLS) type_is_(PTYPE, TYPE_CLS(CLS))
 inline bool type_is_(const Type_* type, int cls) {
@@ -372,7 +374,7 @@ inline bool type_is_(const Type_* type, int cls) {
 
 #define type_cast(TYPE, EXPR) ((TYPE*)(EXPR))
 #define type_as(TYPE, EXPR) ((TYPE*)assert_type_is((EXPR), TYPE_CLS(TYPE)))
-#define assert_type_is(TY, VAL_TY) assert_type_is_((Type_*)(TY), VAL_TY)
+#define assert_type_is(TY, TY_CLS) assert_type_is_((Type_*)(TY), TY_CLS)
 Type_* assert_type_is_(Type_* ty, int val);
 
 void print_type(const Type_* ty);

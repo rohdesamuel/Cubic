@@ -4,7 +4,7 @@ type Shape
   perimeter: function(in self) -> float
 end
 
-class Circle is
+class Circle is Shape
   r: float
 
   name: function(in self) -> string return "Circle" end

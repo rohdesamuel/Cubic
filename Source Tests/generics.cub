@@ -66,8 +66,8 @@ class Stack[T]
   end
 
   pop: function(out self) -> T
-    val ret : T = items.back()
-    items.pop()
+    val ret : T = self.items.back()
+    self.items.pop()
     return ret
   end
 end

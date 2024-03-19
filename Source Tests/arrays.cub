@@ -20,7 +20,7 @@ assert b == a
 # assert b == c
 
 # Multi-dimensional arrays
-val d: int[int[2]] = [[1,2], [3, 4]]
+val d: int[2][2] = [[1,2], [3, 4]]
 assert d[0][0] == 1
 assert d[0][1] == 2
 assert d[1][0] == 3

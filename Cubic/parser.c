@@ -998,6 +998,44 @@ static AstNode_* IndexExpr(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   return (AstNode_*)array;
 }
 
+// Parses array types or generic types.
+// Array type   ::= Type {'[' Integer ']')}
+// Generic type ::= Type '[' Constraint {',' Constraint} ']'
+// Constraint   ::= Type [ ':' UnionType {'&' UnionType} ]
+// 
+// ex.
+// class Vec[T] x, y, z: T end
+// function add[T](a: T, b: T) return a + b end
+// val a := add[int](1, 1)
+// val b := function
+// val c : function(int, int)[2]
+// c[0] = add[int]
+// val d := c[0](1, 1)
+// val e := d(1, 2)[2]
+// function foo[T](a: array[T])
+// function foo(a: array[int])
+// val d : vec3[int] = {}
+// d = {}
+/*
+
+class Foo[T]
+  a : int[T][T][T]
+end
+
+*/
+static AstNode_* IndexOrGenericArgs(Parser_* parser, Scanner_* scanner, Scope_* scope) {
+  AstIndexOrGenericArgs_* node = MAKE_AST_NODE(parser->allocator, AstIndexOrGenericArgs_, scope, parser->previous.line);
+  astlist_init(&node->args, parser->allocator);
+  do {
+    astlist_append(&node->args, Expr(parser, scanner, scope));
+  } while (!match(parser, scanner, TK_RBRACKET) && match(parser, scanner, TK_COMMA));
+
+  if (parser->previous.type != TK_RBRACKET) {
+    error_at_current(parser, "Malformed type or array. Expected ']' at end.");
+  }
+  return (AstNode_*)node;
+}
+
 static AstNode_* UnaryOp(Parser_* parser, Scanner_* scanner, Scope_* scope) {
   TokenType_ operator_type = parser->previous.type;
 
@@ -1179,6 +1217,10 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
   }
 
   AstNode_* exp = prefix_rule(parser, scanner, scope);
+  if (exp->cls == AST_CLS(AstTypeExpr_) && parser->current.type != TK_LBRACE && parser->current.type != TK_RBRACKET) {
+    error_at_current(parser, "Bad type constructor.");
+  }
+
   while (precedence <= get_rule(parser->current.type)->precedence) {
     ParseFn infix_rule = get_rule(parser->current.type)->infix;
     if (!infix_rule) {
@@ -1206,6 +1248,7 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       exp = (AstNode_*)var_exp;
     } else if (parser->previous.type == TK_LBRACE) {
       AstClassConstructor_* new_exp = AST_CAST(AstClassConstructor_, infix_rule(parser, scanner, scope));
+      new_exp->prefix = (AstExpr_*)exp;
       if (exp->cls == AST_CLS(AstTypeExpr_)) {
         AstTypeExpr_* type_expr = AST_CAST(AstTypeExpr_, exp);
         new_exp->base.type = type_expr->base.type;
@@ -1218,12 +1261,10 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
       dealloc(parser->allocator, exp);
       exp = (AstNode_*)new_exp;
     } else if (parser->previous.type == TK_LBRACKET) {
-      AstIndexExpr_* new_exp = AST_CAST(AstIndexExpr_, infix_rule(parser, scanner, scope));
+      AstIndexOrTypeExpr_* new_exp = MAKE_AST_EXPR(parser->allocator, AstIndexOrTypeExpr_, scope, parser->previous.line);
       new_exp->prefix = (AstExpr_*)exp;
-
-      AstVarExpr_* var_exp = MAKE_AST_EXPR(parser->allocator, AstVarExpr_, scope, parser->previous.line);
-      var_exp->expr = (AstExpr_*)new_exp;
-      exp = (AstNode_*)var_exp;
+      new_exp->index_args = AST_CAST(AstIndexOrGenericArgs_, infix_rule(parser, scanner, scope));
+      exp = (AstNode_*)new_exp;
     } else if (parser->previous.type >= TK_PLUS_EQUAL && parser->previous.type <= TK_SLASH_SLASH_EQUAL) {
       AstInPlaceBinaryStmt_* bin_exp =
         MAKE_AST_EXPR(parser->allocator, AstInPlaceBinaryStmt_, scope, parser->previous.line);
@@ -1262,105 +1303,105 @@ static AstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
 }
 
 static ParseRule_ rules[] = {
-  [TK_EOF]               = {NULL,             NULL,              PREC_NONE},
-  [TK_ERR]               = {NULL,             NULL,              PREC_NONE},
-  [TK_ID]                = {Id,               NULL,              PREC_NONE},
-  [TK_LPAREN]            = {grouping,         FunctionCallArgs,  PREC_CALL},
-  [TK_RPAREN]            = {NULL,             NULL,              PREC_NONE},
-  [TK_LBRACKET]          = {ArrayValue,       IndexExpr,         PREC_CALL},
-  [TK_RBRACKET]          = {NULL,             NULL,              PREC_NONE},
-  [TK_LBRACE]            = {ClassConstructor, ClassConstructor,  PREC_CALL},
-  [TK_RBRACE]            = {NULL,             NULL,              PREC_NONE},
-  [TK_SEMICOLON]         = {NULL,             NULL,              PREC_NONE},
-  [TK_COLON]             = {NULL,             NULL,              PREC_NONE},
-  [TK_DOT]               = {NULL,             BinaryOp,          PREC_CALL},
-  [TK_COMMA]             = {NULL,             NULL,              PREC_NONE},
-  [TK_PLUS]              = {NULL,             BinaryOp,          PREC_TERM},
-  [TK_MINUS]             = {UnaryOp,          BinaryOp,          PREC_TERM},
-  [TK_AMPERSAND]         = {NULL,             BinaryOp,          PREC_BITWISE_AND},
-  [TK_PIPE]              = {NULL,             BinaryOp,          PREC_BITWISE_OR},
-  [TK_HAT]               = {NULL,             BinaryOp,          PREC_BITWISE_XOR},
-  [TK_TILDE]             = {UnaryOp,          NULL,              PREC_UNARY},
-  [TK_STAR]              = {NULL,             BinaryOp,          PREC_FACTOR},
-  [TK_PERCENT]           = {NULL,             BinaryOp,          PREC_FACTOR},
-  [TK_QUESTION]          = {NULL,             NULL,              PREC_NONE},
-  [TK_BANG]              = {NULL,             NULL,              PREC_NONE},
-  [TK_BANG_EQUAL]        = {NULL,             BinaryOp,          PREC_EQUALITY},
-  [TK_EQUAL]             = {NULL,             BinaryOp,          PREC_ASSIGNMENT},
-  [TK_EQUAL_EQUAL]       = {NULL,             BinaryOp,          PREC_EQUALITY},
-  [TK_GT]                = {NULL,             BinaryOp,          PREC_COMPARISON},
-  [TK_GTE]               = {NULL,             BinaryOp,          PREC_COMPARISON},
-  [TK_RSHIFT]            = {NULL,             BinaryOp,          PREC_SHIFT},
-  [TK_LT]                = {NULL,             BinaryOp,          PREC_COMPARISON},
-  [TK_LTE]               = {NULL,             BinaryOp,          PREC_COMPARISON},
-  [TK_LSHIFT]            = {NULL,             BinaryOp,          PREC_SHIFT},
-  [TK_ARROW]             = {NULL,             NULL,              PREC_NONE},
-  [TK_FAT_ARROW]         = {NULL,             NULL,              PREC_NONE},
-  [TK_SLASH]             = {NULL,             BinaryOp,          PREC_FACTOR},
-  [TK_DOUBLE_SLASH]      = {NULL,             BinaryOp,          PREC_FACTOR},
-  [TK_DOUBLE_DOT]        = {NULL,             RangeExpr,         PREC_NONE},
-  [TK_TRIPLE_DOT]        = {NULL,             NULL,              PREC_NONE},
-  [TK_QQ]                = {NULL,             NULL,              PREC_NONE},
-  [TK_QQE]               = {NULL,             NULL,              PREC_NONE},
-  [TK_PLUS_EQUAL]        = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_MINUS_EQUAL]       = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_AMPERSAND_EQUAL]   = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_PIPE_EQUAL]        = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_HAT_EQUAL]         = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_TILDE_EQUAL]       = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_STAR_EQUAL]        = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_PERCENT_EQUAL]     = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_SLASH_EQUAL]       = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_SLASH_SLASH_EQUAL] = {NULL,             InPlaceBinaryOp,   PREC_ASSIGNMENT},
-  [TK_STRING]            = {String,           NULL,              PREC_NONE},
-  [TK_INTEGER]           = {Integer,          NULL,              PREC_NONE},
-  [TK_NUMBER]            = {Number,           NULL,              PREC_NONE},
-  [TK_DO]                = {NULL,             NULL,              PREC_NONE},
-  [TK_END]               = {NULL,             NULL,              PREC_NONE},
-  [TK_IF]                = {NULL,             NULL,              PREC_NONE},
-  [TK_THEN]              = {NULL,             NULL,              PREC_NONE},
-  [TK_ELIF]              = {NULL,             NULL,              PREC_NONE},
-  [TK_ELSE]              = {NULL,             NULL,              PREC_NONE},
-  [TK_FOR]               = {NULL,             NULL,              PREC_NONE},
-  [TK_IN]                = {NULL,             NULL,              PREC_NONE},
-  [TK_STEP]              = {NULL,             NULL,              PREC_NONE},
-  [TK_WHILE]             = {NULL,             NULL,              PREC_NONE},
-  [TK_REPEAT]            = {NULL,             NULL,              PREC_NONE},
-  [TK_UNTIL]             = {NULL,             NULL,              PREC_NONE},
-  [TK_CLASS]             = {NULL,             NULL,              PREC_NONE},
-  [TK_IS]                = {NULL,             NULL,              PREC_NONE},
-  [TK_MATCH]             = {NULL,             NULL,              PREC_NONE},
-  [TK_CASE]              = {NULL,             NULL,              PREC_NONE},
-  [TK_FUNCTION]          = {FunctionDef,      NULL,              PREC_FUNCTION},
-  [TK_RETURN]            = {NULL,             NULL,              PREC_NONE},
-  [TK_PRINT]             = {NULL,             NULL,              PREC_NONE},
-  [TK_AND]               = {NULL,             BinaryOp,          PREC_AND},
-  [TK_OR]                = {NULL,             BinaryOp,          PREC_OR},
-  [TK_XOR]               = {NULL,             BinaryOp,          PREC_XOR},
-  [TK_NOT]               = {UnaryOp,          NULL,              PREC_UNARY},
-  [TK_TRUE]              = {True,             NULL,              PREC_NONE},
-  [TK_FALSE]             = {False,            NULL,              PREC_NONE},
-  [TK_PASS]              = {NULL,             NULL,              PREC_NONE},
-  [TK_VAL]               = {NULL,             NULL,              PREC_NONE},
-  [TK_VAR]               = {NULL,             NULL,              PREC_NONE},
-  [TK_REF]               = {NULL,             NULL,              PREC_NONE},
-  [TK_NIL]               = {Nil,              NULL,              PREC_NONE},
-  [TK_NEW]               = {UnaryOp,          NULL,              PREC_UNARY},
-  [TK_DEL]               = {UnaryOp,          NULL,              PREC_UNARY},
-  [TK_ASSERT]            = {NULL,             NULL,              PREC_NONE},
-  [TK_TYPE]              = {NULL,             NULL,              PREC_NONE},
-  [TK_BOOL]              = {NULL,             NULL,              PREC_NONE},
-  [TK_INT]               = {Type,             NULL,              PREC_NONE},
-  [TK_UINT]              = {Type,             NULL,              PREC_NONE},
-  [TK_FLOAT]             = {Type,             NULL,              PREC_NONE},
-  [TK_DOUBLE]            = {Type,             NULL,              PREC_NONE},
-  [TK_STRING_TYPE]       = {Type,             NULL,              PREC_NONE},
-  [TK_LIST]              = {Type,             NULL,              PREC_NONE},
-  [TK_MAP]               = {Type,             NULL,              PREC_NONE},
-  [TK_SET]               = {Type,             NULL,              PREC_NONE},
-  [TK_ASYNC]             = {NULL,             NULL,              PREC_NONE},
-  [TK_AWAIT]             = {NULL,             NULL,              PREC_NONE},
-  [TK_YIELD]             = {NULL,             NULL,              PREC_NONE},
+  [TK_EOF]               = {NULL,             NULL,               PREC_NONE},
+  [TK_ERR]               = {NULL,             NULL,               PREC_NONE},
+  [TK_ID]                = {Id,               NULL,               PREC_NONE},
+  [TK_LPAREN]            = {grouping,         FunctionCallArgs,   PREC_CALL},
+  [TK_RPAREN]            = {NULL,             NULL,               PREC_NONE},
+  [TK_LBRACKET]          = {ArrayValue,       IndexOrGenericArgs, PREC_CALL},
+  [TK_RBRACKET]          = {NULL,             NULL,               PREC_NONE},
+  [TK_LBRACE]            = {ClassConstructor, ClassConstructor,   PREC_CALL},
+  [TK_RBRACE]            = {NULL,             NULL,               PREC_NONE},
+  [TK_SEMICOLON]         = {NULL,             NULL,               PREC_NONE},
+  [TK_COLON]             = {NULL,             NULL,               PREC_NONE},
+  [TK_DOT]               = {NULL,             BinaryOp,           PREC_CALL},
+  [TK_COMMA]             = {NULL,             NULL,               PREC_NONE},
+  [TK_PLUS]              = {NULL,             BinaryOp,           PREC_TERM},
+  [TK_MINUS]             = {UnaryOp,          BinaryOp,           PREC_TERM},
+  [TK_AMPERSAND]         = {NULL,             BinaryOp,           PREC_BITWISE_AND},
+  [TK_PIPE]              = {NULL,             BinaryOp,           PREC_BITWISE_OR},
+  [TK_HAT]               = {NULL,             BinaryOp,           PREC_BITWISE_XOR},
+  [TK_TILDE]             = {UnaryOp,          NULL,               PREC_UNARY},
+  [TK_STAR]              = {NULL,             BinaryOp,           PREC_FACTOR},
+  [TK_PERCENT]           = {NULL,             BinaryOp,           PREC_FACTOR},
+  [TK_QUESTION]          = {NULL,             NULL,               PREC_NONE},
+  [TK_BANG]              = {NULL,             NULL,               PREC_NONE},
+  [TK_BANG_EQUAL]        = {NULL,             BinaryOp,           PREC_EQUALITY},
+  [TK_EQUAL]             = {NULL,             BinaryOp,           PREC_ASSIGNMENT},
+  [TK_EQUAL_EQUAL]       = {NULL,             BinaryOp,           PREC_EQUALITY},
+  [TK_GT]                = {NULL,             BinaryOp,           PREC_COMPARISON},
+  [TK_GTE]               = {NULL,             BinaryOp,           PREC_COMPARISON},
+  [TK_RSHIFT]            = {NULL,             BinaryOp,           PREC_SHIFT},
+  [TK_LT]                = {NULL,             BinaryOp,           PREC_COMPARISON},
+  [TK_LTE]               = {NULL,             BinaryOp,           PREC_COMPARISON},
+  [TK_LSHIFT]            = {NULL,             BinaryOp,           PREC_SHIFT},
+  [TK_ARROW]             = {NULL,             NULL,               PREC_NONE},
+  [TK_FAT_ARROW]         = {NULL,             NULL,               PREC_NONE},
+  [TK_SLASH]             = {NULL,             BinaryOp,           PREC_FACTOR},
+  [TK_DOUBLE_SLASH]      = {NULL,             BinaryOp,           PREC_FACTOR},
+  [TK_DOUBLE_DOT]        = {NULL,             RangeExpr,          PREC_NONE},
+  [TK_TRIPLE_DOT]        = {NULL,             NULL,               PREC_NONE},
+  [TK_QQ]                = {NULL,             NULL,               PREC_NONE},
+  [TK_QQE]               = {NULL,             NULL,               PREC_NONE},
+  [TK_PLUS_EQUAL]        = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_MINUS_EQUAL]       = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_AMPERSAND_EQUAL]   = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_PIPE_EQUAL]        = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_HAT_EQUAL]         = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_TILDE_EQUAL]       = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_STAR_EQUAL]        = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_PERCENT_EQUAL]     = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_SLASH_EQUAL]       = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_SLASH_SLASH_EQUAL] = {NULL,             InPlaceBinaryOp,    PREC_ASSIGNMENT},
+  [TK_STRING]            = {String,           NULL,               PREC_NONE},
+  [TK_INTEGER]           = {Integer,          NULL,               PREC_NONE},
+  [TK_NUMBER]            = {Number,           NULL,               PREC_NONE},
+  [TK_DO]                = {NULL,             NULL,               PREC_NONE},
+  [TK_END]               = {NULL,             NULL,               PREC_NONE},
+  [TK_IF]                = {NULL,             NULL,               PREC_NONE},
+  [TK_THEN]              = {NULL,             NULL,               PREC_NONE},
+  [TK_ELIF]              = {NULL,             NULL,               PREC_NONE},
+  [TK_ELSE]              = {NULL,             NULL,               PREC_NONE},
+  [TK_FOR]               = {NULL,             NULL,               PREC_NONE},
+  [TK_IN]                = {NULL,             NULL,               PREC_NONE},
+  [TK_STEP]              = {NULL,             NULL,               PREC_NONE},
+  [TK_WHILE]             = {NULL,             NULL,               PREC_NONE},
+  [TK_REPEAT]            = {NULL,             NULL,               PREC_NONE},
+  [TK_UNTIL]             = {NULL,             NULL,               PREC_NONE},
+  [TK_CLASS]             = {NULL,             NULL,               PREC_NONE},
+  [TK_IS]                = {NULL,             NULL,               PREC_NONE},
+  [TK_MATCH]             = {NULL,             NULL,               PREC_NONE},
+  [TK_CASE]              = {NULL,             NULL,               PREC_NONE},
+  [TK_FUNCTION]          = {FunctionDef,      NULL,               PREC_FUNCTION},
+  [TK_RETURN]            = {NULL,             NULL,               PREC_NONE},
+  [TK_PRINT]             = {NULL,             NULL,               PREC_NONE},
+  [TK_AND]               = {NULL,             BinaryOp,           PREC_AND},
+  [TK_OR]                = {NULL,             BinaryOp,           PREC_OR},
+  [TK_XOR]               = {NULL,             BinaryOp,           PREC_XOR},
+  [TK_NOT]               = {UnaryOp,          NULL,               PREC_UNARY},
+  [TK_TRUE]              = {True,             NULL,               PREC_NONE},
+  [TK_FALSE]             = {False,            NULL,               PREC_NONE},
+  [TK_PASS]              = {NULL,             NULL,               PREC_NONE},
+  [TK_VAL]               = {NULL,             NULL,               PREC_NONE},
+  [TK_VAR]               = {NULL,             NULL,               PREC_NONE},
+  [TK_REF]               = {NULL,             NULL,               PREC_NONE},
+  [TK_NIL]               = {Nil,              NULL,               PREC_NONE},
+  [TK_NEW]               = {UnaryOp,          NULL,               PREC_UNARY},
+  [TK_DEL]               = {UnaryOp,          NULL,               PREC_UNARY},
+  [TK_ASSERT]            = {NULL,             NULL,               PREC_NONE},
+  [TK_TYPE]              = {NULL,             NULL,               PREC_NONE},
+  [TK_BOOL]              = {NULL,             NULL,               PREC_NONE},
+  [TK_INT]               = {Type,             NULL,               PREC_NONE},
+  [TK_UINT]              = {Type,             NULL,               PREC_NONE},
+  [TK_FLOAT]             = {Type,             NULL,               PREC_NONE},
+  [TK_DOUBLE]            = {Type,             NULL,               PREC_NONE},
+  [TK_STRING_TYPE]       = {Type,             NULL,               PREC_NONE},
+  [TK_LIST]              = {Type,             NULL,               PREC_NONE},
+  [TK_MAP]               = {Type,             NULL,               PREC_NONE},
+  [TK_SET]               = {Type,             NULL,               PREC_NONE},
+  [TK_ASYNC]             = {NULL,             NULL,               PREC_NONE},
+  [TK_AWAIT]             = {NULL,             NULL,               PREC_NONE},
+  [TK_YIELD]             = {NULL,             NULL,               PREC_NONE},
 };
 // Static assert to make sure that all token types are accounted for.
 STATIC_ASSERT(

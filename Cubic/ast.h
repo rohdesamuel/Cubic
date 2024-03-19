@@ -57,6 +57,8 @@ typedef struct AstNode_ {
     AST_CLS(TypeMemberDecl_),
     AST_CLS(AstGenericParam_),
     AST_CLS(AstGenericParams_),
+    AST_CLS(AstIndexOrTypeExpr_),
+    AST_CLS(AstIndexOrGenericArgs_),
     __AST_NODE_COUNT__,
   } cls;
   int line;
@@ -227,6 +229,25 @@ typedef struct AstIndexExpr_ {
   struct AstExpr_* index;
 } AstIndexExpr_;
 
+typedef struct AstTypeExpr_ {
+  struct AstExpr_ base;
+} AstTypeExpr_;
+
+typedef struct AstIndexOrTypeExpr_ {
+  union {
+    struct AstExpr_ base;
+    AstVarExpr_ var_index_expr;
+    AstTypeExpr_ type_expr;
+  };
+  struct AstExpr_* prefix;
+  struct AstIndexOrGenericArgs_* index_args;
+} AstIndexOrTypeExpr_;
+
+typedef struct AstIndexOrGenericArgs_ {
+  struct AstExpr_ base;
+  AstList_ args;
+} AstIndexOrGenericArgs_;
+
 // Var ::= PrefixExpr '.' Id
 typedef struct AstDotExpr_ {
   struct AstExpr_ base;
@@ -374,6 +395,7 @@ typedef struct AstClassMemberDecl_ {
 typedef struct AstClassConstructor_ {
   struct AstExpr_ base;
   Token_ name;
+  struct AstExpr_* prefix;
   struct AstList_ params;
 } AstClassConstructor_;
 
@@ -383,10 +405,6 @@ typedef struct AstClassConstructorParam_ {
   Token_ name;
   struct AstExpr_* expr;
 } AstClassConstructorParam_;
-
-typedef struct AstTypeExpr_ {
-  struct AstExpr_ base;
-} AstTypeExpr_;
 
 typedef struct AstRangeExpr_ {
   struct AstExpr_ base;

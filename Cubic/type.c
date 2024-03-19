@@ -387,7 +387,7 @@ static bool constrainttype_satisfied(ConstraintType_* constraints_ty, Type_* ty)
        constraint_n = constraint_n->next) {
 
     Type_* constraint = list_val(constraint_n, Type_*);
-    if (!type_isassignable(ty, constraint)) {
+    if (!type_isassignable_to(ty, constraint)) {
       return false;
     }
   }
@@ -446,7 +446,7 @@ static void generictype_bindargs(Type_* generic_ty, List_* type_args, Frame_* fr
   }
 }
 
-static Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_args, Token_ name_tk, MemoryAllocator_* allocator, Scope_* scope) {
+Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_args, Token_ name_tk, MemoryAllocator_* allocator, Scope_* scope) {
   for (ListNode_* arg_n = type_args->head; arg_n != NULL; arg_n = arg_n->next) {
     TypeArgument_* arg = list_ptr(arg_n, TypeArgument_);
     type_resolve(arg->type, scope);
@@ -535,6 +535,9 @@ static Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_arg
       }
 
       ret = (Type_*)cls_ty;
+      type_calcsize(ret);
+      type_class_calcoffsets(ret);
+
       break;
     }
 
@@ -1049,7 +1052,7 @@ bool uniontype_isassignable(const Type_* from, const Type_* to) {
   UnionType_* u_to = type_as(UnionType_, to);
 
   if (u_to->selected_type) {
-    return u_from && type_isassignable(u_from->selected_type, u_to->selected_type);
+    return u_from && type_isassignable_to(u_from->selected_type, u_to->selected_type);
   }
 
   if (u_from->selected_type) {
@@ -1075,7 +1078,15 @@ bool uniontype_isassignable(const Type_* from, const Type_* to) {
   return true;
 }
 
-bool type_isassignable(const Type_* from, const Type_* to) {
+bool type_isassignable(const Type_* ty) {
+  if (type_isconst(ty) || type_isval(ty)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool type_isassignable_to(const Type_* from, const Type_* to) {
   // Cannot assign to a const.
   if (type_is(to, InType_) || type_is(to, ConstType_)) {
     return false;
@@ -1093,7 +1104,7 @@ bool type_isassignable(const Type_* from, const Type_* to) {
   if (from_sub || to_sub) {
     from_sub = from_sub ? from_sub : from;
     to_sub = to_sub ? to_sub : to;
-    return type_isassignable(from_sub, to_sub);
+    return type_isassignable_to(from_sub, to_sub);
   }
 
   if (type_is(to, UnionType_) || type_is(from, UnionType_)) {
@@ -1111,7 +1122,7 @@ bool type_isassignable(const Type_* from, const Type_* to) {
     case TYPE_CLS(ArrayType_):
       return type_is(to, ArrayType_) &&
         type_as(ArrayType_, from)->count == type_as(ArrayType_, to)->count &&
-        type_isassignable(type_as(ArrayType_, from)->el_type, type_as(ArrayType_, to)->el_type);
+        type_isassignable_to(type_as(ArrayType_, from)->el_type, type_as(ArrayType_, to)->el_type);
 
     case TYPE_CLS(FunctionType_):
       return type_isequal(from, to);
@@ -1705,7 +1716,7 @@ Type_* uniontype_findassignable(const Type_* ty, const Type_* assign_ty) {
   UnionType_* union_ty = type_as(UnionType_, ty);
   for (ListNode_* n = union_ty->self.types.head; n != NULL; n = n->next) {
     Type_* n_ty = list_val(n, Type_*);
-    if (type_isassignable(assign_ty, n_ty)) {
+    if (type_isassignable_to(assign_ty, n_ty)) {
       return n_ty;
     }
   }

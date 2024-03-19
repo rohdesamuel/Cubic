@@ -2123,6 +2123,8 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(TypeMemberDecl_)]           = {noop_code_gen},
   [AST_CLS(AstGenericParam_)]          = {noop_code_gen},
   [AST_CLS(AstGenericParams_)]         = {noop_code_gen},
+  [AST_CLS(AstIndexOrTypeExpr_)]       = {noop_code_gen},
+  [AST_CLS(AstIndexOrGenericArgs_)]    = {noop_code_gen},
 };
 
 // Static assert to make sure that all node types are accounted for.
