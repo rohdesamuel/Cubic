@@ -34,6 +34,7 @@ typedef struct AstNode_ {
     AST_CLS(AstAssignmentExpr_),
     AST_CLS(AstInPlaceBinaryStmt_),
     AST_CLS(AstWhileStmt_),
+    AST_CLS(AstForStmt_),
     AST_CLS(AstFunctionDef_),
     AST_CLS(AstFunctionBody_),
     AST_CLS(AstFunctionParam_),
@@ -282,6 +283,16 @@ typedef struct AstWhileStmt_ {
   AstExpr_* condition_expr;
   AstNode_* block_stmt;
 } AstWhileStmt_;
+
+// ForStmt ::= 'for' [VarDecl | ExpressionStmt] ';' [Expr] ';' [Expr] 'do' Block 'end'
+typedef struct AstForStmt_ {
+  struct AstNode_ base;
+  AstNode_* opt_var_decl;
+  AstExpr_* opt_condition_expr;
+  AstExpr_* opt_step_expr;
+  AstNode_* block_stmt;
+} AstForStmt_;
+
 
 // AssertStmt ::= 'assert' Expr
 typedef struct AstAssertStmt_ {

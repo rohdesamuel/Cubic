@@ -1197,6 +1197,14 @@ bool type_isaref(const Type_* ty) {
   return type_is(ty, RefType_) || type_is(ty, InType_) || type_is(ty, OutType_);
 }
 
+bool type_isavar(const Type_* ty) {
+  if (type_is(ty, Type_)) {
+    return type_isavar(type_cast(UnaryType_, ty)->ty);
+  }
+
+  return type_is(ty, VarType_);
+}
+
 struct TypeUnionIteratorState {
   uint64_t id;
 };

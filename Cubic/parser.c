@@ -715,11 +715,42 @@ static AstNode_* Statement(Parser_* parser, Scanner_* scanner, Scope_* scope) {
       AstWhileStmt_* stmt = MAKE_AST_STMT(parser->allocator, AstWhileStmt_, scope, parser->current.line);
       stmt->condition_expr = (AstExpr_*)Expr(parser, scanner, scope);
 
-      consume(parser, scanner, TK_DO, "Expected 'do' at end of while expression.");
+      consume(parser, scanner, TK_DO, "Expected 'do' at end of while statement.");
 
       stmt->block_stmt = Block(parser, scanner, scope);
 
-      consume(parser, scanner, TK_END, "Expected 'end' at end of while expression.");
+      consume(parser, scanner, TK_END, "Expected 'end' at end of while definition.");
+
+      ret->stmt = (AstNode_*)stmt;
+      break;
+    }
+
+    case TK_FOR:
+    {
+      // ForStmt ::= 'for' [VarDecl | ExpressionStmt] ';' [Expr] ';' [Expr] 'do' Block 'end'
+      AstForStmt_* stmt = MAKE_AST_STMT(parser->allocator, AstForStmt_, scope_createfrom(scope), parser->current.line);
+      advance(parser, scanner);
+      if (!match(parser, scanner, TK_SEMICOLON)) {
+        if (match(parser, scanner, TK_VAL) || match(parser, scanner, TK_VAR)) {
+          stmt->opt_var_decl = VarDecl(parser, scanner, stmt->base.scope, parser->previous.type);
+        } else {
+          stmt->opt_var_decl = ExpressionStmt(parser, scanner, stmt->base.scope);
+        }
+        consume(parser, scanner, TK_SEMICOLON, "Expected ';' after variable declaration in for loop.");
+      }
+
+      if (!match(parser, scanner, TK_SEMICOLON)) {
+        stmt->opt_condition_expr = (AstExpr_*)Expr(parser, scanner, stmt->base.scope);
+        consume(parser, scanner, TK_SEMICOLON, "Expected ';' after condition expression in for loop.");
+      }
+
+      if (!match(parser, scanner, TK_DO)) {
+        stmt->opt_step_expr = (AstExpr_*)Expr(parser, scanner, stmt->base.scope);
+        consume(parser, scanner, TK_DO, "Expected 'do' at end of for loop statement.");
+      }
+
+      stmt->block_stmt = Block(parser, scanner, stmt->base.scope);
+      consume(parser, scanner, TK_END, "Expected 'end' at end of for loop definition.");
 
       ret->stmt = (AstNode_*)stmt;
       break;

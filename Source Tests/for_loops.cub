@@ -19,7 +19,16 @@ end
 do
   val accum: int = 0
   # 1 + 3
-  for i := 0; i < 10; i += 1
+  for val i := 0; i < 10; i += 1
+    accum = accum + i
+  end
+  assert accum == 4
+end
+
+do
+  val accum: int = 0
+  # 1 + 3
+  for var i := 0; i < 10; i += 1
     accum = accum + i
   end
   assert accum == 4

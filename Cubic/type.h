@@ -343,6 +343,7 @@ bool type_iscoercible(const Type_* from, const Type_* to);
 bool type_isconst(const Type_* ty);
 bool type_isval(const Type_* ty);
 bool type_isaref(const Type_* ty);
+bool type_isavar(const Type_* ty);
 
 Type_* type_deref(Type_* ty);
 Type_* type_valtype(Type_* ty);

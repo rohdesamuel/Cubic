@@ -518,6 +518,27 @@ static void while_stmt_analysis(AstNode_* n) {
   }
 }
 
+static void for_stmt_analysis(AstNode_* n) {
+  AstForStmt_* stmt = (AstForStmt_*)n;
+  if (stmt->opt_var_decl) {
+    do_analysis(stmt->opt_var_decl);
+  }
+
+  if (stmt->opt_condition_expr) {
+    stmt->opt_condition_expr->top_type = (Type_*)&Bool_Ty;
+    do_analysis((AstNode_*)stmt->opt_condition_expr);
+    if (!type_isabool(AS_EXPR(stmt->opt_condition_expr)->type)) {
+      error(analyzer_, n, "for loop condition expression must be a bool.");
+    }
+  }
+
+  if (stmt->opt_step_expr) {
+    do_analysis((AstNode_*)stmt->opt_step_expr);
+  }
+
+  do_analysis(stmt->block_stmt);
+}
+
 static void expression_statement_analysis(AstNode_* n) {
   AstExpressionStmt_* stmt = (AstExpressionStmt_*)n;
   do_analysis((AstNode_*)stmt->expr);
@@ -887,6 +908,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstAssignmentExpr_)]         = {assignment_expr_analysis},
   [AST_CLS(AstInPlaceBinaryStmt_)]      = {in_place_binary_stmt_analysis},
   [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},
+  [AST_CLS(AstForStmt_)]                = {for_stmt_analysis},
   [AST_CLS(AstFunctionDef_)]            = {function_def_analysis},
   [AST_CLS(AstFunctionBody_)]           = {function_body_analysis},
   [AST_CLS(AstFunctionParam_)]          = {function_param_analysis},

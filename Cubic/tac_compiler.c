@@ -677,6 +677,12 @@ static TacHandle_ emit_tac(TacChunk_* chunk, OpCode op, Location_ dst, Operand_ 
   return tac_chunk_write(chunk, &tac, line);
 }
 
+static Location_ emit_true(TacChunk_* chunk, int line) {
+  Location_ ret = tac_alloc_val(chunk, 1);
+  emit_tac(chunk, OP_TRUE, ret, EMPTY_OPERAND, EMPTY_OPERAND, line);
+  return ret;
+}
+
 static Location_ emit_nil(TacChunk_* chunk, int line) {
   Location_ ret = tac_alloc_val(chunk, 1);
   emit_tac(chunk, OP_NIL, ret, EMPTY_OPERAND, EMPTY_OPERAND, line);
@@ -1679,6 +1685,41 @@ static Location_ while_stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
   return EMPTY_LOC;
 }
 
+static Location_ for_stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstForStmt_* stmt = (AstForStmt_*)node;
+
+  // if `condition_expr`
+  Location_ for_loop_begin = tac_alloc_label(chunk, "for_loop_begin");
+  Location_ for_loop_end = tac_alloc_label(chunk, "for_loop_end");
+
+  if (stmt->opt_var_decl) {
+    code_gen(chunk, stmt->opt_var_decl);
+  }
+
+  emit_label(chunk, for_loop_begin, node->line);
+  Location_ condition = EMPTY_LOC;
+  int condition_line = node->line;
+  if (stmt->opt_condition_expr) {
+    condition = code_gen(chunk, (AstNode_*)stmt->opt_condition_expr);
+    condition_line = stmt->opt_condition_expr->base.line;
+  } else {
+    condition = emit_true(chunk, node->line);
+  }
+
+  emit_tac(chunk, OP_JMP_IF_FALSE, for_loop_end, OP_LOC(condition), EMPTY_OPERAND, condition_line);
+
+  // if true then ...
+  code_gen(chunk, stmt->block_stmt);
+
+  if (stmt->opt_step_expr) {
+    code_gen(chunk, (AstNode_*)stmt->opt_step_expr);
+  }
+
+  emit_tac(chunk, OP_JMP, for_loop_begin, EMPTY_OPERAND, EMPTY_OPERAND, stmt->block_stmt->line);
+  emit_label(chunk, for_loop_end, stmt->block_stmt->line);
+  return EMPTY_LOC;
+}
+
 static Location_ expression_statement_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstExpressionStmt_* stmt = (AstExpressionStmt_*)node;
   code_gen(chunk, (AstNode_*)stmt->expr);
@@ -2100,6 +2141,7 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstAssignmentExpr_)]        = {assignment_expr_code_gen},
   [AST_CLS(AstInPlaceBinaryStmt_)]     = {in_place_binary_stmt_code_gen},
   [AST_CLS(AstWhileStmt_)]             = {while_stmt_code_gen},
+  [AST_CLS(AstForStmt_)]               = {for_stmt_code_gen},
   [AST_CLS(AstFunctionDef_)]           = {function_def_code_gen},
   [AST_CLS(AstFunctionBody_)]          = {function_body_code_gen},
   [AST_CLS(AstFunctionParam_)]         = {function_param_code_gen},

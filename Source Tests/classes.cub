@@ -210,12 +210,13 @@ end
 #   return self.n
 # end
 # 
-# function ClassWithMethods.static() -> int
-#   return 20
+# function ClassWithMethods.static(x) -> int
+#   return x
 # end
 # 
 # do
 #   val a := ClassWithMethods{9}
 #   assert a.inc() == 10
-#   assert a.static() == 20
+#   assert a.static(20) == 20
+#   assert ClassWithMethods.static(20) == 20
 # end

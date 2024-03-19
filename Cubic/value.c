@@ -1,6 +1,7 @@
 #include "value.h"
 #include "object.h"
 #include "symbol.h"
+#include "type.h"
 
 #include "memory.h"
 #include <memory.h>
@@ -30,6 +31,10 @@ const char* kTrue = "true";
 const char* kFalse = "false";
 
 void value_print(Value_ value, RuntimeType_ info) {
+  if (info.is_ptr) {
+    value = *value.as.ref.pval;
+  }
+
   switch (info.ty) {
     case TYPE_CLS(NilType_):    printf("nil"); break;
     case TYPE_CLS(BoolType_):   printf("%s", AS_BOOL(value) ? kTrue : kFalse); break;

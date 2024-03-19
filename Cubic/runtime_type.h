@@ -4,6 +4,7 @@
 #include "common.h"
 
 typedef struct RuntimeType_ {
+  bool is_ptr;
   int ty;
 } RuntimeType_;
 
