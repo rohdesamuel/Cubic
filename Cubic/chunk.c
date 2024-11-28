@@ -1,5 +1,14 @@
 #include <stdlib.h>
 
+#include "common.h"
+
+#ifdef __COMPILE_AS_WINDOWS__
+#include <Windows.h>
+#include <memoryapi.h>
+#include <errhandlingapi.h>
+#include <winbase.h>
+#endif
+
 #include "chunk.h"
 #include "memory.h"
 
@@ -23,9 +32,31 @@ void chunk_init(Chunk chunk) {
   valuearray_init(&chunk->constants);
 }
 
+void chunk_protect(Chunk chunk) {
+  if (chunk->capacity == 0) {
+    return;
+  }
+
+#ifdef __COMPILE_AS_WINDOWS__
+  LPVOID new_code = VirtualAlloc(NULL, (SIZE_T)chunk->capacity, MEM_COMMIT, PAGE_READWRITE);
+  assertf(new_code, "Could not allocate code.");
+  memcpy(new_code, chunk->code, chunk->capacity);
+
+  VirtualAlloc(new_code, (SIZE_T)chunk->capacity, MEM_COMMIT, PAGE_READONLY);
+
+  free(chunk->code);
+  chunk->code = new_code;
+
+#else
+  STATIC_ASSERT(false, "chunk_protect unimplemented for non-Windows systems");
+#endif
+}
+
 void chunk_free(Chunk chunk) {
   FREE_ARRAY(int, chunk->lines, chunk->capacity);
-  FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+  if (chunk->capacity > 0) {
+    VirtualFree(chunk->code, 0, MEM_RELEASE);
+  }
   valuearray_free(&chunk->constants);
   chunk_init(chunk);
 }

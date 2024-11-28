@@ -4,7 +4,10 @@ type Shape
   perimeter: function(in self) -> float
 end
 
-class Circle is Shape
+function Shape.name(in self) -> string
+end
+
+class Circle: Shape
   r: float
 
   name: function(in self) -> string return "Circle" end
@@ -12,7 +15,7 @@ class Circle is Shape
   perimeter: function(in self) -> float return math.pi * self.r * 2 end
 end
 
-class Rectangle is Shape
+class Rectangle: Shape
   w: float
   h: float
 

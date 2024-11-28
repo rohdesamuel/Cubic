@@ -12,22 +12,22 @@ UTEST_F_TEARDOWN(TypeTest) {}
 
 UTEST_F(TypeTest, TypeIdPrimitives) {
   uint64_t primitive_ids[] = {
-    type_id((Type_*)&Unknown_Ty),
-    type_id((Type_*)&Nil_Ty),
-    type_id((Type_*)&Bool_Ty),
-    type_id((Type_*)&Int_Ty),
-    type_id((Type_*)&Int8_Ty),
-    type_id((Type_*)&Int16_Ty),
-    type_id((Type_*)&Int32_Ty),
-    type_id((Type_*)&Int64_Ty),
-    type_id((Type_*)&Uint_Ty),
-    type_id((Type_*)&Uint8_Ty),
-    type_id((Type_*)&Uint16_Ty),
-    type_id((Type_*)&Uint32_Ty),
-    type_id((Type_*)&Uint64_Ty),
-    type_id((Type_*)&Float_Ty),
-    type_id((Type_*)&Double_Ty),
-    type_id((Type_*)&String_Ty),
+    type_id((Type_*)Unknown_Ty),
+    type_id((Type_*)Nil_Ty),
+    type_id((Type_*)Bool_Ty),
+    type_id((Type_*)Int_Ty),
+    type_id((Type_*)Int8_Ty),
+    type_id((Type_*)Int16_Ty),
+    type_id((Type_*)Int32_Ty),
+    type_id((Type_*)Int64_Ty),
+    type_id((Type_*)Uint_Ty),
+    type_id((Type_*)Uint8_Ty),
+    type_id((Type_*)Uint16_Ty),
+    type_id((Type_*)Uint32_Ty),
+    type_id((Type_*)Uint64_Ty),
+    type_id((Type_*)Float_Ty),
+    type_id((Type_*)Double_Ty),
+    type_id((Type_*)String_Ty),
   };
 
   size_t count = sizeof(primitive_ids) / sizeof(primitive_ids[0]);
@@ -43,11 +43,11 @@ UTEST_F(TypeTest, TypeIdUnknownAndPlaceholdersArePoison) {
   pageallocator_init(&a, 4096);
   MemoryAllocator_* m = (MemoryAllocator_*)&a;
 
-  EXPECT_EQ(0, type_id((Type_*)&Unknown_Ty));
-  EXPECT_EQ(0, type_id(make_in_ty((Type_*)&Unknown_Ty, m)));
-  EXPECT_EQ(0, type_id(make_tuple_ty(m, 1, (Type_*)&Unknown_Ty)));
-  EXPECT_EQ(0, type_id(make_union_ty(m, 1, (Type_*)&Unknown_Ty)));
-  EXPECT_EQ(0, type_id(make_in_ty(make_union_ty(m, 2, (Type_*)&Int_Ty, (Type_*)&Unknown_Ty), m)));
+  EXPECT_EQ(0, type_id((Type_*)Unknown_Ty));
+  EXPECT_EQ(0, type_id(make_in_ty((Type_*)Unknown_Ty, m)));
+  EXPECT_EQ(0, type_id(make_tuple_ty(m, 1, (Type_*)Unknown_Ty)));
+  EXPECT_EQ(0, type_id(make_union_ty(m, 1, (Type_*)Unknown_Ty)));
+  EXPECT_EQ(0, type_id(make_in_ty(make_union_ty(m, 2, (Type_*)Int_Ty, (Type_*)Unknown_Ty), m)));
 
   pageallocator_deinit(&a);
 }
@@ -57,7 +57,7 @@ UTEST_F(TypeTest, TypeIdUnary) {
   pageallocator_init(&a, 4096);
   MemoryAllocator_* m = (MemoryAllocator_*)&a;
 
-  Type_* ty = (Type_*)&Int_Ty;
+  Type_* ty = (Type_*)Int_Ty;
   uint64_t ids[] = {
     type_id(make_const_ty(ty, m)),
     type_id(make_in_ty(ty, m)),
@@ -84,7 +84,7 @@ UTEST_F(TypeTest, TypeIdClasses) {
   pageallocator_init(&a, 4096);
   MemoryAllocator_* m = (MemoryAllocator_*)&a;
 
-  Type_* ty = (Type_*)&Int_Ty;
+  Type_* ty = (Type_*)Int_Ty;
   uint64_t ids[] = {
     type_id(make_class_ty(token_string("Foo"), m)),
     type_id(make_class_ty(token_string("foo"), m)),

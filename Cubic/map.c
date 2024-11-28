@@ -60,6 +60,25 @@ Hashmap* hashmap_create(void) {
 	return m;
 }
 
+Hashmap* hashmap_copy(Hashmap* map) {
+	Hashmap* ret = hashmap_create();
+	
+	// loop through the linked list of valid entries
+	// this way we can skip over empty buckets
+	struct bucket* current = map->first;
+
+	while (current != NULL) {
+#ifdef __HASHMAP_REMOVABLE
+		// "tombstone" check
+		if (current->key != NULL)
+#endif
+		hashmap_set(ret, current->key, current->ksize, current->value);
+		current = current->next;
+	}
+
+	return ret;
+}
+
 void hashmap_free(Hashmap* m) {
 	free(m->buckets);
 	free(m);
@@ -343,6 +362,5 @@ void hashmap_iterate(Hashmap* m, hashmap_callback c, void* user_ptr) {
 			break;
 		}
 		co++;
-
 	}
 }

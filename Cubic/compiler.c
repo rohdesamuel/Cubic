@@ -7,9 +7,12 @@
 #include "parser.h"
 #include "analyzer.h"
 #include "ast.h"
+#include "cst.h"
 #include "symbol_table.h"
 #include "tac_compiler.h"
 #include "map.h"
+#include "type.h"
+#include "type_expr.h"
 
 #include <assert.h>
 #include <string.h>
@@ -38,40 +41,64 @@ static void compiler_clear(Compiler_* compiler) {
 
 bool compile(const char* source, Chunk_* chunk) {
   PageAllocator_ allocator;
-  Parser_ parser;
+  Parser_ cst_parser;
+  AstParser_ ast_parser;
   Scanner_ scanner;
   TacCompiler_ tac_compiler;
   Compiler_ compiler;
   Analyzer_ analyzer;
   pageallocator_init(&allocator, 1ull << 14);
 
+  type_init();
+  type_expr_init();
+
   scanner_init(&scanner, source);
-  parser_init(&parser, (MemoryAllocator_*)&allocator);
+  parser_init(&cst_parser, (MemoryAllocator_*)&allocator);
+  ast_parser_init(&ast_parser, (MemoryAllocator_*)&allocator);
   errorscontainer_init(&analyzer_errors, (MemoryAllocator_*)&allocator);
   analyzer_init(&analyzer, (MemoryAllocator_*)&allocator);
   tac_compiler_init(&tac_compiler, (MemoryAllocator_*)&allocator);
   compiler_init(&compiler, (MemoryAllocator_*)&allocator);
 
-  AstNode_* root = parse(&parser, &scanner, analyzer.scope, source);
-  bool error = parser.had_error;
-  if (!error) {
-    analyze(&analyzer, (AstProgram_*)root);
+  CstNode_* cst_root = parse_cst(&cst_parser, &scanner, analyzer.scope, source);
+  bool error = false;
+  if (error = cst_parser.had_error) {
+    goto cleanup;
   }
 
-  error = error || analyzer.had_error;
-  if (!error) {
-    tac_compiler_compile(&tac_compiler, root);
-    codegen(&compiler, chunk, &tac_compiler.chunk, (MemoryAllocator_*)&allocator);
+  AstNode_* ast_root = parse_ast(&ast_parser, cst_root, analyzer.scope);
+  if (error = ast_parser.errors->has_errors) {
+    goto cleanup;
   }
+
+  analyze(&analyzer, (AstProgram_*)ast_root);
+
+  if (error = analyzer.had_error) {
+    goto cleanup;
+  }
+  tac_compiler_compile(&tac_compiler, ast_root);
+  codegen(&compiler, chunk, &tac_compiler.chunk, (MemoryAllocator_*)&allocator);
   
-  end_compiler(&parser, chunk);
+cleanup:
+
+  if (ast_parser.errors->has_errors) {
+    for (ListNode_* n = ast_parser.errors->errors.head; n != NULL; n = n->next) {
+      Error_* err = list_ptr(n, Error_);
+      printf(err->error_str);
+    }
+  }
+
+  end_compiler(&cst_parser, chunk);
 
   compiler_clear(&compiler);
   tac_compiler_clear(&tac_compiler);
   analyzer_clear(&analyzer);
-  parser_clear(&parser);
+  ast_parser_clear(&ast_parser);
+  parser_clear(&cst_parser);
 
   pageallocator_deinit(&allocator);
+
+  chunk_protect(chunk);
   return !error;
 }
 

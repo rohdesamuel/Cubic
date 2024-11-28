@@ -111,5 +111,11 @@
     <None Include="constraints.cub">
       <Filter>Source Files\Test Files</Filter>
     </None>
+    <None Include="generic_functions.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
+    <None Include="type_classes.cub">
+      <Filter>Source Files\Test Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

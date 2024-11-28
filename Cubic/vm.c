@@ -33,7 +33,7 @@ InterpretResult vm_interpret(VM vm, const char* source) {
   if (!compile(source, &chunk)) {
     chunk_free(&chunk);
     return INTERPRET_COMPILE_ERROR;
-  }
+  }  
 
   vm->chunk = &chunk;
   vm->ip = vm->chunk->code;
@@ -222,7 +222,6 @@ static InterpretResult run(VM vm) {
         frame->slots[dst] = TRUE_VAL;
         continue;
       }
-
 
       case OP_CONSTANT:
       {

@@ -5,7 +5,7 @@
 #define ATTRIBUTE_MASK 0xFF000000
 
 RuntimeType_ type_toruntime(const Type_* ty) {
-  Type_* sub_ty = type_valtype(type_deref((Type_*)ty));
+  Type_* sub_ty = type_valtype((Type_*)ty);
   return (RuntimeType_) {
     .is_ptr = type_isavar(ty) || type_isaref(ty),
     .ty = sub_ty->cls

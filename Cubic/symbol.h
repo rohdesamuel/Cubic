@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "type.h"
+#include "type.h"
 #include "memory.h"
 #include "tokens.h"
 #include "value.h"
@@ -33,15 +34,12 @@ typedef enum {
   SYMBOL_CLS_TYPE,
 } SymbolCls_;
 
-#define MAKE_SEMANTIC_INFO(TYPE) ((SemanticType_){.info = (TYPE), .sym = NULL})
-
 typedef struct ClassSymbol_ {
   ListOf_(Symbol_*) members;
   struct Symbol_* constructor;
 } ClassSymbol_;
 
 // Any symbol living on the stack uses this as the base variable.
-// If the symbol references another symbol, the SemanticType_::sym will be set.
 typedef struct VarSymbol_ {
   Location_ location;
 } VarSymbol_;
@@ -73,6 +71,8 @@ typedef struct Symbol_ {
 
   Token_ name;
   struct Scope_* parent;
+  const struct TypeExpr_* type_expr;
+
   Type_* ty;
 
   union {

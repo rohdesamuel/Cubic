@@ -1,0 +1,45 @@
+type Vector[T]
+  (+): function(T, T) -> T
+  (-): function(T, T) -> T
+  (*): function(T, double) -> T
+  norm: function(T) -> double
+  normalize: function(T) -> T
+end
+
+class Vec2[T]: Vector
+  x: T
+  y: T
+end
+
+alias vec2: Vec2[float]
+
+val v : vec2 = {1.f, 0.f}
+val p : vec2 = {}
+
+while true
+  p += v
+end
+
+########
+
+type Vector[T]
+  (+): function(T, T) -> T
+  (-): function(T, T) -> T
+  (*): function(T, double) -> T
+  norm: function(T) -> double
+  normalize: function(T) -> T
+end
+
+class vec2: Vector
+  x: float
+  y: float
+end
+
+
+
+val v : vec2 = {1.f, 0.f}
+val p : vec2 = {}
+
+while true
+  p += v
+end

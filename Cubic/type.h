@@ -85,17 +85,18 @@ typedef enum {
 } ValueLifetime;
 #define TYPE_CLS(name) TYPE_##name
 
+
+typedef struct Specialization_ {
+  struct Type_* type;
+  struct Type_** args;
+  size_t count;
+} Specialization_;
+
 typedef struct Type_ {
   // The type that is the final result of resolving the symbol.
   // E.g. return value of a function, the type that a pointer is addressing
   // to, the field of a given struct.
   enum TypeCls {
-    // Unknown because type has not been parsed.
-    TYPE_CLS(UnknownType_),    
-
-    // Type that was previously a placeholder and then resolved.
-    TYPE_CLS(Type_),
-
     // Primitive types.
     __TYPE_PRIMITIVE_START__,
     TYPE_CLS(NilType_),
@@ -124,9 +125,6 @@ typedef struct Type_ {
     TYPE_CLS(VarType_),
     TYPE_CLS(RefType_),
     __TYPE_DECLS_END__,
-    TYPE_CLS(GenericOrArrayType_),
-    TYPE_CLS(GenericImplType_),
-    TYPE_CLS(GenericType_),
     TYPE_CLS(FieldType_),
     __TYPE_UNARY_END__,
 
@@ -137,6 +135,7 @@ typedef struct Type_ {
     TYPE_CLS(UnionType_),
     TYPE_CLS(ConstraintType_),
     TYPE_CLS(TupleType_),
+    TYPE_CLS(GenericParamType_),
     __TYPE_COMPOSITE_END__,
 
 
@@ -146,16 +145,27 @@ typedef struct Type_ {
     __TYPE_COUNT__,
   } cls;
 
+  // The TypeExpr_ that created this type.
+  const struct TypeExpr_* tmpl;
+
+  // The type arguments that created this type. Should be the same size as
+  // the type parameters in the parent TypeExpr_ `tmpl`.
+  struct Type_** args;
+  int args_count;
+
+  // List of type specializations.
+  ListOf_(Type_*) specializations;
 
   // The size of this type in memory, not following pointers.
   size_t size;
 
+  // The scope this type belongs to.
+  struct Scope_* scope;
   Token_ opt_name;
   uint64_t id;
 } Type_;
 
-#define DEF_PRIMITIVE_TY(NAME) typedef struct NAME##Type_ { Type_ self; } NAME##Type_; \
-extern const NAME##Type_ NAME##_Ty;
+#define DEF_PRIMITIVE_TY(NAME) extern const Type_* NAME##_Ty;
 
 DEF_PRIMITIVE_TY(Unknown);
 DEF_PRIMITIVE_TY(Nil);
@@ -245,12 +255,10 @@ typedef struct GenericType_ {
   struct Scope_* scope;
 } GenericType_;
 
-typedef struct GenericOrArrayType_ {
-  UnaryType_ unary;
-  Token_ arg_str;
-  Token_ full_name;
-  ListOf_(TypeArgument_) args;
-} GenericOrArrayType_;
+typedef struct GenericParamType_ {
+  UnaryType_ self;
+  Token_ name;
+} GenericParamType_;
 
 typedef struct UnionType_ {
   MultiType_ self;
@@ -281,7 +289,7 @@ typedef struct ClassTypeField_ {
 
 typedef struct ClassType_ {
   Type_ self;
-
+  
   const struct FunctionType_* constructor;
   ListOf_(ClassTypeField_) members;
   struct Scope_* scope;
@@ -295,31 +303,28 @@ typedef struct FunctionType_ {
   ListOf_(Type_*) params;
 } FunctionType_;
 
-Type_* make_unknown_ty(MemoryAllocator_* allocator);
-Type_* make_const_ty(Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_var_ty(Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_ref_ty(Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_in_ty(Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_out_ty(Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_array_ty(Type_* el_type, size_t count, MemoryAllocator_* allocator);
+void type_init();
+
+Type_* make_const_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_var_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_ref_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_in_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_out_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_array_ty(Type_* el_type, size_t count, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 
 // Class types are singletons. For each class type, there is only one Type_*
 // instance.
-Type_* make_class_ty(Token_ name, MemoryAllocator_* allocator);
-Type_* make_placeholder_ty(Token_ name, MemoryAllocator_* allocator);
-Type_* make_function_ty(Token_ name, MemoryAllocator_* allocator);
-Type_* make_symbol_ty(Type_* sym_type, struct Symbol_* sym, MemoryAllocator_* allocator);
-Type_* make_array_or_generic_ty(Token_ name, MemoryAllocator_* allocator);
-Type_* make_tuple_ty(MemoryAllocator_* allocator, int n, ...);
-Type_* make_union_ty(MemoryAllocator_* allocator, int n, ...);
-Type_* make_constraint_ty(MemoryAllocator_* allocator, Token_ name, int n, ...);
-Type_* make_field_ty(Token_ field_name, Type_* sub_type, MemoryAllocator_* allocator);
-Type_* make_generic_ty(Type_* prototype, List_* type_args, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_class_ty(Token_ name, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_function_ty(Token_ name, ListOf_(Type_*)* params, Type_* ret_ty, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_tuple_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator, int n, ...);
+Type_* make_union_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator, int n, ...);
+Type_* make_constraint_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator, Token_ name, int n, ...);
+Type_* make_field_ty(Token_ field_name, Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_genericparam_ty(Token_ name, Type_* constraint, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 
+Type_* type_alloc(MemoryAllocator_* allocator, struct Scope_* scope, const struct TypeExpr_* tmpl, int type_cls, size_t type_size);
 
-Type_* type_alloc(MemoryAllocator_* allocator, int type_cls, size_t type_size);
-
-#define type_alloc_ty(ALLOCATOR, TY) ((TY*)type_alloc(ALLOCATOR, TYPE_CLS(TY), sizeof(TY)))
+#define type_alloc_ty(ALLOCATOR, SCOPE, TYPE_EXPR, TY) ((TY*)type_alloc(ALLOCATOR, SCOPE, TYPE_EXPR, TYPE_CLS(TY), sizeof(TY)))
 
 // Fills all placeholders in the given type with types found starting at the
 // given scope. Returns true if type was resolved successfully, e.g. was able
@@ -327,9 +332,6 @@ Type_* type_alloc(MemoryAllocator_* allocator, int type_cls, size_t type_size);
 bool type_resolve(Type_* type, struct Scope_* scope);
 
 // Sets the the given type
-void type_set(Type_* type, Type_* new_type);
-void type_wrap(Type_* type, Type_* wrapper);
-void type_replace(Type_* type, Type_* new_type);
 uint64_t type_id(const Type_* ty);
 
 // Calculates the size of the given type.
@@ -358,18 +360,17 @@ bool uniontype_has(const Type_* union_ty, const Type_* ty);
 Type_* uniontype_select(const Type_* ty, const Type_* assign_ty);
 Type_* generictype_findimpl(Type_* generic_ty, struct Scope_* scope);
 Type_* generictype_findimpl_i(Type_* generic_ty, uint64_t type_id);
-Type_* generictype_specialize(Type_* ty, ListOf_(TypeArgument_)* type_args, Token_ name_tk, struct MemoryAllocator_* allocator, struct Scope_* scope);
 
 #define type_is(PTYPE, CLS) type_is_(PTYPE, TYPE_CLS(CLS))
 inline bool type_is_(const Type_* type, int cls) {
+  if (!type) {
+    return false;
+  }
+
   if (type->cls == cls) {
     return true;
   }
 
-  if (type->cls == TYPE_CLS(Type_)) {
-    type = ((UnaryType_*)type)->ty;
-  }
-  
   return false;
 }
 
@@ -380,8 +381,6 @@ Type_* assert_type_is_(Type_* ty, int val);
 
 void print_type(const Type_* ty);
 
-bool type_isunknown(const Type_* ty);
-bool type_isplaceholder(const Type_* ty);
 bool type_isaprimitive(const Type_* ty);
 bool type_isunary(const Type_* ty);
 bool type_isnil(const Type_* ty);

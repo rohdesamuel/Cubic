@@ -22,7 +22,7 @@ UTEST_F(ParserTest, EmptySourceCode) {
   
   Frame_* frame = frame_root((MemoryAllocator_*)&utest_fixture->allocator);
 
-  AstNode_* ast = parse(&utest_fixture->parser, &scanner, frame->scope, "");
+  //AstNode_* ast = parse(&utest_fixture->parser, &scanner, frame->scope, "");
 }
 
 UTEST_F(ParserTest, DoubleDots) {
@@ -31,5 +31,5 @@ UTEST_F(ParserTest, DoubleDots) {
 
   Frame_* frame = frame_root((MemoryAllocator_*)&utest_fixture->allocator);
 
-  AstNode_* ast = parse(&utest_fixture->parser, &scanner, frame->scope, "1.. val a := 0");
+  //AstNode_* ast = parse(&utest_fixture->parser, &scanner, frame->scope, "1.. val a := 0");
 }

@@ -1,0 +1,16 @@
+function add[T](a: T, b: T) -> T
+  return a + b
+end
+
+function sub[V, T](a: V, b: T) -> T
+  return a - b
+end
+
+function some[T](a: T, b: T) -> T
+  return add[T](a, b) - sub[T, int](a, b)
+end
+
+some[int](1, 2)
+
+assert add[int](1, 2) == 3
+assert add[double](4.0, 8.0) == 12.0

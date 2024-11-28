@@ -12,6 +12,12 @@
 // #define DEBUG_PRINT_CODE
 // #define DEBUG_TRACE_EXECUTION
 
+#if (defined __WIN32__ || defined __CYGWIN32__ || defined _WIN32 || defined _WIN64 || defined _MSC_VER)
+#define __COMPILE_AS_WINDOWS__
+#elif (defined __linux__ || defined __GNUC__)
+#define __COMPILE_AS_LINUX__
+#endif
+
 #define expectf(cond, ...) \
 do { if (!(cond)) fprintf(stderr, __VA_ARGS__); __debugbreak(); }  while(0)
 
@@ -43,5 +49,11 @@ do { if (!(cond)) { fprintf(stderr, __VA_ARGS__); __debugbreak(); exit(1); } }  
 #  error "Cannot define thread_local"
 # endif
 #endif
+
+#define Optional(TYPE) \
+struct { \
+  bool has_val; \
+  TYPE val; \
+}
 
 #endif  // COMMON__H

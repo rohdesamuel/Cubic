@@ -7,67 +7,99 @@
 #include "value.h"
 
 #define AST_CLS(name) AST_##name
-#define MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, LINE) ((CLS*) make_ast_node((MemoryAllocator_*)(ALLOCATOR), AST_CLS(CLS), sizeof(CLS), (SCOPE), LINE))
-#define MAKE_AST_NOOP(ALLOCATOR) (make_ast_node((MemoryAllocator_*)(ALLOCATOR), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), (NULL), 0))
-#define MAKE_AST_STMT(ALLOCATOR, CLS, SCOPE, LINE) MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, LINE)
-#define MAKE_AST_EXPR(ALLOCATOR, CLS, SCOPE, LINE) MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, LINE)
+#define MAKE_AST_NODE(ALLOCATOR, CLS, SCOPE, NODE) ((CLS*) make_ast_node((MemoryAllocator_*)(ALLOCATOR), AST_CLS(CLS), sizeof(CLS), (SCOPE), (struct CstNode_*)(NODE)))
+#define MAKE_AST_NOOP(ALLOCATOR) (make_ast_node((MemoryAllocator_*)(ALLOCATOR), AST_CLS(AstNoopStmt_), sizeof(AstNoopStmt_), NULL, NULL))
 #define AST_CAST(TYPE, EXPR) ((TYPE*)(assert_astnode_is(EXPR, AST_CLS(TYPE))))
 
 // TODO: implement types as UnionTypes.
+#define ASTNODE_LIST(AST_NODE) \
+  AST_NODE(AstProgram_), \
+  AST_NODE(AstBlock_), \
+  AST_NODE(AstStmt_), \
+  AST_NODE(AstExpr_), \
+  AST_NODE(AstPrintStmt_), \
+  AST_NODE(AstUnaryExp_), \
+  AST_NODE(AstBinaryExp_), \
+  AST_NODE(AstPrimaryExp_), \
+  AST_NODE(AstReturnStmt_), \
+  AST_NODE(AstIfStmt_), \
+  AST_NODE(AstAssertStmt_), \
+  AST_NODE(AstVarDeclStmt_), \
+  AST_NODE(AstVarExpr_), \
+  AST_NODE(AstIndexExpr_), \
+  AST_NODE(AstIdExpr_), \
+  AST_NODE(AstAssignmentExpr_), \
+  AST_NODE(AstInPlaceBinaryStmt_), \
+  AST_NODE(AstWhileStmt_), \
+  AST_NODE(AstForStmt_), \
+  AST_NODE(AstFunctionPrototype_), \
+  AST_NODE(AstFunctionDef_), \
+  AST_NODE(AstGenericFunctionDef_), \
+  AST_NODE(AstFunctionParam_), \
+  AST_NODE(AstFunctionCall_), \
+  AST_NODE(AstFunctionCallArgs_), \
+  AST_NODE(AstFunctionCallArg_), \
+  AST_NODE(AstExpressionStmt_), \
+  AST_NODE(AstNoopExpr_), \
+  AST_NODE(AstNoopStmt_), \
+  AST_NODE(AstCleanUpTemps_), \
+  AST_NODE(AstTmpDecl_), \
+  AST_NODE(AstClassDef_), \
+  AST_NODE(AstClassMemberDecl_), \
+  AST_NODE(AstClassConstructor_), \
+  AST_NODE(AstClassConstructorParam_), \
+  AST_NODE(AstDotExpr_), \
+  AST_NODE(AstTypeExpr_), \
+  AST_NODE(AstArrayValueExpr_), \
+  AST_NODE(AstRangeExpr_), \
+  AST_NODE(AstTypeDef_), \
+  AST_NODE(TypeMemberDecl_), \
+  AST_NODE(AstGenericParam_), \
+  AST_NODE(AstGenericParams_), \
+  AST_NODE(AstIndexOrTypeExpr_), \
+  AST_NODE(AstIndexOrGenericArgs_)
+
+#define GENERATE_ASTNODE(NODE) AST_CLS(NODE)
+
+typedef struct AstListNode_ {
+  struct AstNode_* node;
+  struct AstListNode_* next;
+} AstListNode_;
+
+typedef struct AstList_ {
+  struct MemoryAllocator_* allocator;
+  AstListNode_* head;
+  AstListNode_* tail;
+  int count;
+} AstList_;
+
 typedef struct AstNode_ {
   enum {
-    AST_CLS(AstProgram_),
-    AST_CLS(AstBlock_),
-    AST_CLS(AstStmt_),
-    AST_CLS(AstExpr_),
-    AST_CLS(AstPrintStmt_),
-    AST_CLS(AstUnaryExp_),
-    AST_CLS(AstBinaryExp_),
-    AST_CLS(AstPrimaryExp_),
-    AST_CLS(AstReturnStmt_),
-    AST_CLS(AstIfStmt_),
-    AST_CLS(AstAssertStmt_),
-    AST_CLS(AstVarDeclStmt_),
-    AST_CLS(AstVarExpr_),
-    AST_CLS(AstIndexExpr_),
-    AST_CLS(AstIdExpr_),
-    AST_CLS(AstAssignmentExpr_),
-    AST_CLS(AstInPlaceBinaryStmt_),
-    AST_CLS(AstWhileStmt_),
-    AST_CLS(AstForStmt_),
-    AST_CLS(AstFunctionDef_),
-    AST_CLS(AstFunctionBody_),
-    AST_CLS(AstFunctionParam_),
-    AST_CLS(AstFunctionCall_),
-    AST_CLS(AstFunctionCallArgs_),
-    AST_CLS(AstFunctionCallArg_),
-    AST_CLS(AstExpressionStmt_),
-    AST_CLS(AstNoopExpr_),
-    AST_CLS(AstNoopStmt_),
-    AST_CLS(AstCleanUpTemps_),
-    AST_CLS(AstTmpDecl_),
-    AST_CLS(AstClassDef_),
-    AST_CLS(AstClassMemberDecl_),
-    AST_CLS(AstClassConstructor_),
-    AST_CLS(AstClassConstructorParam_),
-    AST_CLS(AstDotExpr_),
-    AST_CLS(AstTypeExpr_),
-    AST_CLS(AstArrayValueExpr_),
-    AST_CLS(AstRangeExpr_),
-    AST_CLS(AstTypeDef_),
-    AST_CLS(TypeMemberDecl_),
-    AST_CLS(AstGenericParam_),
-    AST_CLS(AstGenericParams_),
-    AST_CLS(AstIndexOrTypeExpr_),
-    AST_CLS(AstIndexOrGenericArgs_),
+    ASTNODE_LIST(GENERATE_ASTNODE),
     __AST_NODE_COUNT__,
   } cls;
-  int line;
+
+  const struct CstNode_* parent;
   struct Scope_* scope;
+  AstList_ specializations;
+  int line;
 } AstNode_;
+
+extern size_t ast_node_sizes[__AST_NODE_COUNT__];
 
 #define AS_NODE(PTR) ((struct AstNode_*)(PTR))
 #define AS_EXPR(PTR) ((struct AstExpr_*)(PTR))
+
+struct AstList_* astlist_create(struct MemoryAllocator_* allocator);
+
+// Performs a deep copy of node in the given list.
+struct AstList_* astlist_copy(const struct AstList_* from, struct MemoryAllocator_* allocator, struct Scope_* scope);
+void astlist_copyto(struct AstList_* to, const struct AstList_* from, struct MemoryAllocator_* allocator, struct Scope_* scope);
+
+void astlist_init(struct AstList_* list, struct MemoryAllocator_* allocator);
+void astlist_clear(struct AstList_* list);
+void astlist_destroy(struct AstList_** list);
+void astlist_append(struct AstList_* list, struct AstNode_* node);
 
 typedef struct AstStmt_ {
   AstNode_ base;
@@ -80,12 +112,12 @@ typedef struct AstExpr_ {
   struct AstExpr_* expr;
 
   // This type is the result of executing this expression.
-  struct Type_* type;
+  Type_* type;
 
   // This type is what the result of this expression should be interpreted as.
   // For instance, when automatically dereferencing a reference this type is a
   // value type.
-  struct Type_* top_type;
+  Type_* top_type;
 } AstExpr_;
 
 typedef struct AstCleanUpTemps_ {
@@ -106,18 +138,6 @@ typedef struct AstNoopStmt_ {
 typedef struct AstNoopExpr_ {
   AstExpr_ base;
 } AstNoopExpr_;
-
-typedef struct AstListNode_ {
-  AstNode_* node;
-  struct AstListNode_* next;
-} AstListNode_;
-
-typedef struct AstList_ {
-  struct MemoryAllocator_* allocator;
-  AstListNode_* head;
-  AstListNode_* tail;
-  int count;
-} AstList_;
 
 // Program ::= Block
 typedef struct AstProgram_ {
@@ -143,9 +163,8 @@ typedef struct AstPrintStmt_ {
 typedef struct AstVarDeclStmt_ {
   AstNode_ base;
 
-  // Owned by Parser allocator.
   Token_ name;
-  struct Type_* decl_type;
+  Type_* decl_type;
 
   AstExpr_* expr;
 } AstVarDeclStmt_;
@@ -328,34 +347,38 @@ typedef struct TypeMemberDecl_ {
 typedef struct AstTypeDef_ {
   struct AstNode_ base;
   Token_ name;
-  AstGenericParams_* opt_generics;
   Type_* type;
   AstList_ members;
 } AstTypeDef_;
 
-// FunctionDef ::= 'function' [Id] [GenericParams] FunctionBody 'end'
+typedef struct AstFunctionPrototype_ {
+  struct AstNode_ base;
+  struct CstFunctionDef_* parent;
+
+  Type_* fn_type;
+  AstList_ defs;
+} AstFunctionPrototype_;
+
+// FunctionDef ::= 'function' [Id] '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement 'end'
 typedef struct AstFunctionDef_ {
   struct AstExpr_ base;
   struct Symbol_* fn_symbol;
-
-  struct AstFunctionBody_* body;
+  struct AstNode_* body;
+  AstList_ function_params;
+  Type_* return_type;
 } AstFunctionDef_;
 
-// FunctionBody ::= '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement
-typedef struct AstFunctionBody_ {
-  struct AstNode_ base;
-  struct Symbol_* fn_symbol;
-  AstList_ function_params;
-  struct Type_* return_type;
-  AstNode_* stmt;
-} AstFunctionBody_;
+// GenericFunctionDef ::= 'function' [Id] [GenericParams] FunctionBody 'end'
+typedef struct AstGenericFunctionDef_ {
+  AstFunctionDef_ base;
+  struct AstGenericParams_* generic_params;
+} AstGenericFunctionDef_;
 
 // FunctionParam ::= (Id [':' UnionType])
 typedef struct AstFunctionParam_ {
   struct AstNode_ base;
   Token_ name;
-  struct Type_* type;
-
+  Type_* type;
 } AstFunctionParam_;
 
 // FunctionCall ::= PrefixExpr FunctionCallArgs
@@ -370,7 +393,7 @@ typedef struct AstFunctionCall_ {
 // FunctionCallArgs ::= '(' { FunctionCallArg } ')'
 typedef struct AstFunctionCallArgs_ {
   struct AstNode_ base;
-  struct Type_* fn_type;
+  Type_* fn_type;
   AstList_ args;
   struct Symbol_* fn_sym;  
 } AstFunctionCallArgs_;
@@ -385,7 +408,6 @@ typedef struct AstFunctionCallArg_ {
 typedef struct AstClassDef_ {
   struct AstNode_ base;
   Token_ name;
-  AstGenericParams_* opt_generics;
   AstList_ members;
 
   Type_* class_type;
@@ -397,8 +419,7 @@ typedef struct AstClassMemberDecl_ {
   struct AstNode_ base;
 
   Token_ name;
-  struct Type_* field_type;
-  Symbol_* field_sym;
+  Type_* field_type;
   AstExpr_* opt_expr;
 } AstClassMemberDecl_;
 
@@ -427,7 +448,8 @@ typedef struct Ast_ {
   struct AstProgram_* program;
 } Ast_;
 
-AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct Scope_* symbol_table, int line);
+AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struct Scope_* symbol_table, const struct CstNode_* node);
+AstNode_* copy_ast_node(MemoryAllocator_* allocator, AstNode_* node, struct Scope_* scope);
 #define assert_astnode_is(NODE, CLS) assert_astnode_is_((AstNode_*)(NODE), CLS)
 AstNode_* assert_astnode_is_(AstNode_* node, int cls);
 #endif  // AST__H

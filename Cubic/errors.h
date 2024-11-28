@@ -6,6 +6,7 @@
 typedef struct Error_ {
   const char* error_str;
   int line;
+  const char* source;
 } Error_;
 
 typedef struct ErrorsContainer_ {

@@ -173,8 +173,10 @@
   <ItemGroup>
     <ClCompile Include="analyzer.c" />
     <ClCompile Include="ast.c" />
+    <ClCompile Include="ast_parser.c" />
     <ClCompile Include="chunk.c" />
     <ClCompile Include="compiler.c" />
+    <ClCompile Include="cst.c" />
     <ClCompile Include="debug.c" />
     <ClCompile Include="errors.c" />
     <ClCompile Include="hash.c" />
@@ -183,6 +185,7 @@
     <ClCompile Include="memory.c" />
     <ClCompile Include="native_fns.c" />
     <ClCompile Include="object.c" />
+    <ClCompile Include="cst_parser.c" />
     <ClCompile Include="parser.c" />
     <ClCompile Include="random.c" />
     <ClCompile Include="runtime_type.c" />
@@ -192,6 +195,8 @@
     <ClCompile Include="tac_compiler.c" />
     <ClCompile Include="tokens.c" />
     <ClCompile Include="type.c" />
+    <ClCompile Include="type_expr.c" />
+    <ClCompile Include="type_parser.c" />
     <ClCompile Include="value.c" />
     <ClCompile Include="vm.c" />
   </ItemGroup>
@@ -204,6 +209,7 @@
     <ClInclude Include="chunk.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="compiler.h" />
+    <ClInclude Include="cst.h" />
     <ClInclude Include="debug.h" />
     <ClInclude Include="errors.h" />
     <ClInclude Include="hash.h" />
@@ -223,6 +229,8 @@
     <ClInclude Include="tokens.h" />
     <ClInclude Include="type.h" />
     <ClInclude Include="type_checker.h" />
+    <ClInclude Include="type_expr.h" />
+    <ClInclude Include="type_parser.h" />
     <ClInclude Include="value.h" />
     <ClInclude Include="vm.h" />
   </ItemGroup>

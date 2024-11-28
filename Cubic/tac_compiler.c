@@ -1058,7 +1058,7 @@ static Location_ emit_idiv(TacChunk_* chunk, Location_ l, Location_ r, const Typ
 
   if (type_isareal(ltype)) {
     // Convert the float or double to 4 or 8 byte int respectively.
-    const Type_* int_ty = type_is(ltype, FloatType_) ? (const Type_*)&Int32_Ty : (const Type_*)&Int64_Ty;
+    const Type_* int_ty = type_is(ltype, FloatType_) ? Int32_Ty : Int64_Ty;
     return emit_cast(chunk, tmp, ltype, int_ty, type_size, line);
   }
 
@@ -1353,9 +1353,9 @@ static Location_ primary_code_gen(TacChunk_* chunk, AstNode_* node) {
   TypedValue_ v = { 0 };
 
   if (type_is(ty, NilType_)) {
-    v = (TypedValue_){ NIL_VAL, type_toruntime((Type_*)&Nil_Ty)};
+    v = (TypedValue_){ NIL_VAL, type_toruntime(Nil_Ty)};
   } else if (type_is(ty, BoolType_)) {
-    v = (TypedValue_){ exp->value.as.b ? TRUE_VAL : FALSE_VAL, type_toruntime((Type_*)&Bool_Ty) };
+    v = (TypedValue_){ exp->value.as.b ? TRUE_VAL : FALSE_VAL, type_toruntime(Bool_Ty) };
   } else {
     v = (TypedValue_){ exp->value, type_toruntime(exp->base.type)};
   }
@@ -1581,7 +1581,7 @@ Location_ array_get_as_ptr(TacChunk_* chunk, Location_* array, Location_* index,
       break;
   }
 
-  Type_* el_type = type_deref(array_ty->el_type);
+  Type_* el_type = array_ty->el_type;
   size_t el_size = el_type->size * sizeof(Value_);
 
   emit_tac(chunk, OP_LEA, prefix_ptr, OP_LOC(*index), OP_SIZE(el_size), line);
@@ -1590,7 +1590,7 @@ Location_ array_get_as_ptr(TacChunk_* chunk, Location_* array, Location_* index,
 
 static Location_ array_get_as_ref(TacChunk_* chunk, Location_* array, Location_* index, ArrayType_* array_ty, int line) {
   Location_ ptr = array_get_as_ptr(chunk, array, index, array_ty, line);
-  Type_* el_type = type_deref(array_ty->el_type);
+  Type_* el_type = array_ty->el_type;
   if (type_is(el_type, VarType_)) {
     Location_ dst = tac_alloc_ptr(chunk);
     Location_ tmp = tac_alloc_ptr(chunk);
@@ -1604,7 +1604,7 @@ static Location_ array_get_as_ref(TacChunk_* chunk, Location_* array, Location_*
 
 static Location_ array_get_as_val(TacChunk_* chunk, Location_* array, Location_* index, ArrayType_* array_ty,  int line) {
   Location_ ptr = array_get_as_ptr(chunk, array, index, array_ty, line);
-  Type_* el_type = type_deref(array_ty->el_type);
+  Type_* el_type = array_ty->el_type;
   Location_ dst = tac_alloc(chunk, el_type);
   if (dst.size == 1) {
     emit_tac(chunk, OP_LOAD, dst, OP_LOC(ptr), OP_OFFSET(0), line);
@@ -1633,7 +1633,7 @@ static Location_ index_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   if (tmp.type == LOCATION_TYPE_VAL) {
     index = tmp;
   } else {
-    index = tac_alloc_val(chunk, Int_Ty.self.size);
+    index = tac_alloc_val(chunk, Int_Ty->size);
     emit_set_variable(chunk, &index, &tmp, expr->index->type, node->line);
   }
 
@@ -1743,7 +1743,22 @@ static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
   fn_chunk->slot_offset++;
 
   hashmap_set(chunk->fn_code, fn_loc.token.start, fn_loc.token.length, (uintptr_t)fn_chunk);
-  code_gen(fn_chunk, (AstNode_*)def->body);  
+  
+  emit_label(chunk, fn->loc, node->line);
+  TacHandle_ prologue = emit_tac(chunk, OP_PROLOGUE, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
+  for (AstListNode_* n = def->function_params.head; n != NULL; n = n->next) {
+    code_gen(chunk, n->node);
+  }
+
+  code_gen(chunk, def->body);
+
+  if (type_is(def->return_type, NilType_)) {
+    emit_tac(chunk, OP_RETURN, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
+  }
+
+  chunk->code[prologue].arg_l = OP_SIZE(chunk->slot_offset);
+  chunk->code[prologue].arg_r = OP_SIZE(fn->arg_size);
+  //emit_tac(chunk, OP_EPILOGUE, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
 
   return fn_loc;
 }
@@ -1755,24 +1770,7 @@ static Location_ function_param_code_gen(TacChunk_* chunk, AstNode_* node) {
 }
 
 static Location_ function_body_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstFunctionBody_* body = (AstFunctionBody_*)node;
-  FunctionSymbol_* fn = &body->fn_symbol->fn;
-  emit_label(chunk, fn->loc, node->line);
-  TacHandle_ prologue = emit_tac(chunk, OP_PROLOGUE, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
-  for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
-    code_gen(chunk, n->node);
-  }
 
-  code_gen(chunk, body->stmt);
-
-  if (type_is(body->return_type, NilType_)) {
-    emit_tac(chunk, OP_RETURN, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
-  }
-  
-  chunk->code[prologue].arg_l = OP_SIZE(chunk->slot_offset);
-  chunk->code[prologue].arg_r = OP_SIZE(fn->arg_size);
-  //emit_tac(chunk, OP_EPILOGUE, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
-  return EMPTY_LOC;
 }
 
 static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
@@ -2103,7 +2101,7 @@ static Location_ in_place_binary_stmt_code_gen(TacChunk_* chunk, AstNode_* node)
     if (dst.type == LOCATION_TYPE_VAL) {
     tmp = dst;
   } else {
-    tmp = tac_alloc_val(chunk, Int_Ty.self.size);
+    tmp = tac_alloc_val(chunk, Int_Ty->size);
     emit_set_variable(chunk, &tmp, &dst, expr->left->type, node->line);
   }
   Location_ src = code_gen(chunk, (AstNode_*)expr->right);
@@ -2143,7 +2141,6 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstWhileStmt_)]             = {while_stmt_code_gen},
   [AST_CLS(AstForStmt_)]               = {for_stmt_code_gen},
   [AST_CLS(AstFunctionDef_)]           = {function_def_code_gen},
-  [AST_CLS(AstFunctionBody_)]          = {function_body_code_gen},
   [AST_CLS(AstFunctionParam_)]         = {function_param_code_gen},
   [AST_CLS(AstFunctionCall_)]          = {function_call_code_gen},
   [AST_CLS(AstFunctionCallArgs_)]      = {function_args_code_gen},

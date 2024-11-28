@@ -22,7 +22,7 @@ Frame_* frame_root(struct MemoryAllocator_* allocator) {
     .line = 0,
   };
 
-  return frame_create(make_function_ty(entry_name, allocator), allocator);
+  return frame_create(make_function_ty(entry_name, NULL, NULL, NULL, NULL, allocator), allocator);
 }
 
 Frame_* frame_create(Type_* fn_type, struct MemoryAllocator_* allocator) {
@@ -85,23 +85,6 @@ Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope) {
   return scope_addclass(scope, cls_ty);
 }
 
-Symbol_* frame_addtmp(Frame_* frame, Scope_* scope) {
-  MemoryAllocator_* allocator = frame->allocator;
-
-  int tmp_index = frame->tmp_count++;
-
-  Symbol_* ret = alloc(allocator, sizeof(Symbol_));
-  *ret = (Symbol_){
-    .type = SYMBOL_CLS_TMP,
-    .name = {0},
-    .parent = scope,
-  };
-
-  list_push(&frame->tmps, &ret);
-  
-  return ret;
-}
-
 Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope) {
   return scope_addtype(scope, name, type);
 }
@@ -115,21 +98,6 @@ void frame_leavescope(Frame_* frame, Scope_* scope) {
 
   frame->stack_size -= scope->stack_size;
   frame->var_count -= scope->table->vars.count;
-}
-
-static void frame_cleartemps(Frame_* frame) {
-  frame->max_tmp_count = max(frame->max_tmp_count, frame->tmp_count);
-  //frame->tmp_count = 0;
-  list_clear(&frame->tmps);
-}
-
-void frame_movetemps(Frame_* frame, List_* list) {
-  for (ListNode_* n = frame->tmps.head; n != NULL; n = n->next) {
-    Symbol_* s = list_val(n, Symbol_*);
-    list_push(list, &s);
-  }
-
-  frame_cleartemps(frame);
 }
 
 static Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn) {
@@ -182,7 +150,14 @@ void scope_destroy(Scope_** scope) {
   list_clear(&to_destroy->children);
 
   symboltable_destroy(&to_destroy->table);
+
+  if (to_destroy->parent) {
+    Scope_* parent = to_destroy->parent;
+    assertf(list_remove(&parent->children, (void*)&to_destroy), "");
+  }
+
   dealloc(allocator, to_destroy);
+  **scope = (Scope_){ 0 };
   *scope = NULL;
 }
 
@@ -254,7 +229,6 @@ Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type) {
     .parent = scope,
     .ty = type
   };
-
   return scope_addnew(scope, &s);
 }
 
@@ -288,7 +262,6 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   };
 
   list_of(&s.closure.closures, Symbol_*, scope->allocator);
-
   return scope_addnew(scope, &s);
 }
 
@@ -344,7 +317,7 @@ Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, Type_* type) {
   return field;
 }
 
-Symbol_* scope_find(Scope_* scope, Token_* name) {
+Symbol_* scope_find(Scope_* scope, const Token_* name) {
   Symbol_* ret = NULL;
   SymbolTable_* table = scope->table;
   if (!hashmap_get(table->symbols_, name->start, name->length, (uintptr_t*)&ret)) {

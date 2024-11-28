@@ -44,11 +44,9 @@ typedef struct Frame_ {
   ListOf_(Symbol_*) tmps;
 
   int var_count;
-  int tmp_count;
   int stack_size;
 
   int max_var_count;
-  int max_tmp_count;
   int max_stack_size;
 } Frame_;
 
@@ -70,13 +68,10 @@ Symbol_* frame_addparam(Frame_* frame, Token_* name, Type_* type);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 Symbol_* frame_addfn(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope);
-Symbol_* frame_addtmp(Frame_* frame, Scope_* scope);
 Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
-void frame_assignindices(Frame_* frame);
 
 void frame_enterscope(Frame_* frame, Scope_* scope);
 void frame_leavescope(Frame_* frame, Scope_* scope);
-void frame_movetemps(Frame_* frame, List_* list);
 void frame_closevar(Frame_* frame, Symbol_* sym);
 Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn);
 
@@ -86,11 +81,9 @@ void scope_destroy(Scope_** scope);
 
 SymbolTable_* symboltable_create(struct MemoryAllocator_* allocator);
 SymbolTable_* symboltable_createfrom(SymbolTable_* parent);
-SymbolTable_* symboltable_copy(SymbolTable_* table);
-SymbolTable_* symboltable_add(SymbolTable_* table);
 void symboltable_destroy(SymbolTable_** symbol_table);
 
-Symbol_* scope_find(Scope_* scope, Token_* name);
+Symbol_* scope_find(Scope_* scope, const Token_* name);
 Symbol_* scope_search_to_root(Scope_* scope, const Token_* name);
 VarSymbol_* scope_var(Scope_* scope, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
@@ -98,9 +91,6 @@ Symbol_* scope_addnew(Scope_* scope, Symbol_* symbol);
 bool scope_addexisting(Scope_* scope, Symbol_* symbol);
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
-
-int symbolvar_index(Symbol_* var);
-int symboltmp_index(Symbol_* tmp);
 
 Symbol_* classsymbol_addmember(Symbol_* sym, Token_ name, Type_* type);
 

@@ -134,4 +134,6 @@ void chunk_write(Chunk chunk, uint8_t byte, int line);
 void chunk_writeconstant(Chunk chunk, Value_ value, int line);
 int chunk_addconstant(Chunk chunk, Value_ value);
 
+void chunk_protect(Chunk chunk);
+
 #endif  // CHUNK__H

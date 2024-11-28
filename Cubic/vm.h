@@ -8,7 +8,7 @@
 #include "value.h"
 
 #define FRAMES_MAX 256
-#define STACK_MAX 256
+#define STACK_MAX 256 // (1 << 20)  // 1 million Value entries.
 #define NATIVE_FNS_MAX 1024
 
 typedef struct CallFrame_ {

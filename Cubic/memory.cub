@@ -208,7 +208,7 @@ val mesh := new Mesh with [num_verts=num_verts]
 ###################
 # USE CASE 3
 #
-# Should you free or not free memory from an API? Whos owns the memory?
+# Should you free or not free memory from an API? Who owns the memory?
 ###################
 
 struct Foo_* foo_create();

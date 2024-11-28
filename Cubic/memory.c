@@ -24,27 +24,27 @@ void* reallocate(void* pointer, size_t old_size, size_t new_size) {
   return result;
 }
 
-void array_init(Array_* array, struct MemoryAllocator_* allocator, size_t elm_size) {
-  *array = (Array_){ 0 };
-  array->elm_size = elm_size;
-}
-
-void* array_grow(Array_* array) {
-  int new_capacity = (array->capacity) < 8 ? 8 : (array->capacity) * 2;
-  if (new_capacity == 0) {
-    free(array->data);
-    return NULL;
-  }
-
-  void* result = realloc(array->data, array->elm_size * new_capacity);
-  if (result == NULL) exit(1);
-
-  return result;
-}
-
-void array_free(Array_* array) {
-  free(array->data);
-}
+//void array_init(Array_* array, struct MemoryAllocator_* allocator, size_t elm_size) {
+//  *array = (Array_){ 0 };
+//  array->elm_size = elm_size;
+//}
+//
+//void* array_grow(Array_* array) {
+//  int new_capacity = (array->capacity) < 8 ? 8 : (array->capacity) * 2;
+//  if (new_capacity == 0) {
+//    free(array->data);
+//    return NULL;
+//  }
+//
+//  void* result = realloc(array->data, array->elm_size * new_capacity);
+//  if (result == NULL) exit(1);
+//
+//  return result;
+//}
+//
+//void array_free(Array_* array) {
+//  free(array->data);
+//}
 
 #if 0
 struct MemoryPoolAllocator {
@@ -176,7 +176,7 @@ void list_clear(List_* list) {
   list->count = 0;
 }
 
-ListNode_* list_push(List_* list, void* pval) {
+ListNode_* list_push_(List_* list, void* pval) {
   struct ListNode_* n;
   if (list->allocator) {
     n = alloc(list->allocator, list->node_size);
@@ -197,6 +197,73 @@ ListNode_* list_push(List_* list, void* pval) {
   list->tail = n;
   ++list->count;
   return n;
+}
+
+bool list_remove(List_* list, void* pval) {
+  ListNode_* to_pop = NULL;
+  ListNode_* prev = NULL;
+  bool ret = false;
+  for (ListNode_* n = list->head; n != NULL; n = n->next) {
+    if (memcmp(&n->data, pval, list->val_size) == 0) {
+      ret = true;
+      to_pop = n;
+
+      if (to_pop == list->head) {
+        list->head = to_pop->next;
+      }
+      
+      if (to_pop == list->tail) {
+        list->tail = prev;
+      }
+
+      if (prev) {
+        prev->next = n->next;
+      }
+
+      break;
+    }
+    prev = n;
+  }
+
+  if (ret) {
+    if (list->allocator) {
+      dealloc(list->allocator, to_pop);
+    } else {
+      free(to_pop);
+    }
+    --list->count;
+  }
+
+  return ret;
+}
+
+bool list_pop(List_* list, void* pval, size_t val_size) {
+  assertf(list->val_size >= val_size, "Trying to pop from list and place into too small a value.");
+  if (!list->head) {
+    return false;
+  }
+
+  ListNode_* to_pop = list->head;
+  list->head = to_pop->next;
+
+  if (to_pop == list->tail) {
+    list->tail = NULL;
+  }
+
+  memcpy(pval, &to_pop->data, list->val_size);
+
+  if (list->allocator) {
+    dealloc(list->allocator, to_pop);
+  } else {
+    free(to_pop);
+  }
+  --list->count;
+
+  return true;
+}
+
+bool list_empty(List_* list) {
+  return list->count == 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -341,3 +408,7 @@ MemoryAllocator_ DefaultAllocator = {
   .deallocate = default_dealloc,
   .clear = default_clear
 };
+
+MemoryAllocator memallocator_default() {
+  return &DefaultAllocator;
+}

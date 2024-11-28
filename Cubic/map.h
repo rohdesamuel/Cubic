@@ -58,6 +58,8 @@ typedef void (*hashmap_callback)(const void* key, size_t ksize, uintptr_t value,
 
 Hashmap* hashmap_create(void);
 
+Hashmap* hashmap_copy(Hashmap* map);
+
 // only frees the hashmap object and buckets.
 // does not call free on each element's `key` or `value`.
 // to free data associated with an element, call `hashmap_iterate`.

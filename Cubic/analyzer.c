@@ -31,31 +31,17 @@ void analyzer_init(Analyzer_* analyzer, MemoryAllocator_* allocator) {
   analyzer->scope = analyzer->frame->scope;
 }
 
-void errorscontainer_init(ErrorsContainer_* errors, MemoryAllocator_* allocator) {
-  *errors = (ErrorsContainer_){ 0 };
-  errors->allocator = allocator;
-
-  list_of(&errors->errors, Error_, allocator);
-}
-
-static void errorscontainer_clear(ErrorsContainer_* errors) {
-  for (ListNode_* n = errors->errors.head; n != NULL; n = n->next) {
-    Error_* err = list_ptr(n, Error_);
-    dealloc(errors->allocator, (char*)err->error_str);
-  }
-  list_clear(&errors->errors);
-}
-
-void analyze(Analyzer_* analyzer, struct AstProgram_* ast) {
-  analyzer_ = analyzer;
-  do_analysis(analyzer, (AstNode_*)ast);
-}
-
 void analyzer_clear(Analyzer_* analyzer) {
   scope_destroy(&analyzer->scope);
   frame_destroy(&analyzer->frame);
   *analyzer = (Analyzer_){ 0 };
   analyzer_ = NULL;
+}
+
+
+void analyze(Analyzer_* analyzer, struct AstProgram_* ast) {
+  analyzer_ = analyzer;
+  do_analysis(analyzer, (AstNode_*)ast);
 }
 
 static void program_analysis(Analyzer_* analyzer, AstNode_* node) {
@@ -144,12 +130,12 @@ static void binary_analysis(Analyzer_* analyzer, AstNode_* n) {
   Type_* ltype = AS_EXPR(expr->left)->type;
   Type_* rtype = AS_EXPR(expr->right)->type;
 
-  if (type_isunknown(ltype)) {
+  if (!ltype) {
     error(analyzer_, n, "left-hand expression type could not be deduced.");
     return;
   }
 
-  if (type_isunknown(rtype)) {
+  if (!rtype) {
     error(analyzer_, n, "right-hand expression type could not be deduced.");
     return;
   }
@@ -165,8 +151,8 @@ static void binary_analysis(Analyzer_* analyzer, AstNode_* n) {
     case TK_AND: 
     case TK_OR:
     case TK_XOR:
-      expr->base.type = (Type_*)&Bool_Ty;
-      expected_type = (Type_*)&Bool_Ty;
+      expr->base.type = (Type_*)Bool_Ty;
+      expected_type = (Type_*)Bool_Ty;
       break;
 
     case TK_GT:
@@ -175,7 +161,7 @@ static void binary_analysis(Analyzer_* analyzer, AstNode_* n) {
     case TK_LTE:
     case TK_EQUAL_EQUAL:
     case TK_BANG_EQUAL:
-      expr->base.type = (Type_*)&Bool_Ty;
+      expr->base.type = (Type_*)Bool_Ty;
       break;
 
     case TK_AMPERSAND:
@@ -208,7 +194,7 @@ static void binary_analysis(Analyzer_* analyzer, AstNode_* n) {
     case TK_LSHIFT:
     case TK_RSHIFT:
       expr->base.type = lval_type;
-      expected_type = (const Type_*)&Int_Ty;
+      expected_type = (const Type_*)Int_Ty;
       break;
 
     default:
@@ -246,7 +232,7 @@ static void return_analysis(Analyzer_* analyzer, AstNode_* n) {
 
 static void if_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstIfStmt_* stmt = (AstIfStmt_*)n;
-  stmt->condition_expr->top_type = (Type_*)&Bool_Ty;
+  stmt->condition_expr->top_type = (Type_*)Bool_Ty;
 
   do_analysis(analyzer, (AstNode_*)stmt->condition_expr);
   if (!type_isabool(AS_EXPR(stmt->condition_expr)->type)) {
@@ -271,7 +257,7 @@ static void if_analysis(Analyzer_* analyzer, AstNode_* n) {
 
 static void assert_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstAssertStmt_* stmt = (AstAssertStmt_*)n;
-  stmt->expr->top_type = (Type_*)&Bool_Ty;
+  stmt->expr->top_type = (Type_*)Bool_Ty;
   do_analysis(analyzer, (AstNode_*)stmt->expr);
   if (!type_isabool(AS_EXPR(stmt->expr)->type)) {
     error(analyzer_, n, "assert expression must have a boolean type.");
@@ -290,7 +276,7 @@ static void var_decl_analysis(Analyzer_* analyzer, AstNode_* n) {
   }
 
   Type_* val_type = type_valtype(stmt->decl_type);
-  if (type_isunknown(val_type)) {
+  if (!val_type) {
     if (!stmt->expr) {
       error(analyzer_, n, "type deduced variable must have an expression");
       return;
@@ -301,7 +287,7 @@ static void var_decl_analysis(Analyzer_* analyzer, AstNode_* n) {
       return;
     }
 
-    type_set(val_type, stmt->expr->type);
+    // type_set(val_type, stmt->expr->type);
   }
   if (!type_resolve(stmt->decl_type, n->scope)) {
     error(analyzer_, n, "could not resolve type %.*s", stmt->decl_type->opt_name.length, stmt->decl_type->opt_name.start);
@@ -367,7 +353,7 @@ static void id_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
 
 static void index_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstIndexExpr_* expr = (AstIndexExpr_*)n;
-  expr->prefix->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
+  expr->prefix->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, NULL, NULL, RefType_);
   do_analysis(analyzer, (AstNode_*)expr->prefix);
   do_analysis(analyzer, (AstNode_*)expr->index);
 
@@ -392,7 +378,7 @@ static void assignment_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstAssignmentExpr_* expr = (AstAssignmentExpr_*)n;
 
   // TODO: allow for deconstructing tuples in assignments (and other types).
-  expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
+  expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, NULL, NULL, RefType_);
   expr->right->top_type = expr->base.top_type;
   do_analysis(analyzer, (AstNode_*)expr->left);
   Type_* val_type = type_valtype(expr->left->type);
@@ -431,7 +417,7 @@ static void in_place_binary_stmt_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstInPlaceBinaryStmt_* expr = (AstInPlaceBinaryStmt_*)n;
 
   // TODO: allow for deconstructing tuples in assignments (and other types).
-  expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, RefType_);
+  expr->left->top_type = (Type_*)type_alloc_ty(analyzer_->allocator, NULL, NULL, RefType_);
   expr->right->top_type = expr->base.top_type;
   do_analysis(analyzer, (AstNode_*)expr->left);
   do_analysis(analyzer, (AstNode_*)expr->right);
@@ -508,7 +494,7 @@ static void in_place_binary_stmt_analysis(Analyzer_* analyzer, AstNode_* n) {
 
 static void while_stmt_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstWhileStmt_* stmt = (AstWhileStmt_*)n;
-  stmt->condition_expr->top_type = (Type_*)&Bool_Ty;
+  stmt->condition_expr->top_type = (Type_*)Bool_Ty;
 
   do_analysis(analyzer, (AstNode_*)stmt->condition_expr);
   do_analysis(analyzer, stmt->block_stmt);
@@ -525,7 +511,7 @@ static void for_stmt_analysis(Analyzer_* analyzer, AstNode_* n) {
   }
 
   if (stmt->opt_condition_expr) {
-    stmt->opt_condition_expr->top_type = (Type_*)&Bool_Ty;
+    stmt->opt_condition_expr->top_type = (Type_*)Bool_Ty;
     do_analysis(analyzer, (AstNode_*)stmt->opt_condition_expr);
     if (!type_isabool(AS_EXPR(stmt->opt_condition_expr)->type)) {
       error(analyzer_, n, "for loop condition expression must be a bool.");
@@ -548,25 +534,26 @@ static void function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstFunctionDef_* def = (AstFunctionDef_*)n;
 
   def->base.type = def->fn_symbol->ty;
-  do_analysis(analyzer, (AstNode_*)def->body);
-}
 
-static void function_body_analysis(Analyzer_* analyzer, AstNode_* n) {
-  AstFunctionBody_* body = (AstFunctionBody_*)n;
-  FunctionType_* fn_type = type_as(FunctionType_, body->fn_symbol->ty);
-  FunctionSymbol_* fn = &body->fn_symbol->fn;
-  fn_type->ret_ty = body->return_type;
+  FunctionType_* fn_type = type_as(FunctionType_, def->fn_symbol->ty);
+  FunctionSymbol_* fn = &def->fn_symbol->fn;
+  fn_type->ret_ty = def->return_type;
 
   type_resolve(fn_type->ret_ty, n->scope);
   type_calcsize(fn_type->ret_ty);
 
-  for (AstListNode_* n = body->function_params.head; n != NULL; n = n->next) {
+  assertf(false, "unimplemented");
+
+  for (AstListNode_* n = def->function_params.head; n != NULL; n = n->next) {
     do_analysis(analyzer, n->node);
   }
 
-  do_analysis(analyzer, body->stmt);
+  do_analysis(analyzer, def->body);
 }
 
+static void generic_function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
+  assertf(false, "unimplemented");
+}
 static void function_param_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstFunctionParam_* param = (AstFunctionParam_*)n;
   
@@ -574,7 +561,7 @@ static void function_param_analysis(Analyzer_* analyzer, AstNode_* n) {
   Type_* val_type = type_valtype(param->type);
   type_resolve(param->type, n->scope);
   type_calcsize(param->type);
-  if (type_isunknown(param->type)) {
+  if (!param->type) {
     error(analyzer_, n, "Parameter type inference is unimplemented.");
   }
   
@@ -661,6 +648,12 @@ static void ast_class_def_analysis(Analyzer_* analyzer, AstNode_* node) {
     do_analysis(analyzer, n->node);
   }
 
+  if (def->base.specializations.count) {
+    for (AstListNode_* n = def->base.specializations.head; n != NULL; n = n->next) {
+      do_analysis(analyzer, n->node);
+    }
+  }
+
   //if (semantictype_hascycle(&def->class_type)) {
   //  error(analyzer_, node, "struct \"%.*s\" has a cycle", cls_sym->name.length, cls_sym->name.start);
   //  return;
@@ -736,15 +729,15 @@ static void ast_class_constructor_analysis(Analyzer_* analyzer, AstNode_* node) 
   constructor->prefix->top_type = constructor->base.top_type;
   do_analysis(analyzer, (AstNode_*)constructor->prefix);
 
-  if (type_isunknown(constructor->prefix->type)) {
+  if (!constructor->prefix->type) {
     Symbol_* cls_sym = scope_search_to_root(node->scope, &constructor->name);
 
     Type_* type = constructor->base.type;
-    if (!type_resolve(type, node->scope)) {
+    if (!type) {
+      constructor->base.type = cls_sym->ty;
+    } else if (!type_resolve(type, node->scope)) {
       error(analyzer_, node, "Could not find class %.*s", type->opt_name.length, type->opt_name.start);
       return;
-    } else if (!type) {
-      constructor->base.type = cls_sym->ty;
     }
   } else {
     constructor->base.type = constructor->prefix->type;
@@ -808,7 +801,7 @@ static void array_value_analysis(Analyzer_* analyzer, AstNode_* node) {
     ++index;
   }
 
-  array_expr->base.type = make_array_ty(el_type, array_expr->values.count, analyzer_->allocator);
+  array_expr->base.type = make_array_ty(el_type, array_expr->values.count, NULL, NULL, analyzer_->allocator);
   if (el_type) {
     type_calcsize(array_expr->base.type);
   }
@@ -840,53 +833,54 @@ static void generic_params_analysis(Analyzer_* analyzer, AstNode_* node) {
 }
 
 static void index_or_generic_args_analysis(Analyzer_* analyzer, AstNode_* node) {
-  AstIndexOrGenericArgs_* expr = (AstIndexOrGenericArgs_*)node;
-  if (type_is(expr->base.top_type, GenericType_)) {
-    Type_* generic_ty = expr->base.top_type;
-    ListOf_(TypeArgument_) type_args;
-    MemoryAllocator_* allocator = analyzer_->allocator;
-    list_of(&type_args, TypeArgument_, allocator);
-
-    for (AstListNode_* n = expr->args.head; n != NULL; n = n->next) {
-      AstTypeExpr_* expr = AST_CAST(AstTypeExpr_, n->node);
-      do_analysis(analyzer, n->node);
-      type_resolve(expr->base.type, node->scope);
-      TypeArgument_ arg = {
-        .is_type = true,
-        .type = expr->base.type
-      };
-      list_push(&type_args, &arg);
-    }
-
-    expr->base.type = generictype_specialize(generic_ty, &type_args, generic_ty->opt_name, allocator, node->scope);
-
-    list_clear(&type_args);
-  }
+  // AstIndexOrGenericArgs_* expr = (AstIndexOrGenericArgs_*)node;
+  // if (type_is(expr->base.top_type, GenericType_)) {
+  //   Type_* generic_ty = expr->base.top_type;
+  //   ListOf_(TypeArgument_) type_args;
+  //   MemoryAllocator_* allocator = analyzer_->allocator;
+  //   list_of(&type_args, TypeArgument_, allocator);
+  // 
+  //   for (AstListNode_* n = expr->args.head; n != NULL; n = n->next) {
+  //     AstTypeExpr_* expr = AST_CAST(AstTypeExpr_, n->node);
+  //     do_analysis(analyzer, n->node);
+  //     type_resolve(expr->base.type, node->scope);
+  //     TypeArgument_ arg = {
+  //       .is_type = true,
+  //       .type = expr->base.type
+  //     };
+  //     list_push(&type_args, &arg);
+  //   }
+  // 
+  //   // expr->base.type = generictype_specialize(generic_ty, &type_args, generic_ty->opt_name, allocator, node->scope);
+  // 
+  //   list_clear(&type_args);
+  // }
 }
 
 static void index_or_type_expr_analysis(Analyzer_* analyzer, AstNode_* node) {
+  assertf(false, "unimplemented");
   AstIndexOrTypeExpr_* expr = (AstIndexOrTypeExpr_*)node;
   expr->prefix->top_type = expr->base.top_type;
   do_analysis(analyzer, (AstNode_*)expr->prefix);
 
-  if (type_is(expr->prefix->type, GenericType_)) {
-    expr->base.base.cls = AST_CLS(AstTypeExpr_);
-    expr->index_args->base.top_type = expr->prefix->type;
-    do_analysis(analyzer, (AstNode_*)expr->index_args);
-    expr->type_expr.base.type = expr->index_args->base.type;
-  } else {
-    assert_type_is(expr->prefix->type, TYPE_CLS(ArrayType_));
-    expr->base.base.cls = AST_CLS(AstVarExpr_);
-    
-    AstIndexExpr_* index_expr = MAKE_AST_EXPR(analyzer_->allocator, AstIndexExpr_, node->scope, node->line);
-    index_expr->prefix = expr->prefix;
-
-    AstNode_* index = expr->index_args->args.head->node;
-    index_expr->index = (AstExpr_*)index;
-
-    expr->var_index_expr.expr = (AstExpr_*)index_expr;
-    do_analysis(analyzer, node);
-  }
+  //if (type_is(expr->prefix->type, GenericType_)) {
+  //  expr->base.base.cls = AST_CLS(AstTypeExpr_);
+  //  expr->index_args->base.top_type = expr->prefix->type;
+  //  do_analysis(analyzer, (AstNode_*)expr->index_args);
+  //  expr->type_expr.base.type = expr->index_args->base.type;
+  //} else {
+  //  // assert_type_is(expr->prefix->type, TYPE_CLS(ArrayType_));
+  //  // expr->base.base.cls = AST_CLS(AstVarExpr_);
+  //  // 
+  //  // AstIndexExpr_* index_expr = MAKE_AST_NODE(analyzer_->allocator, AstIndexExpr_, node->scope, node->line);
+  //  // index_expr->prefix = expr->prefix;
+  //  // 
+  //  // AstNode_* index = expr->index_args->args.head->node;
+  //  // index_expr->index = (AstExpr_*)index;
+  //  // 
+  //  // expr->var_index_expr.expr = (AstExpr_*)index_expr;
+  //  // do_analysis(analyzer, node);
+  //}
 }
 
 AnalysisRule_ analysis_rules[] = {
@@ -909,8 +903,9 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstInPlaceBinaryStmt_)]      = {in_place_binary_stmt_analysis},
   [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},
   [AST_CLS(AstForStmt_)]                = {for_stmt_analysis},
+  [AST_CLS(AstFunctionPrototype_)]      = {noop_analysis},
   [AST_CLS(AstFunctionDef_)]            = {function_def_analysis},
-  [AST_CLS(AstFunctionBody_)]           = {function_body_analysis},
+  [AST_CLS(AstGenericFunctionDef_)]     = {generic_function_def_analysis},
   [AST_CLS(AstFunctionParam_)]          = {function_param_analysis},
   [AST_CLS(AstFunctionCall_)]           = {function_call_analysis},
   [AST_CLS(AstFunctionCallArgs_)]       = {function_call_args_analysis},

@@ -53,7 +53,16 @@ typedef enum {
 
   // Types
   TK_BOOL,
-  TK_INT, TK_UINT,
+  TK_INT,
+  TK_INT8,
+  TK_INT16,
+  TK_INT32,
+  TK_INT64,
+  TK_UINT,
+  TK_UINT8,
+  TK_UINT16,
+  TK_UINT32,
+  TK_UINT64,
   TK_FLOAT, TK_DOUBLE,
   TK_STRING_TYPE,
   TK_LIST, TK_MAP, TK_SET,

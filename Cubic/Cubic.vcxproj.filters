@@ -93,7 +93,7 @@
     <ClCompile Include="compiler.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="parser.c">
+    <ClCompile Include="cst_parser.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ast.c">
@@ -136,6 +136,21 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="errors.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="type_expr.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="cst.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ast_parser.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="parser.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="type_parser.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -221,6 +236,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="errors.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="type_expr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="cst.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="type_parser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -190,6 +190,7 @@
     <None Include="fib.cub" />
     <None Include="functions.cub" />
     <None Include="generics.cub" />
+    <None Include="generic_functions.cub" />
     <None Include="global_variables.cub" />
     <None Include="for_loops.cub" />
     <None Include="lambdas.cub" />
@@ -205,6 +206,7 @@
     <None Include="simple_type_inference.cub" />
     <None Include="strings.cub" />
     <None Include="classes.cub" />
+    <None Include="type_classes.cub" />
     <None Include="vars.cub" />
     <None Include="while_loops.cub" />
   </ItemGroup>

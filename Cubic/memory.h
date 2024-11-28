@@ -25,16 +25,6 @@ void dealloc_(struct MemoryAllocator_* allocator, void* ptr);
 #define ARRAY_GROW(arr, ty) (ty*)array_grow(arr)
 #define ARRAY_FREE(arr) array_free(arr)
 
-typedef struct Array_ {
-  int count;
-  int capacity;
-  size_t elm_size;
-  uint8_t* data;
-} Array_;
-
-void array_init(Array_* array, struct MemoryAllocator_* allocator, size_t elm_size);
-void* array_grow(Array_* array);
-
 typedef struct ListNode_ {
   struct ListNode_* next;
   void* data;
@@ -59,7 +49,11 @@ typedef struct List_ {
 
 void list_init(struct List_* list, size_t val_size, struct MemoryAllocator_* allocator);
 void list_clear(List_* list);
-ListNode_* list_push(List_* list, void* pval);
+bool list_empty(List_* list);
+ListNode_* list_push_(List_* list, void* pval);
+#define list_push(LIST, PVAL) list_push_(LIST, (void*)(PVAL));
+bool list_remove(List_* list, void* pval);
+bool list_pop(List_* list, void* pval, size_t val_size);
 
 typedef struct MemoryAllocator_ {
   // Allocate a block of memory with `size`.
