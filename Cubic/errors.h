@@ -17,6 +17,8 @@ typedef struct ErrorsContainer_ {
   MemoryAllocator_* allocator;
 } ErrorsContainer_;
 
+ErrorsContainer_* errors();
+
 void errorscontainer_init(ErrorsContainer_* errors, MemoryAllocator_* allocator);
 void errorscontainer_clear(ErrorsContainer_* errors);
 

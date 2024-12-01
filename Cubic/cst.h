@@ -54,9 +54,10 @@
   CST_NODE(CstTypeDef_), \
   CST_NODE(CstTypeMemberDecl_), \
   CST_NODE(CstGenericParam_), \
-  CST_NODE(CstIndexOrTypeExpr_), \
+  CST_NODE(CstVarOrTypeExpr_), \
   CST_NODE(CstIndexOrGenericArgs_), \
-  CST_NODE(CstGenericOrArrayType_)
+  CST_NODE(CstGenericOrArrayType_), \
+  CST_NODE(CstGenericOrArrayExpr_)
 
 #define GENERATE_CSTNODE(NODE) CST_CLS(NODE)
 
@@ -245,15 +246,15 @@ typedef struct CstType_ {
   CstNode_* impl;
 } CstType_;
 
-typedef struct CstIndexOrTypeExpr_ {
+typedef struct CstVarOrTypeExpr_ {
   union {
     CstNode_ base;
-    CstVarExpr_ var_index_expr;
+    CstVarExpr_ var_expr;
     CstType_ type_expr;
   };
   CstNode_* prefix;
   struct CstIndexOrGenericArgs_* index_args;
-} CstIndexOrTypeExpr_;
+} CstVarOrTypeExpr_;
 
 typedef struct CstIndexOrGenericArgs_ {
   CstNode_ base;
@@ -265,6 +266,12 @@ typedef struct CstGenericOrArrayType_ {
   CstNode_* prefix;
   CstList_ args;
 } CstGenericOrArrayType_;
+
+typedef struct CstGenericOrArrayExpr_ {
+  CstNode_ base;
+  CstNode_* prefix;
+  CstList_ args;
+} CstGenericOrArrayExpr_;
 
 // Var ::= PrefixExpr '.' Id
 typedef struct CstDotExpr_ {
@@ -364,9 +371,7 @@ typedef struct CstFunctionCall_ {
 // FunctionCallArgs ::= '(' { FunctionCallArg } ')'
 typedef struct CstFunctionCallArgs_ {
   CstNode_ base;
-  CstType_ fn_type;
   CstList_ args;
-  struct Symbol_* fn_sym;
 } CstFunctionCallArgs_;
 
 // ClassDef ::= 'struct' Id [GenericParams] {ClassMemberDecl} 'end'

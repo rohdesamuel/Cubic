@@ -289,10 +289,6 @@ static void var_decl_analysis(Analyzer_* analyzer, AstNode_* n) {
 
     // type_set(val_type, stmt->expr->type);
   }
-  if (!type_resolve(stmt->decl_type, n->scope)) {
-    error(analyzer_, n, "could not resolve type %.*s", stmt->decl_type->opt_name.length, stmt->decl_type->opt_name.start);
-    return;
-  }
 
   // An array declared of zero-size, takes the size of the expression.
   val_type = type_valtype(stmt->decl_type);
@@ -535,20 +531,23 @@ static void function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
 
   def->base.type = def->fn_symbol->ty;
 
-  FunctionType_* fn_type = type_as(FunctionType_, def->fn_symbol->ty);
+  FunctionType_* fn_type = type_as(FunctionType_, def->fn_type);
   FunctionSymbol_* fn = &def->fn_symbol->fn;
   fn_type->ret_ty = def->return_type;
 
-  type_resolve(fn_type->ret_ty, n->scope);
   type_calcsize(fn_type->ret_ty);
-
-  assertf(false, "unimplemented");
 
   for (AstListNode_* n = def->function_params.head; n != NULL; n = n->next) {
     do_analysis(analyzer, n->node);
   }
 
   do_analysis(analyzer, def->body);
+
+  if (def->base.base.specializations.count) {
+    for (AstListNode_* n = def->base.base.specializations.head; n != NULL; n = n->next) {
+      do_analysis(analyzer, n->node);
+    }
+  }
 }
 
 static void generic_function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
@@ -559,7 +558,6 @@ static void function_param_analysis(Analyzer_* analyzer, AstNode_* n) {
   
   // TODO: implement parameter type inference.
   Type_* val_type = type_valtype(param->type);
-  type_resolve(param->type, n->scope);
   type_calcsize(param->type);
   if (!param->type) {
     error(analyzer_, n, "Parameter type inference is unimplemented.");
@@ -587,14 +585,6 @@ static void function_call_analysis(Analyzer_* analyzer, AstNode_* node) {
   call->args->fn_type = (Type_*)fn_type;
 
   do_analysis(analyzer, (AstNode_*)call->args);
-}
-
-static void function_call_arg_analysis(Analyzer_* analyzer, AstNode_* node) {
-  AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, node);
-  
-  arg->expr->top_type = arg->base.top_type;
-  do_analysis(analyzer, (AstNode_*)arg->expr);
-  arg->base.type = arg->expr->type;
 }
 
 static void function_call_args_analysis(Analyzer_* analyzer, AstNode_* node) {
@@ -676,12 +666,6 @@ static void ast_class_member_decl_analysis(Analyzer_* analyzer, AstNode_* node) 
   AstClassMemberDecl_* decl = (AstClassMemberDecl_*)node;
   Type_* type = decl->field_type;
 
-  if (!type_resolve(type, node->scope)) {
-    error(analyzer_, node,
-      "Could not find type '%.*s' in class member declaration",
-      type->opt_name.length, type->opt_name.start);
-  }
-
   if (decl->opt_expr) {
     AstExpr_* expr = decl->opt_expr;
     do_analysis(analyzer, (AstNode_*)expr);
@@ -735,13 +719,9 @@ static void ast_class_constructor_analysis(Analyzer_* analyzer, AstNode_* node) 
     Type_* type = constructor->base.type;
     if (!type) {
       constructor->base.type = cls_sym->ty;
-    } else if (!type_resolve(type, node->scope)) {
-      error(analyzer_, node, "Could not find class %.*s", type->opt_name.length, type->opt_name.start);
-      return;
     }
   } else {
     constructor->base.type = constructor->prefix->type;
-    type_resolve(constructor->base.type, node->scope);
   }
 
   for (AstListNode_* n = constructor->params.head; n != NULL; n = n->next) {
@@ -817,7 +797,6 @@ static void type_def_analysis(Analyzer_* analyzer, AstNode_* node) {
     do_analysis(analyzer, n->node);
   }
 
-  type_resolve(type_def->type, node->scope);
   printf("%.*s ::= ", type_def->name.length, type_def->name.start);
   print_type(type_def->type);
   printf("\n");
@@ -825,7 +804,6 @@ static void type_def_analysis(Analyzer_* analyzer, AstNode_* node) {
 
 static void type_member_decl_analysis(Analyzer_* analyzer, AstNode_* node) {
   TypeMemberDecl_* member_decl = (TypeMemberDecl_*)node;
-  type_resolve(member_decl->type, node->scope);
 }
 
 static void generic_params_analysis(Analyzer_* analyzer, AstNode_* node) {
@@ -859,7 +837,7 @@ static void index_or_generic_args_analysis(Analyzer_* analyzer, AstNode_* node) 
 
 static void index_or_type_expr_analysis(Analyzer_* analyzer, AstNode_* node) {
   assertf(false, "unimplemented");
-  AstIndexOrTypeExpr_* expr = (AstIndexOrTypeExpr_*)node;
+  AstVarOrTypeExpr_* expr = (AstVarOrTypeExpr_*)node;
   expr->prefix->top_type = expr->base.top_type;
   do_analysis(analyzer, (AstNode_*)expr->prefix);
 
@@ -903,13 +881,11 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstInPlaceBinaryStmt_)]      = {in_place_binary_stmt_analysis},
   [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},
   [AST_CLS(AstForStmt_)]                = {for_stmt_analysis},
-  [AST_CLS(AstFunctionPrototype_)]      = {noop_analysis},
   [AST_CLS(AstFunctionDef_)]            = {function_def_analysis},
   [AST_CLS(AstGenericFunctionDef_)]     = {generic_function_def_analysis},
   [AST_CLS(AstFunctionParam_)]          = {function_param_analysis},
   [AST_CLS(AstFunctionCall_)]           = {function_call_analysis},
   [AST_CLS(AstFunctionCallArgs_)]       = {function_call_args_analysis},
-  [AST_CLS(AstFunctionCallArg_)]        = {function_call_arg_analysis},
   [AST_CLS(AstExpressionStmt_)]         = {expression_statement_analysis},
   [AST_CLS(AstNoopExpr_)]               = {noop_analysis},
   [AST_CLS(AstNoopStmt_)]               = {noop_analysis},
@@ -927,7 +903,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(TypeMemberDecl_)]            = {type_member_decl_analysis},
   [AST_CLS(AstGenericParam_)]           = {noop_analysis},
   [AST_CLS(AstGenericParams_)]          = {generic_params_analysis},
-  [AST_CLS(AstIndexOrTypeExpr_)]        = {index_or_type_expr_analysis},
+  [AST_CLS(AstVarOrTypeExpr_)]        = {index_or_type_expr_analysis},
   [AST_CLS(AstIndexOrGenericArgs_)]     = {index_or_generic_args_analysis},
 };
 

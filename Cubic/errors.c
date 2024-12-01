@@ -3,6 +3,8 @@
 #include <memory.h>
 #include <stdarg.h>
 
+thread_local ErrorsContainer_* cur_errors_;
+
 void errorscontainer_init(ErrorsContainer_* errors, MemoryAllocator_* allocator) {
   *errors = (ErrorsContainer_){ 0 };
   errors->allocator = allocator;
@@ -30,14 +32,14 @@ void error_add(ErrorsContainer_* errors, int line, const char* format, ...) {
 
   cursor = sprintf_s(buf, sizeof(buf), "[line %d] Error: ", line);
   cursor += vsprintf_s(buf, sizeof(buf), format, args);
-  assertf(cursor < sizeof(buf), "Could not write error to log (error too long).");
+  assertf(cursor > 0 && cursor < sizeof(buf), "Could not write error to log (error too long).");
 
   cursor += sprintf_s(buf, sizeof(buf), "\n");
-  assertf(cursor < sizeof(buf), "Could not write error to log (could not append new line).");
+  assertf(cursor > 0 && cursor < sizeof(buf), "Could not write error to log (could not append new line).");
 
   buf[cursor] = '\0';
   cursor += 1;
-  assertf(cursor < sizeof(buf), "Could not write error to log (could not make null-terminated).");
+  assertf(cursor > 0 && cursor < sizeof(buf), "Could not write error to log (could not make null-terminated).");
 
   Error_ err = { 0 };
   err.error_str = alloc(errors->allocator, cursor);
@@ -56,20 +58,27 @@ void error_panic(ErrorsContainer_* errors, int line, const char* format, ...) {
 
   char buf[1024] = { 0 };
   int cursor = 0;
+  int64_t remaining_size = sizeof(buf);
 
   va_list args;
   va_start(args, format);
 
-  cursor = sprintf_s(buf, sizeof(buf), "[line %d] Error: ", line);
-  cursor += vsprintf_s(buf, sizeof(buf), format, args);
-  assertf(cursor < sizeof(buf), "Could not write error to log (error too long).");
+  cursor = sprintf_s(buf, remaining_size, "[line %d] Error: ", line);
+  remaining_size -= cursor;
+  assertf(cursor > 0 && cursor < sizeof(buf) && remaining_size <= sizeof(buf), "Could not write error to log (error too long).");
 
-  cursor += sprintf_s(buf, sizeof(buf), "\n");
-  assertf(cursor < sizeof(buf), "Could not write error to log (could not append new line).");
+  cursor += vsprintf_s(buf + cursor, remaining_size, format, args);
+  remaining_size -= cursor;
+  assertf(cursor > 0 && cursor < sizeof(buf) && remaining_size <= sizeof(buf), "Could not write error to log (error too long).");
+
+  cursor += sprintf_s(buf + cursor, remaining_size, "\n");
+  remaining_size -= cursor;
+  assertf(cursor > 0 && cursor < sizeof(buf) && remaining_size <= sizeof(buf), "Could not write error to log (could not append new line).");
 
   buf[cursor] = '\0';
+  buf[sizeof(buf) - 1] = '\0';
   cursor += 1;
-  assertf(cursor < sizeof(buf), "Could not write error to log (could not make null-terminated).");
+  assertf(cursor > 0 && cursor < sizeof(buf) && remaining_size <= sizeof(buf), "Could not write error to log (could not make null-terminated).");
 
   Error_ err = { 0 };
   err.error_str = alloc(errors->allocator, cursor);

@@ -118,6 +118,7 @@ typedef struct Type_ {
 
     // Unary types.    
     __TYPE_UNARY_START__,
+    TYPE_CLS(PlaceholderType_),
     __TYPE_DECLS_START__,
     TYPE_CLS(ConstType_),
     TYPE_CLS(InType_),
@@ -167,7 +168,6 @@ typedef struct Type_ {
 
 #define DEF_PRIMITIVE_TY(NAME) extern const Type_* NAME##_Ty;
 
-DEF_PRIMITIVE_TY(Unknown);
 DEF_PRIMITIVE_TY(Nil);
 DEF_PRIMITIVE_TY(Bool);
 DEF_PRIMITIVE_TY(Int);
@@ -197,6 +197,10 @@ typedef struct MultiType_ {
   Type_ self;
   ListOf_(Type_*) types;
 } MultiType_;
+
+typedef struct PlaceholderType_ {
+  UnaryType_ unary;
+} PlaceholderType_;
 
 typedef struct ArrayType_ {
   Type_ self;
@@ -305,6 +309,7 @@ typedef struct FunctionType_ {
 
 void type_init();
 
+Type_* make_placeholder_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 Type_* make_const_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 Type_* make_var_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 Type_* make_ref_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
@@ -329,7 +334,7 @@ Type_* type_alloc(MemoryAllocator_* allocator, struct Scope_* scope, const struc
 // Fills all placeholders in the given type with types found starting at the
 // given scope. Returns true if type was resolved successfully, e.g. was able
 // to find the class.
-bool type_resolve(Type_* type, struct Scope_* scope);
+const Type_* type_resolve(Type_* type, struct Scope_* scope, struct ErrorsContainer_* errors);
 
 // Sets the the given type
 uint64_t type_id(const Type_* ty);

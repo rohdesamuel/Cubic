@@ -11,8 +11,9 @@ static Symbol_* frame_addclosure(Frame_* frame, Token_* name, Symbol_* fn);
 static Symbol_* scope_addclosure(Scope_* table, Token_* name, Symbol_* fn);
 static Symbol_* scope_addvar(Scope_* scope, Token_* name, Type_* type);
 static Symbol_* scope_addfn(Scope_* scope, Token_* name, Type_* type);
-static Symbol_* scope_addclass(Scope_* scope, Type_* cls_ty);
+static Symbol_* scope_addclass(Scope_* scope, Token_* name, Type_* cls_ty);
 static Symbol_* scope_addtype(Scope_* scope, Token_* name, Type_* type);
+static Symbol_* frame_addfn(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 
 Frame_* frame_root(struct MemoryAllocator_* allocator) {
   Token_ entry_name = {
@@ -81,8 +82,8 @@ Symbol_* frame_addfn(Frame_* frame, Token_* name, Type_* fn_ty, Scope_* scope) {
   return scope_addfn(scope, name, fn_ty);
 }
 
-Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope) {
-  return scope_addclass(scope, cls_ty);
+Symbol_* frame_addclass(Frame_* frame, Token_* name, Type_* cls_ty, Scope_* scope) {
+  return scope_addclass(scope, name, cls_ty);
 }
 
 Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope) {
@@ -93,9 +94,6 @@ void frame_enterscope(Frame_* frame, Scope_* scope) {
 }
 
 void frame_leavescope(Frame_* frame, Scope_* scope) {
-  frame->max_stack_size = max(frame->max_stack_size, frame->stack_size);
-  frame->max_var_count = max(frame->max_var_count, frame->var_count);  
-
   frame->stack_size -= scope->stack_size;
   frame->var_count -= scope->table->vars.count;
 }
@@ -265,12 +263,12 @@ static Symbol_* scope_addclosure(Scope_* scope, Token_* name, Symbol_* fn) {
   return scope_addnew(scope, &s);
 }
 
-Symbol_* scope_addclass(Scope_* scope, Type_* cls_ty) {
+Symbol_* scope_addclass(Scope_* scope, Token_* name, Type_* cls_ty) {
   MemoryAllocator_* allocator = scope->allocator;
   Symbol_ s = (Symbol_){
     .type = SYMBOL_CLS_CLASS,
     .cls = {0},
-    .name = cls_ty->opt_name,
+    .name = *name,
     .parent = scope,
     .ty = cls_ty
   };

@@ -59,7 +59,7 @@ typedef struct ClosureSymbol_ {
 } ClosureSymbol_;
 
 typedef struct ArraySymbol_ {
-  int a;
+  int unused;
 } ArraySymbol_;
 
 typedef struct TypeDefSymbol_ {
@@ -71,7 +71,7 @@ typedef struct Symbol_ {
 
   Token_ name;
   struct Scope_* parent;
-  const struct TypeExpr_* type_expr;
+  //const struct TypeExpr_* type_expr;
 
   Type_* ty;
 

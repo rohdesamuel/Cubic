@@ -103,6 +103,12 @@ typedef struct TypeExprFunction_ {
   ListOf_(const TypeExpr_*) params;
 } TypeExprFunction_;
 
+typedef struct TypeExprFunctionParam_ {
+  TypeExpr_ base;
+  Token_ name;
+  const TypeExpr_* type;
+} TypeExprFunctionParam_;
+
 typedef struct TypeExprGenericParam_ {
   TypeExpr_ base;
   Token_ name;

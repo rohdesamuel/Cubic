@@ -9,7 +9,6 @@ bool token_eq(Token_ a, Token_ b) {
 
 Token_ token_string(const char* str) {
   int len = (int)strlen(str);
-  len = len == 0 ? 0 : len - 1;
   return (Token_) { .start = str, .length = len };
 }
 

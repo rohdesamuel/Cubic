@@ -19,8 +19,9 @@ typedef struct Parser_ {
 
 typedef struct AstParser_ {
   bool had_error;
-  List_ work_queue;
-  Hashmap* /*<Symbol_*, AstNode_*>*/ generic_nodes;
+  List_ resolution_work_queue;
+  List_ specialization_work_queue;
+  List_ parse_work_queue;
   MemoryAllocator_* allocator;
   struct ErrorsContainer_* errors;
 } AstParser_;

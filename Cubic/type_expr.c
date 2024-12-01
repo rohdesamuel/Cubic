@@ -433,20 +433,51 @@ static const Type_* resolve_typeexpr_recur(const TypeExpr_* type, Scope_* scope,
     case TYPE_EXPR_CLS(TypeExprFunction_):
     {
       const TypeExprFunction_* ty = (const TypeExprFunction_*)type;
-      Hashmap* new_env = hashmap_copy(type_env);
-      bind_type_params(type, NULL, new_env);
+      FunctionType_* fn_type = NULL;
+      Scope_* fn_scope = NULL;
 
-      const Type_* ret_ty = resolve_typeexpr_recur(ty->ret_type, scope, new_env, errors, allocator);
+      {
+        Type_** type_args = alloc_type_array(type->params.count);
+        resolve_type_args(type, type_args, scope, type_env, errors, allocator);
 
-      ListOf_(Type_*) resolved_params = { 0 };
-      list_of(&resolved_params, Type_*, allocator);
-      for (ListNode_* n = ty->params.head; n != NULL; n = n->next) {
-        const Type_* param_type = resolve_typeexpr_recur(list_val(n, const TypeExpr_*), scope, new_env, errors, allocator);
-        list_push(&resolved_params, &param_type);
+        Symbol_* base_cls_sym = scope_find(scope, &ty->name);
+        const Type_* found_ty = find_specialization(&ty->name, type_args, scope);
+        if (found_ty) {
+          return_type_array();
+          return found_ty;
+        }
+
+
+        fn_type = (FunctionType_*)make_function_ty(ty->name, NULL, NULL, (TypeExpr_*)ty, scope, allocator);
+        fn_scope = fn_type->self.scope;
+        if (base_cls_sym) {
+          list_push(&base_cls_sym->ty->specializations, &fn_type);
+          add_specialization((Type_*)fn_type, type_args, type->params.count, allocator);
+        }
+
+        ListNode_* param_n = type->params.head;
+        for (int i = 0; i < type->params.count; ++i) {
+          const TypeExprGenericParam_* param = list_val(param_n, const TypeExprGenericParam_*);
+          frame_addtype(fn_scope->frame, (Token_*)&param->name, type_args[i], fn_scope);
+          param_n = param_n->next;
+        }
+
+        return_type_array();
       }
 
+
+      //const TypeExprFunction_* ty = (const TypeExprFunction_*)type;
+      Hashmap* new_env = hashmap_copy(type_env);
+      bind_type_params(type, NULL, new_env);
+      fn_type->ret_ty = (Type_*)resolve_typeexpr_recur(ty->ret_type, scope, new_env, errors, allocator);
+      
+      for (ListNode_* n = ty->params.head; n != NULL; n = n->next) {
+        const Type_* param_type = resolve_typeexpr_recur(list_val(n, const TypeExpr_*), scope, new_env, errors, allocator);
+        list_push(&fn_type->params, &param_type);
+      }
+      
       hashmap_free(new_env);
-      return make_function_ty(ty->name, &resolved_params, (Type_*)ret_ty, type, scope, allocator);
+      return (Type_*)fn_type;
     }
 
     case TYPE_EXPR_CLS(TypeExprClass_):

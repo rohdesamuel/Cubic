@@ -45,9 +45,6 @@ typedef struct Frame_ {
 
   int var_count;
   int stack_size;
-
-  int max_var_count;
-  int max_stack_size;
 } Frame_;
 
 typedef struct SymbolTable_ {
@@ -66,8 +63,7 @@ Frame_* frame_createfrom(Frame_* frame, Scope_* prev_scope, Type_* fn_type);
 void frame_destroy(Frame_** frame);
 Symbol_* frame_addparam(Frame_* frame, Token_* name, Type_* type);
 Symbol_* frame_addvar(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
-Symbol_* frame_addfn(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
-Symbol_* frame_addclass(Frame_* frame, Type_* cls_ty, Scope_* scope);
+Symbol_* frame_addclass(Frame_* frame, Token_* name, Type_* cls_ty, Scope_* scope);
 Symbol_* frame_addtype(Frame_* frame, Token_* name, Type_* type, Scope_* scope);
 
 void frame_enterscope(Frame_* frame, Scope_* scope);

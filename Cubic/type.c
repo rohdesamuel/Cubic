@@ -53,6 +53,12 @@ void type_init() {
   String_Ty_.tmpl = String_TypeExpr;
 }
 
+Type_* make_placeholder_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator) {
+  PlaceholderType_* ret =  (PlaceholderType_*)type_alloc_ty(allocator, scope, tmpl, PlaceholderType_);
+  ret->unary.self.id = 0;
+  return (Type_*)ret;
+}
+
 Type_* make_const_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator) {
   ConstType_* ret = type_alloc_ty(allocator, scope, tmpl, ConstType_);
   ret->unary.ty = sub_type;
@@ -135,6 +141,8 @@ Type_* make_function_ty(Token_ name, ListOf_(Type_*)* params, Type_* ret_ty, con
 
   return (Type_*)ret;
 }
+
+
 
 Type_* make_tuple_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator, int n, ...) {
   va_list args;
@@ -271,52 +279,26 @@ static bool constrainttype_satisfied(ConstraintType_* constraints_ty, Type_* ty)
 
 // Fills all placeholders in the given type with types found starting at the
 // given scope.
-bool type_resolve(Type_* type, struct Scope_* scope) {
-  if (type_isaprimitive(type)) {
-    return true;
+const Type_* type_resolve(Type_* type, struct Scope_* scope, struct ErrorsContainer_* errors) {
+  type = type_valtype(type);
+  if (!type_is(type, PlaceholderType_)) {
+    return type;
   }
-
-  if (type_isunary(type) && type_cast(UnaryType_, type)->ty) {
-    return type_resolve(type_cast(UnaryType_, type)->ty, scope);
-  }
-
-  if (type_ismultitype(type)) {
-    bool ret = true;
-    for (ListNode_* n = type_cast(MultiType_, type)->types.head; n != NULL; n = n->next) {
-      ret &= type_resolve(list_val(n, Type_*), scope);
-    }
-    return ret;
-  }
-
-  switch (type->cls) {
-    case TYPE_CLS(ClassType_):
-    {
-      ClassType_* class_ty = type_as(ClassType_, type);
-      bool ret = true;
-      for (ListNode_* n = class_ty->members.head; n != NULL; n = n->next) {
-        ret = ret && type_resolve(list_val(n, Type_*), scope);
-      }
-      return ret;
-    }
-
-    case TYPE_CLS(ArrayType_):
-    {
-      ArrayType_* ty = type_as(ArrayType_, type);
-      return type_resolve(ty->el_type, scope);
-    }
-
-    case TYPE_CLS(ConstraintType_):
-    {
-      ConstraintType_* ty = type_as(ConstraintType_, type);
-      return true;
-    }
-  }
-
-  return true;
+  PlaceholderType_* unresolved = type_as(PlaceholderType_, type);
+  unresolved->unary.ty = (Type_*)resolve_typeexpr(type->tmpl, NULL, scope, errors, scope->allocator);
+  unresolved->unary.self.id = unresolved->unary.ty->id;
+  return unresolved->unary.ty;
 }
 
 size_t type_calcsize(Type_* type) {
   size_t size = 0;
+
+  if (type_isunary(type)) {
+    size = type_calcsize(type_cast(UnaryType_, type)->ty);
+    type->size = size;
+    return size;
+  }
+
   switch (type->cls) {
     case TYPE_CLS(NilType_):
       return 0;

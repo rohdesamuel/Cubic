@@ -451,6 +451,8 @@ static CstNode_* FunctionParam(Parser_* parser, Scanner_* scanner) {
     param->kind = TK_IN;
   } else if (match(parser, scanner, TK_OUT)) {
     param->kind = TK_OUT;
+  } else {
+    param->kind = 0;
   }
 
   consume(parser, scanner, TK_ID, "Expecting parameter name");
@@ -597,9 +599,6 @@ static CstNode_* VarDecl(Parser_* parser, Scanner_* scanner, TokenType_ decl_tok
 
   if (match(parser, scanner, TK_EQUAL)) {
     stmt->expr = Expr(parser, scanner);
-    if (stmt->expr->cls == CST_CLS(CstClassConstructor_)) {
-      CST_CAST(CstClassConstructor_, stmt->expr)->name = stmt->name;
-    }
   } else if (!stmt->opt_type) {
     error_at_current(parser, "Expected an expression for a deduced type variable.");
   }
@@ -1101,6 +1100,51 @@ static CstNode_* PrefixRangeExpr(Parser_* parser, Scanner_* scanner) {
   return (CstNode_*)expr;
 }
 
+// Recursively replaces all CstVarOrTypeExpr_ nodes with a CstGenericOrArrayExpr_.
+// This is for parsing expressions like:
+//   val a := foo[int](1, 2, 3) OR
+//   val a := foo[1][3][4](1, 2, 3) OR
+// Where the parse tree is ((((foo[int]) [1]) [3]) [4]) (1, 2, 3)
+static void reduce_to_var_expr(CstNode_* expr, MemoryAllocator_* allocator) {
+  if (expr->cls != CST_CLS(CstVarOrTypeExpr_)) return;
+
+  CstVarOrTypeExpr_* var_or_expr = CST_CAST(CstVarOrTypeExpr_, expr);
+  var_or_expr->base.cls = CST_CLS(CstVarExpr_);
+
+  CstGenericOrArrayExpr_* generic_or_array = MAKE_CST_NODE(allocator, CstGenericOrArrayExpr_, var_or_expr->base.line);
+  generic_or_array->prefix = var_or_expr->prefix;
+  generic_or_array->args = var_or_expr->index_args->args;
+  var_or_expr->prefix = NULL;
+  var_or_expr->index_args = NULL;
+
+  CstVarExpr_* var_expr = CST_CAST(CstVarExpr_, var_or_expr);
+  var_expr->expr = (CstNode_*)generic_or_array;
+
+  reduce_to_var_expr((CstNode_*)generic_or_array->prefix, allocator);
+}
+
+// Recursively replaces all CstVarOrTypeExpr_ nodes with a CstGenericOrArrayType_.
+// This is for parsing expressions like:
+//   val a := foo[1][3][4]{1, 2, 3} OR
+// Where the parse tree is ((((foo[int]) [1]) [3]) [4]) {1, 2, 3}
+static void reduce_to_type_expr(CstNode_* expr, MemoryAllocator_* allocator) {
+  if (expr->cls != CST_CLS(CstVarOrTypeExpr_)) return;
+
+  CstVarOrTypeExpr_* index_or_expr = CST_CAST(CstVarOrTypeExpr_, expr);
+  index_or_expr->base.cls = CST_CLS(CstType_);
+
+  CstGenericOrArrayType_* generic_or_array = MAKE_CST_NODE(allocator, CstGenericOrArrayType_, expr->line);
+  generic_or_array->prefix = index_or_expr->prefix;
+  generic_or_array->args = index_or_expr->index_args->args;
+  index_or_expr->prefix = NULL;
+  index_or_expr->index_args = NULL;
+
+  CstType_* cst_type = CST_CAST(CstType_, expr);
+  cst_type->impl = (CstNode_*)generic_or_array;
+
+  reduce_to_var_expr((CstNode_*)generic_or_array->prefix, allocator);
+}
+
 static CstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence precedence) {
   advance(parser, scanner);
   ParseFn prefix_rule = get_rule(parser->previous.type)->prefix;
@@ -1124,7 +1168,12 @@ static CstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
     if (parser->previous.type == TK_LPAREN) {
       CstFunctionCall_* new_exp = MAKE_CST_NODE(parser->allocator, CstFunctionCall_, parser->previous.line);
       new_exp->prefix = exp;
-      new_exp->args = infix_rule(parser, scanner);      
+      new_exp->args = infix_rule(parser, scanner);
+
+      if (exp->cls == CST_CLS(CstVarOrTypeExpr_)) {
+        reduce_to_var_expr(exp, parser->allocator);
+      }
+
       exp = (CstNode_*)new_exp;
     } else if (parser->previous.type == TK_EQUAL) {
       CstAssignmentExpr_* new_exp = MAKE_CST_NODE(parser->allocator, CstAssignmentExpr_, parser->previous.line);
@@ -1151,11 +1200,13 @@ static CstNode_* parse_precedence(Parser_* parser, Scanner_* scanner, Precedence
         CstVarExpr_* var_expr = CST_CAST(CstVarExpr_, exp);
         CstIdExpr_* id_expr = CST_CAST(CstIdExpr_, var_expr->expr);
         new_exp->name = id_expr->name;
+      } else if (exp->cls == CST_CLS(CstVarOrTypeExpr_)) {
+        reduce_to_type_expr(exp, parser->allocator);
       }
       dealloc(parser->allocator, exp);
       exp = (CstNode_*)new_exp;
     } else if (parser->previous.type == TK_LBRACKET) {
-      CstIndexOrTypeExpr_* new_exp = MAKE_CST_NODE(parser->allocator, CstIndexOrTypeExpr_, parser->previous.line);
+      CstVarOrTypeExpr_* new_exp = MAKE_CST_NODE(parser->allocator, CstVarOrTypeExpr_, parser->previous.line);
       new_exp->prefix = exp;
       new_exp->index_args = CST_CAST(CstIndexOrGenericArgs_, infix_rule(parser, scanner));
       exp = (CstNode_*)new_exp;

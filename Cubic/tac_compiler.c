@@ -1744,19 +1744,19 @@ static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
 
   hashmap_set(chunk->fn_code, fn_loc.token.start, fn_loc.token.length, (uintptr_t)fn_chunk);
   
-  emit_label(chunk, fn->loc, node->line);
+  emit_label(fn_chunk, fn->loc, node->line);
   TacHandle_ prologue = emit_tac(chunk, OP_PROLOGUE, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
   for (AstListNode_* n = def->function_params.head; n != NULL; n = n->next) {
-    code_gen(chunk, n->node);
+    code_gen(fn_chunk, n->node);
   }
 
-  code_gen(chunk, def->body);
+  code_gen(fn_chunk, def->body);
 
   if (type_is(def->return_type, NilType_)) {
-    emit_tac(chunk, OP_RETURN, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
+    emit_tac(fn_chunk, OP_RETURN, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
   }
 
-  chunk->code[prologue].arg_l = OP_SIZE(chunk->slot_offset);
+  chunk->code[prologue].arg_l = OP_SIZE(fn_chunk->slot_offset);
   chunk->code[prologue].arg_r = OP_SIZE(fn->arg_size);
   //emit_tac(chunk, OP_EPILOGUE, EMPTY_LOC, EMPTY_OPERAND, EMPTY_OPERAND, node->line);
 
@@ -1786,7 +1786,6 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
 
   int i = 0;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-    AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, n->node);
     Location_ tmp = code_gen(chunk, n->node);
     //tmp = emit_cast_kind(chunk, &tmp, &arg->base.top_sem_type, &arg->base.sem_type, tmp.size, n->node->line);
     args_locs[i] = tmp;
@@ -1809,16 +1808,16 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
   int64_t arg_size = 0;
   i = 0;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-    AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, n->node);
-    param_locs[i] = tac_alloc(chunk, arg->base.top_type);
+    AstExpr_* arg = (AstExpr_*)n->node;
+    param_locs[i] = tac_alloc(chunk, arg->top_type);
     arg_size += param_locs[i].size;
     ++i;
   }
 
   i = 0;
   for (AstListNode_* n = args->args.head; n != NULL; n = n->next) {
-    AstFunctionCallArg_* arg = AST_CAST(AstFunctionCallArg_, n->node);
-    emit_set_param(chunk, &param_locs[i], &args_locs[i], arg->expr->type->size, node->line);
+    AstExpr_* arg = (AstExpr_*)n->node;
+    emit_set_param(chunk, &param_locs[i], &args_locs[i], arg->type->size, node->line);
     ++i;
   }
 
@@ -1828,25 +1827,6 @@ static Location_ function_call_code_gen(TacChunk_* chunk, AstNode_* node) {
 
 static Location_ function_args_code_gen(TacChunk_* chunk, AstNode_* node) {
   return EMPTY_LOC;
-}
-
-static Location_ function_arg_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstFunctionCallArg_* arg = (AstFunctionCallArg_*)node;
-  Location_ tmp = code_gen(chunk, (AstNode_*)arg->expr);
-  Location_ dst = tmp;
-
-//  SemanticType_* dst_type = &arg->base.top_sem_type;
-//  SemanticType_* src_type = &arg->base.sem_type;
-//  if (dst_type->kind != src_type->kind) {
-//    switch (dst_type->kind) {
-//      case KIND_VAL:
-//        emit_set_variable(chu)
-//        break;
-//      case KIND_REF:
-//        break;
-//    }
-//  }
-  return dst;
 }
 
 static Location_ noop_code_gen(TacChunk_* chunk, AstNode_* node) { return EMPTY_LOC; }
@@ -2144,7 +2124,6 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstFunctionParam_)]         = {function_param_code_gen},
   [AST_CLS(AstFunctionCall_)]          = {function_call_code_gen},
   [AST_CLS(AstFunctionCallArgs_)]      = {function_args_code_gen},
-  [AST_CLS(AstFunctionCallArg_)]       = {function_arg_code_gen},
   [AST_CLS(AstExpressionStmt_)]        = {expression_statement_code_gen},
   [AST_CLS(AstNoopExpr_)]              = {noop_code_gen},
   [AST_CLS(AstNoopStmt_)]              = {noop_code_gen},
@@ -2162,7 +2141,7 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(TypeMemberDecl_)]           = {noop_code_gen},
   [AST_CLS(AstGenericParam_)]          = {noop_code_gen},
   [AST_CLS(AstGenericParams_)]         = {noop_code_gen},
-  [AST_CLS(AstIndexOrTypeExpr_)]       = {noop_code_gen},
+  [AST_CLS(AstVarOrTypeExpr_)]       = {noop_code_gen},
   [AST_CLS(AstIndexOrGenericArgs_)]    = {noop_code_gen},
 };
 

@@ -32,13 +32,11 @@
   AST_NODE(AstInPlaceBinaryStmt_), \
   AST_NODE(AstWhileStmt_), \
   AST_NODE(AstForStmt_), \
-  AST_NODE(AstFunctionPrototype_), \
   AST_NODE(AstFunctionDef_), \
   AST_NODE(AstGenericFunctionDef_), \
   AST_NODE(AstFunctionParam_), \
   AST_NODE(AstFunctionCall_), \
   AST_NODE(AstFunctionCallArgs_), \
-  AST_NODE(AstFunctionCallArg_), \
   AST_NODE(AstExpressionStmt_), \
   AST_NODE(AstNoopExpr_), \
   AST_NODE(AstNoopStmt_), \
@@ -56,7 +54,7 @@
   AST_NODE(TypeMemberDecl_), \
   AST_NODE(AstGenericParam_), \
   AST_NODE(AstGenericParams_), \
-  AST_NODE(AstIndexOrTypeExpr_), \
+  AST_NODE(AstVarOrTypeExpr_), \
   AST_NODE(AstIndexOrGenericArgs_)
 
 #define GENERATE_ASTNODE(NODE) AST_CLS(NODE)
@@ -253,15 +251,15 @@ typedef struct AstTypeExpr_ {
   struct AstExpr_ base;
 } AstTypeExpr_;
 
-typedef struct AstIndexOrTypeExpr_ {
+typedef struct AstVarOrTypeExpr_ {
   union {
     struct AstExpr_ base;
-    AstVarExpr_ var_index_expr;
+    AstVarExpr_ var_expr;
     AstTypeExpr_ type_expr;
   };
   struct AstExpr_* prefix;
   struct AstIndexOrGenericArgs_* index_args;
-} AstIndexOrTypeExpr_;
+} AstVarOrTypeExpr_;
 
 typedef struct AstIndexOrGenericArgs_ {
   struct AstExpr_ base;
@@ -351,18 +349,12 @@ typedef struct AstTypeDef_ {
   AstList_ members;
 } AstTypeDef_;
 
-typedef struct AstFunctionPrototype_ {
-  struct AstNode_ base;
-  struct CstFunctionDef_* parent;
-
-  Type_* fn_type;
-  AstList_ defs;
-} AstFunctionPrototype_;
-
 // FunctionDef ::= 'function' [Id] '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement 'end'
 typedef struct AstFunctionDef_ {
   struct AstExpr_ base;
   struct Symbol_* fn_symbol;
+  Type_* fn_type;
+
   struct AstNode_* body;
   AstList_ function_params;
   Type_* return_type;
@@ -387,7 +379,6 @@ typedef struct AstFunctionCall_ {
   struct AstExpr_ base;
   AstExpr_* prefix;
   struct AstFunctionCallArgs_* args;
-  struct Symbol_* fn_sym;
 } AstFunctionCall_;
 
 // FunctionCallArgs ::= '(' { FunctionCallArg } ')'
@@ -395,14 +386,7 @@ typedef struct AstFunctionCallArgs_ {
   struct AstNode_ base;
   Type_* fn_type;
   AstList_ args;
-  struct Symbol_* fn_sym;  
 } AstFunctionCallArgs_;
-
-// FunctionCallArg ::= Expr
-typedef struct AstFunctionCallArg_ {
-  struct AstExpr_ base;
-  AstExpr_* expr;
-} AstFunctionCallArg_;
 
 // ClassDef ::= 'struct' Id [GenericParams] {ClassMemberDecl} 'end'
 typedef struct AstClassDef_ {
