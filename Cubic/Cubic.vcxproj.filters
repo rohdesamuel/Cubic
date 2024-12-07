@@ -153,6 +153,9 @@
     <ClCompile Include="type_parser.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ast_initializer.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="syntax.txt">

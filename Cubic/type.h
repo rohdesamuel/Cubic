@@ -83,8 +83,45 @@ typedef enum {
   // Type is a static constant and can be cached for multiple uses.
   LIFETIME_STATIC,
 } ValueLifetime;
-#define TYPE_CLS(name) TYPE_##name
 
+#define TYPE_CLS(name) TYPE_##name
+#define TYPE_NAME(name) name __##name##impl__
+
+// TODO: implement types as UnionTypes.
+#define TYPE_LIST(TYPE_OP, DELIM) \
+  TYPE_OP(NilType_) DELIM \
+  TYPE_OP(BoolType_) DELIM \
+  TYPE_OP(IntType_) DELIM \
+  TYPE_OP(Int8Type_) DELIM \
+  TYPE_OP(Int16Type_) DELIM \
+  TYPE_OP(Int32Type_) DELIM \
+  TYPE_OP(Int64Type_) DELIM \
+  TYPE_OP(UintType_) DELIM \
+  TYPE_OP(Uint8Type_) DELIM \
+  TYPE_OP(Uint16Type_) DELIM \
+  TYPE_OP(Uint32Type_) DELIM \
+  TYPE_OP(Uint64Type_) DELIM \
+  TYPE_OP(FloatType_) DELIM \
+  TYPE_OP(DoubleType_) DELIM \
+  TYPE_OP(StringType_) DELIM \
+  TYPE_OP(ConstType_) DELIM \
+  TYPE_OP(InType_) DELIM \
+  TYPE_OP(OutType_) DELIM \
+  TYPE_OP(VarType_) DELIM \
+  TYPE_OP(RefType_) DELIM \
+  TYPE_OP(FieldType_) DELIM \
+  TYPE_OP(ClassType_) DELIM \
+  TYPE_OP(ArrayType_) DELIM \
+  TYPE_OP(UnionType_) DELIM \
+  TYPE_OP(ConstraintType_) DELIM \
+  TYPE_OP(TupleType_) DELIM \
+  TYPE_OP(GenericParamType_) DELIM \
+  TYPE_OP(FunctionType_)
+
+#define GENERATE_TYPE_ENUMS(TYPE) TYPE_CLS(TYPE)
+#define GENERATE_TYPE_UNION(TYPE) TYPE_NAME(TYPE)
+#define COMMA ,
+#define SEMICOLON ;
 
 typedef struct Specialization_ {
   struct Type_* type;
@@ -97,53 +134,21 @@ typedef struct Type_ {
   // E.g. return value of a function, the type that a pointer is addressing
   // to, the field of a given struct.
   enum TypeCls {
-    // Primitive types.
-    __TYPE_PRIMITIVE_START__,
-    TYPE_CLS(NilType_),
-    TYPE_CLS(BoolType_),
-    TYPE_CLS(IntType_),
-    TYPE_CLS(Int8Type_),
-    TYPE_CLS(Int16Type_),
-    TYPE_CLS(Int32Type_),
-    TYPE_CLS(Int64Type_),
-    TYPE_CLS(UintType_),
-    TYPE_CLS(Uint8Type_),
-    TYPE_CLS(Uint16Type_),
-    TYPE_CLS(Uint32Type_),
-    TYPE_CLS(Uint64Type_),
-    TYPE_CLS(FloatType_),
-    TYPE_CLS(DoubleType_),
-    TYPE_CLS(StringType_),
-    __TYPE_PRIMITIVE_END__,
+    TYPE_LIST(GENERATE_TYPE_ENUMS, COMMA),
 
-    // Unary types.    
-    __TYPE_UNARY_START__,
+    // Define the PlaceholderType_ outside of the list because this would
+    // result in a loop when defining the PlaceholderType_.
     TYPE_CLS(PlaceholderType_),
-    __TYPE_DECLS_START__,
-    TYPE_CLS(ConstType_),
-    TYPE_CLS(InType_),
-    TYPE_CLS(OutType_),
-    TYPE_CLS(VarType_),
-    TYPE_CLS(RefType_),
-    __TYPE_DECLS_END__,
-    TYPE_CLS(FieldType_),
-    __TYPE_UNARY_END__,
-
-    // Composite types.
-    __TYPE_COMPOSITE_START__,
-    TYPE_CLS(ClassType_),
-    TYPE_CLS(ArrayType_),
-    TYPE_CLS(UnionType_),
-    TYPE_CLS(ConstraintType_),
-    TYPE_CLS(TupleType_),
-    TYPE_CLS(GenericParamType_),
-    __TYPE_COMPOSITE_END__,
-
-
-    // Functional types.
-    TYPE_CLS(FunctionType_),
-
     __TYPE_COUNT__,
+
+    __TYPE_PRIMITIVE_START__ = TYPE_CLS(NilType_),
+    __TYPE_PRIMITIVE_END__ = TYPE_CLS(StringType_),
+
+    __TYPE_UNARY_START__ = TYPE_CLS(ConstType_),
+    __TYPE_UNARY_END__ = TYPE_CLS(FieldType_),
+
+    __TYPE_COMPOSITE_START__ = TYPE_CLS(ClassType_),
+    __TYPE_COMPOSITE_END__ = TYPE_CLS(GenericParamType_),
   } cls;
 
   // The TypeExpr_ that created this type.
@@ -166,7 +171,9 @@ typedef struct Type_ {
   uint64_t id;
 } Type_;
 
-#define DEF_PRIMITIVE_TY(NAME) extern const Type_* NAME##_Ty;
+#define DEF_PRIMITIVE_TY(NAME) \
+typedef Type_ NAME##Type_; \
+extern const Type_* NAME##_Ty;
 
 DEF_PRIMITIVE_TY(Nil);
 DEF_PRIMITIVE_TY(Bool);
@@ -197,10 +204,6 @@ typedef struct MultiType_ {
   Type_ self;
   ListOf_(Type_*) types;
 } MultiType_;
-
-typedef struct PlaceholderType_ {
-  UnaryType_ unary;
-} PlaceholderType_;
 
 typedef struct ArrayType_ {
   Type_ self;
@@ -301,11 +304,16 @@ typedef struct ClassType_ {
 
 typedef struct FunctionType_ {
   Type_ self;
-  //struct Symbol_* sym;
-
   Type_* ret_ty;
   ListOf_(Type_*) params;
 } FunctionType_;
+
+typedef struct PlaceholderType_ {
+  union {
+    Type_ self;
+    TYPE_LIST(GENERATE_TYPE_UNION, SEMICOLON);
+  };
+} PlaceholderType_;
 
 void type_init();
 
@@ -368,15 +376,7 @@ Type_* generictype_findimpl_i(Type_* generic_ty, uint64_t type_id);
 
 #define type_is(PTYPE, CLS) type_is_(PTYPE, TYPE_CLS(CLS))
 inline bool type_is_(const Type_* type, int cls) {
-  if (!type) {
-    return false;
-  }
-
-  if (type->cls == cls) {
-    return true;
-  }
-
-  return false;
+  return type && type->cls == cls;
 }
 
 #define type_cast(TYPE, EXPR) ((TYPE*)(EXPR))

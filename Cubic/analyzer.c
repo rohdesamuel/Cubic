@@ -710,18 +710,14 @@ static void ast_dot_expr_analysis(Analyzer_* analyzer, AstNode_* node) {
 
 static void ast_class_constructor_analysis(Analyzer_* analyzer, AstNode_* node) {
   AstClassConstructor_* constructor = (AstClassConstructor_*)node;
-  constructor->prefix->top_type = constructor->base.top_type;
-  do_analysis(analyzer, (AstNode_*)constructor->prefix);
 
-  if (!constructor->prefix->type) {
+  if (!constructor->base.type) {
     Symbol_* cls_sym = scope_search_to_root(node->scope, &constructor->name);
 
     Type_* type = constructor->base.type;
     if (!type) {
       constructor->base.type = cls_sym->ty;
     }
-  } else {
-    constructor->base.type = constructor->prefix->type;
   }
 
   for (AstListNode_* n = constructor->params.head; n != NULL; n = n->next) {

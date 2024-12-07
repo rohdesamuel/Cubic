@@ -198,6 +198,16 @@ static const TypeExpr_* cst_type_def_parse(const CstNode_* node, MemoryAllocator
   return NULL;
 }
 
+static const TypeExpr_* cst_var_exp_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  CstVarExpr_* cst = (CstVarExpr_*)node;
+  return do_parse(cst->expr, allocator);
+}
+
+static const TypeExpr_* cst_id_exp_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  CstIdExpr_* cst = (CstIdExpr_*)node;
+  return make_symbol_typeexpr(cst->name, allocator);
+}
+
 static const TypeExpr_* cst_primary_exp_parse(const CstNode_* node, MemoryAllocator_* allocator) {
   CstPrimaryExp_* cst = (CstPrimaryExp_*)node;
   return make_primary_typeexpr(cst->type, cst->value, allocator);
@@ -205,6 +215,8 @@ static const TypeExpr_* cst_primary_exp_parse(const CstNode_* node, MemoryAlloca
 
 static ParseRule_ parse_rules[] = {
   [CST_CLS(CstPrimaryExp_)]         = {cst_primary_exp_parse},
+  [CST_CLS(CstVarExpr_)]            = {cst_var_exp_parse},
+  [CST_CLS(CstIdExpr_)]             = {cst_id_exp_parse},
   [CST_CLS(CstFunctionDef_)]        = {cst_function_def_parse},
   [CST_CLS(CstFunctionParam_)]      = {cst_function_param_parse},
   [CST_CLS(CstClassDef_)]           = {cst_class_def_parse},
@@ -217,7 +229,7 @@ static ParseRule_ parse_rules[] = {
   [CST_CLS(CstType_)]               = {cst_type_parse},
   [CST_CLS(CstTypeDef_)]            = {cst_type_def_parse},
   [CST_CLS(CstGenericParam_)]       = {cst_generic_param_parse},
-  [CST_CLS(CstVarOrTypeExpr_)]    = {cst_var_or_type_expr_parse},
+  [CST_CLS(CstVarOrTypeExpr_)]      = {cst_var_or_type_expr_parse},
   [CST_CLS(CstGenericOrArrayType_)] = {cst_generic_or_array_type_parse},
 };
 

@@ -411,7 +411,6 @@ typedef struct AstClassMemberDecl_ {
 typedef struct AstClassConstructor_ {
   struct AstExpr_ base;
   Token_ name;
-  struct AstExpr_* prefix;
   struct AstList_ params;
 } AstClassConstructor_;
 

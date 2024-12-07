@@ -31,7 +31,12 @@ DEF_PRIMITIVE_TYPE(Float);
 DEF_PRIMITIVE_TYPE(Double);
 DEF_PRIMITIVE_TYPE(String);
 
-static Type_* type_replace_decltype(Type_* ty, Type_* replace_with, MemoryAllocator_* allocator);
+#define TYPE_SIZE(TYPE) sizeof(TYPE)
+
+static const size_t type_sizes[__TYPE_COUNT__] = {
+  TYPE_LIST(TYPE_SIZE, COMMA)
+};
+
 static void generictype_bindargs(Type_* generic_ty, List_* type_args, Frame_* frame, Scope_* scope);
 static uint64_t type_id_calc(Type_* ty);
 
@@ -55,7 +60,7 @@ void type_init() {
 
 Type_* make_placeholder_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator) {
   PlaceholderType_* ret =  (PlaceholderType_*)type_alloc_ty(allocator, scope, tmpl, PlaceholderType_);
-  ret->unary.self.id = 0;
+  ret->self.id = 0;
   return (Type_*)ret;
 }
 
@@ -142,8 +147,6 @@ Type_* make_function_ty(Token_ name, ListOf_(Type_*)* params, Type_* ret_ty, con
   return (Type_*)ret;
 }
 
-
-
 Type_* make_tuple_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator, int n, ...) {
   va_list args;
   va_start(args, n);
@@ -220,11 +223,11 @@ Type_* type_alloc(MemoryAllocator_* allocator, struct Scope_* scope, const struc
 }
 
 bool type_isaprimitive(const Type_* ty) {
-  return ty->cls > __TYPE_PRIMITIVE_START__ && ty->cls < __TYPE_PRIMITIVE_END__;
+  return ty->cls >= __TYPE_PRIMITIVE_START__ && ty->cls <= __TYPE_PRIMITIVE_END__;
 }
 
 bool type_isunary(const Type_* ty) {
-  return ty->cls > __TYPE_UNARY_START__ && ty->cls < __TYPE_UNARY_END__;
+  return ty->cls >= __TYPE_UNARY_START__ && ty->cls <= __TYPE_UNARY_END__;
 }
 
 bool type_ismultitype(const Type_* ty) {
@@ -284,10 +287,14 @@ const Type_* type_resolve(Type_* type, struct Scope_* scope, struct ErrorsContai
   if (!type_is(type, PlaceholderType_)) {
     return type;
   }
-  PlaceholderType_* unresolved = type_as(PlaceholderType_, type);
-  unresolved->unary.ty = (Type_*)resolve_typeexpr(type->tmpl, NULL, scope, errors, scope->allocator);
-  unresolved->unary.self.id = unresolved->unary.ty->id;
-  return unresolved->unary.ty;
+  PlaceholderType_* placeholder = type_as(PlaceholderType_, type);
+  Type_* resolved_type = (Type_*)resolve_typeexpr(type->tmpl, NULL, scope, errors, scope->allocator);
+
+  assertf(resolved_type->cls < sizeof(type_sizes) / sizeof(type_sizes[0]), "Trying to copy unknown type.");
+  memcpy(placeholder, resolved_type, type_sizes[resolved_type->cls]);
+
+  dealloc(scope->allocator, resolved_type);
+  return (Type_*)placeholder;
 }
 
 size_t type_calcsize(Type_* type) {
@@ -951,41 +958,6 @@ Type_* type_valtype(Type_* ty) {
   }
 
   return ty;
-}
-
-static Type_* type_replace_decltype(Type_* ty, Type_* replace_with, MemoryAllocator_* allocator) {
-  Type_* ret = NULL;
-  Type_* sub_ty = NULL;
-
-  if (!ty) {
-    return replace_with;
-  }
-
-  if (ty->cls > __TYPE_DECLS_START__ && ty->cls < __TYPE_DECLS_END__) {    
-    sub_ty = type_replace_decltype(type_cast(UnaryType_, ty)->ty, replace_with, allocator);
-  } else {
-    return replace_with;
-  }
-
-  switch (ty->cls) {
-    case TYPE_CLS(ConstType_):
-      return make_const_ty(sub_ty, ty->tmpl, ty->scope, allocator);
-
-    case TYPE_CLS(InType_):
-      return make_in_ty(sub_ty, ty->tmpl, ty->scope, allocator);
-    
-    case TYPE_CLS(OutType_):
-      return make_out_ty(sub_ty, ty->tmpl, ty->scope, allocator);
-    
-    case TYPE_CLS(VarType_):
-      return make_var_ty(sub_ty, ty->tmpl, ty->scope, allocator);
-    
-    case TYPE_CLS(RefType_):
-      return make_ref_ty(sub_ty, ty->tmpl, ty->scope, allocator);
-  }
-
-  assertf(false, "Could not replace decltype. Unknown type: %d", ty->cls);
-  return NULL;
 }
 
 bool type_isdefined(const Type_* ty) {

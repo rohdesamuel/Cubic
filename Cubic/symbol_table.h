@@ -85,6 +85,7 @@ VarSymbol_* scope_var(Scope_* scope, Token_* name);
 FunctionSymbol_* scope_fn(Scope_* scope, Token_* name);
 Symbol_* scope_addnew(Scope_* scope, Symbol_* symbol);
 bool scope_addexisting(Scope_* scope, Symbol_* symbol);
+bool scope_addplaceholder(Scope_* scope, const Token_* name);
 
 void closure_addto(ClosureSymbol_* closure, Symbol_* upvalue);
 

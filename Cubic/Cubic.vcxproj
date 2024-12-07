@@ -173,6 +173,7 @@
   <ItemGroup>
     <ClCompile Include="analyzer.c" />
     <ClCompile Include="ast.c" />
+    <ClCompile Include="ast_initializer.c" />
     <ClCompile Include="ast_parser.c" />
     <ClCompile Include="chunk.c" />
     <ClCompile Include="compiler.c" />
