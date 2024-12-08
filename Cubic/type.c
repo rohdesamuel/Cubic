@@ -266,6 +266,27 @@ bool type_isastring(const Type_* ty) {
   return type_is(ty, StringType_);
 }
 
+Type_* type_findspecialization(const Type_* base_type, Type_** resolved_args) {
+  Type_* found_specialization = NULL;
+  for (ListNode_* n = base_type->specializations.head; n != NULL; n = n->next) {
+    Type_* s = list_val(n, Type_*);
+
+    bool is_same = true;
+    for (size_t i = 0; i < s->args_count; ++i) {
+      const Type_* s_type = s->args[i];
+      const Type_* arg_type = resolved_args[i];
+      is_same &= s_type->id == arg_type->id;
+      if (!is_same) break;
+    }
+
+    if (is_same) {
+      return s;
+    }
+  }
+
+  return NULL;
+}
+
 static bool constrainttype_satisfied(ConstraintType_* constraints_ty, Type_* ty) {
   for (ListNode_* constraint_n = constraints_ty->self.types.head;
        constraint_n != NULL;

@@ -405,7 +405,7 @@ static AstNode_* cst_class_def_parse(AstParser_* parser, CstNode_* node, Scope_*
   astlist_init(&ret->members, allocator);
 
   const TypeExpr_* class_type_expr = parse_type(node, allocator);
-  ClassType_* cls_type = make_placeholder_ty(class_type_expr, scope, allocator);
+  ClassType_* cls_type = NULL;// make_placeholder_ty(class_type_expr, scope, allocator);
 
   frame_addclass(scope->frame, &ret->name, (Type_*)cls_type, scope);
   ret->class_type = (Type_*)cls_type;

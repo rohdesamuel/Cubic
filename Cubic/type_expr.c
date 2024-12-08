@@ -325,28 +325,10 @@ static void resolve_type_args(const TypeExpr_* type, Type_** resolved_args, Scop
 static const Type_* find_specialization(const Token_* sym_name, Type_** resolved_args, Scope_* scope) {
   Symbol_* sym = scope_find(scope, sym_name);
   if (!sym) {
-    return false;
+    return NULL;
   }
 
-  Type_* base_type = sym->ty;
-  Type_* found_specialization = NULL;
-  for (ListNode_* n = base_type->specializations.head; n != NULL; n = n->next) {
-    Type_* s = list_val(n, Type_*);
-
-    bool is_same = true;
-    for (size_t i = 0; i < s->args_count; ++i) {
-      const Type_* s_type = s->args[i];
-      const Type_* arg_type = resolved_args[i];
-      is_same &= s_type->id == arg_type->id;
-      if (!is_same) break;
-    }
-
-    if (is_same) {
-      return s;
-    }
-  }
-
-  return NULL;
+  return type_findspecialization(sym->ty, resolved_args);
 }
 
 static void add_specialization(Type_* t, Type_** args, int args_count, MemoryAllocator_* allocator) {

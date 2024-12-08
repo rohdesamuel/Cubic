@@ -77,10 +77,10 @@ typedef struct AstParseWork_ {
   Token_ name;
 } AstParseWork_;
 
-typedef struct AstParseResolutionWork_ {
-  Scope_* origin_scope;
-  PlaceholderType_* placeholder_ty;
-} AstParseResolutionWork_;
+typedef struct AstResolutionWork_ {
+  Type_* type;
+  Scope_* scope;
+} AstResolutionWork_;
 
 typedef AstNode_* (*ParseFn)(AstParser_*, CstNode_*, Scope_*, MemoryAllocator_*);
 typedef struct ParseRule_ {
@@ -91,7 +91,7 @@ static ParseRule_* get_rule(int info);
 
 void ast_parser_init(AstParser_* parser, MemoryAllocator_* allocator) {
   *parser = (AstParser_){ 0 };
-  list_of(&parser->resolution_work_queue, AstParseWork_, NULL);
+  list_of(&parser->resolution_work_queue, AstResolutionWork_, NULL);
   list_of(&parser->specialization_work_queue, AstParseWork_, NULL);
   list_of(&parser->parse_work_queue, AstParseWork_, NULL);
   parser->allocator = allocator;
@@ -172,14 +172,16 @@ static AstFunctionDef_* generate_function_def(AstParser_* parser, FunctionType_*
   return ret;
 }
 
-static void defer_type_resolution(AstParser_* parser, const CstNode_* cst_node, AstNode_* ast_node, Token_ name, Scope_* scope, MemoryAllocator_* allocator) {
-  AstParseWork_ work = {
-    .origin_scope = scope,
-    .origin_node = cst_node,
-    .parsed_node = (AstNode_*)ast_node,
-    .name = name,
+static Type_* defer_type_resolution(AstParser_* parser, const TypeExpr_* type_expr, Scope_* scope, MemoryAllocator_* allocator) {
+  Type_* type = make_placeholder_ty(type_expr, scope, allocator);
+
+  AstResolutionWork_ work = {
+    .scope = scope,
+    .type = type,
   };
   list_push(&parser->resolution_work_queue, &work);
+
+  return type;
 }
 
 static void defer_ast_parse(AstParser_* parser, const CstNode_* cst_node, AstNode_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
@@ -192,7 +194,7 @@ static void defer_ast_parse(AstParser_* parser, const CstNode_* cst_node, AstNod
   list_push(&parser->parse_work_queue, &work);
 }
 
-static void defer_class_specialization(AstParser_* parser, const CstNode_* cst_node, AstClassDef_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
+static Type_* defer_class_specialization(AstParser_* parser, const CstNode_* cst_node, AstClassDef_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
   const TypeExpr_* class_type_expr = parse_type(cst_node, allocator);
   Type_* cls_type = make_placeholder_ty(class_type_expr, scope, allocator);
   frame_addclass(scope->frame, &ast_node->name, cls_type, scope);
@@ -205,9 +207,10 @@ static void defer_class_specialization(AstParser_* parser, const CstNode_* cst_n
   };
 
   list_push(&parser->specialization_work_queue, &item);
+  return cls_type;
 }
 
-static void defer_function_specialization(AstParser_* parser, const CstNode_* cst_node, AstFunctionDef_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
+static Type_* defer_function_specialization(AstParser_* parser, const CstNode_* cst_node, AstFunctionDef_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
   const TypeExpr_* type_expr = parse_type(cst_node, allocator);
  
   Type_* fn_type = make_placeholder_ty(type_expr, scope, allocator);
@@ -225,30 +228,12 @@ static void defer_function_specialization(AstParser_* parser, const CstNode_* cs
   };
 
   list_push(&parser->specialization_work_queue, &item);
+  return fn_type;
 }
 
-static void do_resolution_work(AstParser_* parser, AstParseWork_* item) {
+static void do_resolution_work(AstParser_* parser, AstResolutionWork_* item) {
   MemoryAllocator_* allocator = parser->allocator;
-  if (item->name.start) {
-    Symbol_* sym = scope_find(item->origin_scope, &item->name);
-    assertf(sym, "Could not find symbol: %.*s", item->name.length, item->name.start);
-
-    Type_* sym_ty = sym->ty;
-    type_resolve(sym->ty, item->origin_scope, parser->errors);
-  } else {
-    switch (item->parsed_node->cls) {
-      case AST_CLS(AstTypeExpr_):
-      {
-        AstTypeExpr_* ast = (AstTypeExpr_*)item->parsed_node;
-        type_resolve(ast->base.type, item->origin_scope, parser->errors);
-        break;
-      }
-
-      default:
-        assertf(false, "unimplemented");
-        break;
-    }
-  }
+  type_resolve(item->type, item->scope, parser->errors);
 }
 
 static void do_work(AstParser_* parser, AstParseWork_* item) {
@@ -299,6 +284,7 @@ static void do_work(AstParser_* parser, AstParseWork_* item) {
       ListOf_(Type_*)* specializations = &sym->ty->specializations;
       for (ListNode_* n = specializations->head; n != NULL; n = n->next) {
         ClassType_* specialization = type_as(ClassType_, list_val(n, Type_*));
+        
         AstClassDef_* new_class = generate_class_def(
           parser, specialization, (CstClassDef_*)item->origin_node, specialization->scope->parent, allocator);
         astlist_append(&class_def->base.specializations, (AstNode_*)new_class);
@@ -364,8 +350,8 @@ AstNode_* parse_ast(AstParser_* parser, const struct CstNode_* node, struct Scop
     }
 
     while (parser->resolution_work_queue.count) {
-      AstParseWork_ work_item = { 0 };
-      list_pop(&parser->resolution_work_queue, &work_item, sizeof(AstParseWork_));
+      AstResolutionWork_ work_item = { 0 };
+      list_pop(&parser->resolution_work_queue, &work_item, sizeof(AstResolutionWork_));
       do_resolution_work(parser, &work_item);
     }
 
@@ -490,8 +476,7 @@ static AstNode_* cst_var_decl_parse(AstParser_* parser, CstNode_* node, Scope_* 
   
   if (stmt->opt_type) {
     const TypeExpr_* decl_type = parse_type(stmt->opt_type, allocator);
-    ret->decl_type = make_placeholder_ty(decl_type, scope, allocator);
-    defer_type_resolution(parser, node, (AstNode_*)ret, ret->name, scope, allocator);
+    ret->decl_type = defer_type_resolution(parser, decl_type, scope, allocator);
   } else if (!stmt->expr) {
     assertf(ret->expr, "Expected an expression for a deduced type variable.");
     ret->decl_type = ret->expr->type;
@@ -528,9 +513,7 @@ static AstNode_* cst_id_expr_parse(AstParser_* parser, CstNode_* node, Scope_* s
   ret->name = expr->name;
   
   const TypeExpr_* type_expr = parse_type(node, allocator);
-  ret->base.type = make_placeholder_ty(type_expr, scope, allocator);
-
-  defer_type_resolution(parser, node, (AstNode_*)ret, ret->name, scope, allocator);
+  ret->base.type = defer_type_resolution(parser, type_expr, scope, allocator);
 
   return (AstNode_*)ret;
 }
@@ -609,6 +592,7 @@ static AstNode_* cst_function_def_parse(AstParser_* parser, CstNode_* node, Scop
 
   ret->fn_type = make_placeholder_ty(type_expr, scope, allocator);
   ret->fn_type->opt_name = def->name;
+  defer_function_specialization(parser, node, ret, scope, allocator);
 
   Frame_* fn_frame = frame_createfrom(scope->frame, scope, ret->fn_type);
   Scope_* fn_scope = fn_frame->scope;
@@ -621,7 +605,6 @@ static AstNode_* cst_function_def_parse(AstParser_* parser, CstNode_* node, Scop
   }
   ret->body = do_parse(parser, def->body, fn_scope, allocator);
 
-  defer_function_specialization(parser, node, ret, scope, allocator);
 
   return (AstNode_*)ret;
 }
@@ -633,9 +616,8 @@ static AstNode_* cst_function_param_parse(AstParser_* parser, CstNode_* node, Sc
   ret->name = param->name;
 
   const TypeExpr_* type_expr = parse_type(param->type, allocator);
-  ret->type = make_placeholder_ty(type_expr, scope, allocator);
+  ret->type = defer_type_resolution(parser, type_expr, scope, allocator);
   frame_addparam(scope->frame, &ret->name, ret->type);
-  defer_type_resolution(parser, node, (AstNode_*)ret, param->name, scope, allocator);
 
   return (AstNode_*)ret;
 }
@@ -840,9 +822,7 @@ AstNode_* cst_type_parse(AstParser_* parser, CstNode_* node, Scope_* scope, Memo
   AstTypeExpr_* ret = MAKE_AST_NODE(allocator, AstTypeExpr_, scope, node);
 
   const TypeExpr_* type_expr = parse_type(cst->impl, allocator);
-  ret->base.type = make_placeholder_ty(type_expr, scope, allocator);
-
-  defer_type_resolution(parser, node, (AstNode_*)ret, (Token_) { 0 }, scope, allocator);
+  ret->base.type = defer_type_resolution(parser, type_expr, scope, allocator);
 
   return NULL;
 }
