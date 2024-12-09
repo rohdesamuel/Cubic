@@ -1104,6 +1104,7 @@ static CstNode_* PrefixRangeExpr(Parser_* parser, Scanner_* scanner) {
 // This is for parsing expressions like:
 //   val a := foo[int](1, 2, 3) OR
 //   val a := foo[1][3][4](1, 2, 3) OR
+//   val a := b.foo[1][3][4](1, 2, 3) OR
 // Where the parse tree is ((((foo[int]) [1]) [3]) [4]) (1, 2, 3)
 static void reduce_to_var_expr(CstNode_* expr, MemoryAllocator_* allocator) {
   if (expr->cls != CST_CLS(CstVarOrTypeExpr_)) return;

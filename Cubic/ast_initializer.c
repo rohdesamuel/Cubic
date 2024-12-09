@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "ast.h"
+#include "ast_internal.h"
 #include "cst.h"
 #include "type_parser.h"
 #include "map.h"
@@ -227,7 +228,7 @@ static AstNode_* cst_var_decl_parse(AstParser_* parser, CstNode_* node, Scope_* 
   
   if (stmt->opt_type) {
     const TypeExpr_* decl_type = parse_type(stmt->opt_type, allocator);
-    ret->decl_type = make_placeholder_ty(decl_type, scope, allocator);
+    ret->decl_type = defer_type_resolution(parser, decl_type, scope, allocator);
   } else if (!stmt->expr) {
     assertf(ret->expr, "Expected an expression for a deduced type variable.");
     ret->decl_type = ret->expr->type;
@@ -368,7 +369,7 @@ static AstNode_* cst_function_param_parse(AstParser_* parser, CstNode_* node, Sc
   ret->name = param->name;
   
   const TypeExpr_* type_expr = parse_type(param->type, allocator);
-  ret->type = make_placeholder_ty(type_expr, scope, allocator);
+  ret->type = defer_type_resolution(parser, type_expr, scope, allocator);
   frame_addparam(scope->frame, &ret->name, ret->type);
 
   return (AstNode_*)ret;
@@ -404,13 +405,13 @@ static AstNode_* cst_class_def_parse(AstParser_* parser, CstNode_* node, Scope_*
   ret->name = def->name;
   astlist_init(&ret->members, allocator);
 
-  const TypeExpr_* class_type_expr = parse_type(node, allocator);
-  ClassType_* cls_type = NULL;// make_placeholder_ty(class_type_expr, scope, allocator);
+  const TypeExprClass_* class_type_expr = typeexpr_as(TypeExprClass_, parse_type(node, allocator));
+  ClassType_* cls_type = (ClassType_*)make_class_ty(ret->name, (TypeExpr_*)class_type_expr, scope, allocator);
 
   frame_addclass(scope->frame, &ret->name, (Type_*)cls_type, scope);
   ret->class_type = (Type_*)cls_type;
 
-  ListNode_* member_n = cls_type->members.head;
+  ListNode_* member_n = class_type_expr->members.head;
   for (CstListNode_* n = def->members.head; n != NULL; n = n->next) {
     CstClassMemberDecl_* decl = (CstClassMemberDecl_*)n->node;
     AstClassMemberDecl_* ast = MAKE_AST_NODE(allocator, AstClassMemberDecl_, cls_type->scope, decl);
@@ -418,7 +419,9 @@ static AstNode_* cst_class_def_parse(AstParser_* parser, CstNode_* node, Scope_*
     if (decl->opt_expr) {
       ast->opt_expr = (AstExpr_*)do_parse(parser, decl->opt_expr, scope, allocator);
     }
-    ast->field_type = list_val(member_n, Type_*);
+    const TypeExprClassMember_* field_tmpl = list_val(member_n, TypeExprClassMember_*);
+
+    ast->field_type = defer_type_resolution(parser, (TypeExpr_*)field_tmpl, cls_type->scope, allocator);
     astlist_append(&ret->members, (AstNode_*)ast);
 
     member_n = member_n->next;
@@ -454,7 +457,7 @@ static AstNode_* cst_class_constructor_parse(AstParser_* parser, CstNode_* node,
   }
 
   const TypeExpr_* type_expr = parse_type(constructor->prefix, allocator);
-  ret->base.type = make_placeholder_ty(type_expr, scope, allocator);
+  ret->base.type = defer_type_resolution(parser, type_expr, scope, allocator);
   return (AstNode_*)ret;
 }
 

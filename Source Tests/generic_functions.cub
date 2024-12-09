@@ -14,3 +14,29 @@ some[int](1, 2)
 
 assert add[int](1, 2) == 3
 assert add[double](4.0, 8.0) == 12.0
+
+
+class Vec[T]
+  function add[V](a: T, b: T)
+    x += a
+    y += b
+  end
+
+  x: int
+  y: int
+end
+
+function other[T](a: T, b: T)
+  val v := Vec[T]{a, b}
+  v.add(a, b)
+end
+
+other[int](1, 2)
+
+# 1. Find all definitions
+# 2. Find all specializations
+# 3. 
+
+function foo[T](a: T) end
+
+foo[int](1)

@@ -34,7 +34,7 @@ DEF_PRIMITIVE_TYPE(String);
 #define TYPE_SIZE(TYPE) sizeof(TYPE)
 
 static const size_t type_sizes[__TYPE_COUNT__] = {
-  TYPE_LIST(TYPE_SIZE, COMMA)
+  TYPE_LIST(TYPE_SIZE, CB_COMMA)
 };
 
 static void generictype_bindargs(Type_* generic_ty, List_* type_args, Frame_* frame, Scope_* scope);

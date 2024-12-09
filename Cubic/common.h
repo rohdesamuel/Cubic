@@ -56,4 +56,7 @@ struct { \
   TYPE val; \
 }
 
+#define CB_COMMA ,
+#define CB_SEMICOLON ;
+
 #endif  // COMMON__H

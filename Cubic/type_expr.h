@@ -162,4 +162,9 @@ const TypeExpr_* make_class_member_typeexpr(Token_ field_name, const TypeExpr_* 
 const TypeExpr_* make_generic_or_array_typeexpr(const TypeExpr_* prefix, ListOf_(TypeExpr_*)* args, MemoryAllocator_* allocator);
 const TypeExpr_* make_primary_typeexpr(TokenType_ type, Value_ val, MemoryAllocator_* allocator);
 
+#define typeexpr_cast(TYPE, EXPR) ((TYPE*)(EXPR))
+#define typeexpr_as(TYPE, EXPR) ((TYPE*)assert_typeexpr_is((EXPR), TYPE_EXPR_CLS(TYPE)))
+#define assert_typeexpr_is(TY, TY_CLS) assert_typeexpr_is_((TypeExpr_*)(TY), TY_CLS)
+TypeExpr_* assert_typeexpr_is_(TypeExpr_* ty, int val);
+
 #endif  // TYPE_EXPR__H

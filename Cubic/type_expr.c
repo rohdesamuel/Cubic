@@ -578,3 +578,9 @@ const Type_* resolve_typeexpr(const TypeExpr_* type, ListOf_(const TypeExpr_*)* 
 
   return ret;
 }
+
+
+TypeExpr_* assert_typeexpr_is_(TypeExpr_* ty, int cls) {
+  assertf(ty->cls == cls, "TypeExpr does not match %d vs. %d", ty->cls, cls);
+  return ty;
+}

@@ -156,6 +156,12 @@
     <ClCompile Include="ast_initializer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="type_tree.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ast_resolver.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="syntax.txt">
@@ -248,6 +254,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="type_parser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="type_tree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ast_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

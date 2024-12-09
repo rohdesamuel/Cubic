@@ -120,8 +120,6 @@ typedef enum {
 
 #define GENERATE_TYPE_ENUMS(TYPE) TYPE_CLS(TYPE)
 #define GENERATE_TYPE_UNION(TYPE) TYPE_NAME(TYPE)
-#define COMMA ,
-#define SEMICOLON ;
 
 typedef struct Specialization_ {
   struct Type_* type;
@@ -134,7 +132,7 @@ typedef struct Type_ {
   // E.g. return value of a function, the type that a pointer is addressing
   // to, the field of a given struct.
   enum TypeCls {
-    TYPE_LIST(GENERATE_TYPE_ENUMS, COMMA),
+    TYPE_LIST(GENERATE_TYPE_ENUMS, CB_COMMA),
 
     // Define the PlaceholderType_ outside of the list because this would
     // result in a loop when defining the PlaceholderType_.
@@ -311,7 +309,7 @@ typedef struct FunctionType_ {
 typedef struct PlaceholderType_ {
   union {
     Type_ self;
-    TYPE_LIST(GENERATE_TYPE_UNION, SEMICOLON);
+    TYPE_LIST(GENERATE_TYPE_UNION, CB_SEMICOLON);
   };
 } PlaceholderType_;
 
@@ -398,4 +396,6 @@ bool type_isunsigned(const Type_* ty);
 bool type_isareal(const Type_* ty);
 bool type_isastring(const Type_* ty);
 
+#undef COMMA
+#undef SEMICOLON
 #endif  // TYPE__H
