@@ -60,23 +60,6 @@ static void block_analysis(Analyzer_* analyzer, AstNode_* node) {
   }
 }
 
-static void stmt_analysis(Analyzer_* analyzer, AstNode_* node) {
-  AstStmt_* stmt = (AstStmt_*)node;
-  do_analysis(analyzer, stmt->stmt);
-  do_analysis(analyzer, stmt->cleanup);
-}
-
-static void expr_analysis(Analyzer_* analyzer, AstNode_* node) {
-  AstExpr_* expr = (AstExpr_*)node;
-  if (!expr->expr) {
-    return;
-  }
-
-  AS_EXPR(expr->expr)->top_type = expr->top_type;
-  do_analysis(analyzer, (AstNode_*)expr->expr);
-  expr->type = AS_EXPR(expr->expr)->type;
-}
-
 static void print_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstPrintStmt_* stmt = (AstPrintStmt_*)n;
   do_analysis(analyzer, (AstNode_*)stmt->expr);
@@ -860,8 +843,6 @@ static void index_or_type_expr_analysis(Analyzer_* analyzer, AstNode_* node) {
 AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstProgram_)]                = {program_analysis},
   [AST_CLS(AstBlock_)]                  = {block_analysis},
-  [AST_CLS(AstStmt_)]                   = {stmt_analysis},
-  [AST_CLS(AstExpr_)]                   = {expr_analysis},
   [AST_CLS(AstPrintStmt_)]              = {print_analysis},
   [AST_CLS(AstUnaryExp_)]               = {unary_analysis},
   [AST_CLS(AstBinaryExp_)]              = {binary_analysis},
@@ -878,7 +859,6 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstWhileStmt_)]              = {while_stmt_analysis},
   [AST_CLS(AstForStmt_)]                = {for_stmt_analysis},
   [AST_CLS(AstFunctionDef_)]            = {function_def_analysis},
-  [AST_CLS(AstGenericFunctionDef_)]     = {generic_function_def_analysis},
   [AST_CLS(AstFunctionParam_)]          = {function_param_analysis},
   [AST_CLS(AstFunctionCall_)]           = {function_call_analysis},
   [AST_CLS(AstFunctionCallArgs_)]       = {function_call_args_analysis},
@@ -899,7 +879,7 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(TypeMemberDecl_)]            = {type_member_decl_analysis},
   [AST_CLS(AstGenericParam_)]           = {noop_analysis},
   [AST_CLS(AstGenericParams_)]          = {generic_params_analysis},
-  [AST_CLS(AstVarOrTypeExpr_)]        = {index_or_type_expr_analysis},
+  [AST_CLS(AstVarOrTypeExpr_)]          = {index_or_type_expr_analysis},
   [AST_CLS(AstIndexOrGenericArgs_)]     = {index_or_generic_args_analysis},
 };
 

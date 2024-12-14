@@ -216,6 +216,14 @@ const TypeExpr_* make_primary_typeexpr(TokenType_ type, Value_ val, MemoryAlloca
   return (const TypeExpr_*)ret;
 }
 
+const TypeExpr_* make_function_call_typeexpr(const TypeExpr_* prefix, MemoryAllocator_* allocator) {
+  TypeExprFunctionCall_* ret = alloc_typeexpr(allocator, TypeExprFunctionCall_);
+  ret->base.name = token_string("function_call");
+  ret->prefix = prefix;
+
+  return (const TypeExpr_*)ret;
+}
+
 static void bind_type_params(const TypeExpr_* type, ListOf_(TypeExpr_*)* args, Hashmap* type_env) {
   if (args) {
     ListNode_* p = type->params.head;
@@ -549,6 +557,14 @@ static const Type_* resolve_typeexpr_recur(const TypeExpr_* type, Scope_* scope,
       }
 
       break;
+    }
+
+    case TYPE_EXPR_CLS(TypeExprFunctionCall_):
+    {
+      const TypeExprFunctionCall_* ty = (const TypeExprFunctionCall_*)type;
+      const Type_* prefix = resolve_typeexpr_recur(ty->prefix, scope, type_env, errors, allocator);
+      assertf(type_is(prefix, FunctionType_), "Type of function call is not function.");
+      return ((FunctionType_*)prefix)->ret_ty;
     }
 
     case TYPE_EXPR_CLS(TypeExprClassMember_):

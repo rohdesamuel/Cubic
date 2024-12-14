@@ -1107,7 +1107,67 @@ static CstNode_* PrefixRangeExpr(Parser_* parser, Scanner_* scanner) {
 //   val a := b.foo[1][3][4](1, 2, 3) OR
 // Where the parse tree is ((((foo[int]) [1]) [3]) [4]) (1, 2, 3)
 static void reduce_to_var_expr(CstNode_* expr, MemoryAllocator_* allocator) {
-  if (expr->cls != CST_CLS(CstVarOrTypeExpr_)) return;
+  
+  switch (expr->cls) {
+    case CST_CLS(CstUnaryExp_):
+      reduce_to_var_expr(CST_CAST(CstUnaryExp_, expr)->expr, allocator);
+      return;
+    case CST_CLS(CstBinaryExp_):
+    {
+      CstBinaryExp_* exp = (CstBinaryExp_*)expr;
+      reduce_to_var_expr(exp->left, allocator);
+      reduce_to_var_expr(exp->right, allocator);
+      return;
+    }
+    case CST_CLS(CstVarExpr_):
+      reduce_to_var_expr(CST_CAST(CstVarExpr_, expr)->expr, allocator);
+      return;
+
+    case CST_CLS(CstIdExpr_):
+      return;
+
+    case CST_CLS(CstAssignmentExpr_):
+    {
+      CstAssignmentExpr_* exp = (CstAssignmentExpr_*)expr;
+      reduce_to_var_expr(exp->left, allocator);
+      reduce_to_var_expr(exp->right, allocator);
+      return;
+    }
+    case CST_CLS(CstClassConstructor_):
+    {
+      CstClassConstructor_* exp = (CstClassConstructor_*)expr;
+      for (CstListNode_* n = exp->params.head; n != NULL; n = n->next) {
+        reduce_to_var_expr(n->node, allocator);
+      }
+      return;
+    }
+    case CST_CLS(CstClassConstructorParam_):
+      reduce_to_var_expr(CST_CAST(CstClassConstructorParam_, expr)->expr, allocator);
+      return;
+    case CST_CLS(CstDotExpr_):
+      reduce_to_var_expr(CST_CAST(CstDotExpr_, expr)->prefix, allocator);
+      return;
+    case CST_CLS(CstArrayValueExpr_):
+    {
+      CstArrayValueExpr_* exp = (CstArrayValueExpr_*)expr;
+      for (CstListNode_* n = exp->values.head; n != NULL; n = n->next) {
+        reduce_to_var_expr(n->node, allocator);
+      }
+      return;
+    }
+    case CST_CLS(CstRangeExpr_):
+    {
+      CstRangeExpr_* exp = (CstRangeExpr_*)expr;
+      reduce_to_var_expr(exp->left, allocator);
+      reduce_to_var_expr(exp->right, allocator);
+      return;
+    }
+    case CST_CLS(CstVarOrTypeExpr_):
+      break;
+
+    default:
+      assertf(false, "Unknown node.");
+  }
 
   CstVarOrTypeExpr_* var_or_expr = CST_CAST(CstVarOrTypeExpr_, expr);
   var_or_expr->base.cls = CST_CLS(CstVarExpr_);

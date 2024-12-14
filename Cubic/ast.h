@@ -15,8 +15,6 @@
 #define ASTNODE_LIST(AST_NODE) \
   AST_NODE(AstProgram_), \
   AST_NODE(AstBlock_), \
-  AST_NODE(AstStmt_), \
-  AST_NODE(AstExpr_), \
   AST_NODE(AstPrintStmt_), \
   AST_NODE(AstUnaryExp_), \
   AST_NODE(AstBinaryExp_), \
@@ -33,7 +31,6 @@
   AST_NODE(AstWhileStmt_), \
   AST_NODE(AstForStmt_), \
   AST_NODE(AstFunctionDef_), \
-  AST_NODE(AstGenericFunctionDef_), \
   AST_NODE(AstFunctionParam_), \
   AST_NODE(AstFunctionCall_), \
   AST_NODE(AstFunctionCallArgs_), \
@@ -99,16 +96,8 @@ void astlist_clear(struct AstList_* list);
 void astlist_destroy(struct AstList_** list);
 void astlist_append(struct AstList_* list, struct AstNode_* node);
 
-typedef struct AstStmt_ {
-  AstNode_ base;
-  AstNode_* cleanup;
-  AstNode_* stmt;
-} AstStmt_;
-
 typedef struct AstExpr_ {
   AstNode_ base;
-  struct AstExpr_* expr;
-
   // This type is the result of executing this expression.
   Type_* type;
 

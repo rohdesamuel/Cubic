@@ -24,6 +24,7 @@ typedef struct TypeExpr_ {
     TYPE_EXPR_CLS(TypeExprClassMember_),
     TYPE_EXPR_CLS(TypeExprGenericOrArrayType_),
     TYPE_EXPR_CLS(TypeExprPrimary_),
+    TYPE_EXPR_CLS(TypeExprFunctionCall_),
   } cls;
 
   Token_ name;
@@ -140,6 +141,11 @@ typedef struct TypeExprPrimary_ {
   Value_ value;
 } TypeExprPrimary_;
 
+typedef struct TypeExprFunctionCall_ {
+  TypeExpr_ base;
+  const TypeExpr_* prefix;
+} TypeExprFunctionCall_;
+
 const struct Type_* resolve_typeexpr(
   const TypeExpr_* type, ListOf_(const TypeExpr_*)* opt_args, struct Scope_* scope, struct ErrorsContainer_* error, MemoryAllocator_* allocator);
 
@@ -161,6 +167,7 @@ const TypeExpr_* make_class_member_typeexpr(Token_ field_name, const TypeExpr_* 
   MemoryAllocator_* allocator);
 const TypeExpr_* make_generic_or_array_typeexpr(const TypeExpr_* prefix, ListOf_(TypeExpr_*)* args, MemoryAllocator_* allocator);
 const TypeExpr_* make_primary_typeexpr(TokenType_ type, Value_ val, MemoryAllocator_* allocator);
+const TypeExpr_* make_function_call_typeexpr(const TypeExpr_* prefix, MemoryAllocator_* allocator);
 
 #define typeexpr_cast(TYPE, EXPR) ((TYPE*)(EXPR))
 #define typeexpr_as(TYPE, EXPR) ((TYPE*)assert_typeexpr_is((EXPR), TYPE_EXPR_CLS(TYPE)))

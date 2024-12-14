@@ -1389,22 +1389,6 @@ static Location_ program_code_gen(TacChunk_* chunk, AstNode_* node) {
   return EMPTY_LOC;
 }
 
-static Location_ stmt_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstStmt_* stmt = (AstStmt_*)node;
-  code_gen(chunk, stmt->stmt);
-  code_gen(chunk, stmt->cleanup);
-
-  return EMPTY_LOC;
-}
-
-static Location_ expr_code_gen(TacChunk_* chunk, AstNode_* node) {
-  AstExpr_* expr = (AstExpr_*)node;
-  if (!expr->expr) {
-    return EMPTY_LOC;
-  }
-  return code_gen(chunk, (AstNode_*)expr->expr);
-}
-
 static void begin_scope(TacChunk_* chunk, AstBlock_* block) {
   emit_op(chunk, OP_BEGIN_SCOPE, block->base.line);
 }
@@ -2103,8 +2087,6 @@ static Location_ range_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
 static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstProgram_)]               = {program_code_gen},
   [AST_CLS(AstBlock_)]                 = {block_code_gen},
-  [AST_CLS(AstStmt_)]                  = {stmt_code_gen},
-  [AST_CLS(AstExpr_)]                  = {expr_code_gen},
   [AST_CLS(AstPrintStmt_)]             = {print_code_gen},
   [AST_CLS(AstUnaryExp_)]              = {unary_code_gen},
   [AST_CLS(AstBinaryExp_)]             = {binary_code_gen},
@@ -2114,8 +2096,8 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstAssertStmt_)]            = {assert_code_gen},
   [AST_CLS(AstVarDeclStmt_)]           = {var_decl_code_gen},
   [AST_CLS(AstVarExpr_)]               = {var_expr_code_gen},
-  [AST_CLS(AstIdExpr_)]                = {id_expr_code_gen},
   [AST_CLS(AstIndexExpr_)]             = {index_expr_code_gen},
+  [AST_CLS(AstIdExpr_)]                = {id_expr_code_gen},
   [AST_CLS(AstAssignmentExpr_)]        = {assignment_expr_code_gen},
   [AST_CLS(AstInPlaceBinaryStmt_)]     = {in_place_binary_stmt_code_gen},
   [AST_CLS(AstWhileStmt_)]             = {while_stmt_code_gen},
@@ -2141,7 +2123,7 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(TypeMemberDecl_)]           = {noop_code_gen},
   [AST_CLS(AstGenericParam_)]          = {noop_code_gen},
   [AST_CLS(AstGenericParams_)]         = {noop_code_gen},
-  [AST_CLS(AstVarOrTypeExpr_)]       = {noop_code_gen},
+  [AST_CLS(AstVarOrTypeExpr_)]         = {noop_code_gen},
   [AST_CLS(AstIndexOrGenericArgs_)]    = {noop_code_gen},
 };
 

@@ -112,6 +112,21 @@ static const TypeExpr_* cst_generic_or_array_type_parse(const CstNode_* node, Me
   return make_generic_or_array_typeexpr(prefix, &args, allocator);
 }
 
+static const TypeExpr_* cst_generic_or_array_expr_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  CstGenericOrArrayType_* cst = (CstGenericOrArrayType_*)node;
+
+  const TypeExpr_* prefix = do_parse(cst->prefix, allocator);
+  ListOf_(TypeExpr_*) args = { 0 };
+  list_of(&args, const TypeExpr_*, allocator);
+
+  for (CstListNode_* n = cst->args.head; n != NULL; n = n->next) {
+    const TypeExpr_* arg = do_parse(n->node, allocator);
+    list_push(&args, &arg);
+  }
+
+  return make_generic_or_array_typeexpr(prefix, &args, allocator);
+}
+
 static const TypeExpr_* cst_function_def_parse(const CstNode_* node, MemoryAllocator_* allocator) {
   CstFunctionDef_* cst = (CstFunctionDef_*)node;
   
@@ -213,25 +228,68 @@ static const TypeExpr_* cst_primary_exp_parse(const CstNode_* node, MemoryAlloca
   return make_primary_typeexpr(cst->type, cst->value, allocator);
 }
 
+static const TypeExpr_* cst_function_call_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  CstFunctionCall_* cst = (CstFunctionCall_*)node;
+  return make_function_call_typeexpr(do_parse(cst->prefix, allocator), allocator);
+}
+
+static const TypeExpr_* nil_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  return Nil_TypeExpr;
+}
+
+static const TypeExpr_* unimplemented_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  assert(false && "unimplemented");
+  return Nil_TypeExpr;
+}
+
 static ParseRule_ parse_rules[] = {
-  [CST_CLS(CstPrimaryExp_)]         = {cst_primary_exp_parse},
-  [CST_CLS(CstVarExpr_)]            = {cst_var_exp_parse},
-  [CST_CLS(CstIdExpr_)]             = {cst_id_exp_parse},
-  [CST_CLS(CstFunctionDef_)]        = {cst_function_def_parse},
-  [CST_CLS(CstFunctionParam_)]      = {cst_function_param_parse},
-  [CST_CLS(CstClassDef_)]           = {cst_class_def_parse},
-  [CST_CLS(CstClassMemberDecl_)]    = {cst_class_member_decl_parse},
-  [CST_CLS(CstUnionType_)]          = {cst_union_type_parse},
-  [CST_CLS(CstTupleType_)]          = {cst_tuple_type_parse},
-  [CST_CLS(CstPrimitiveType_)]      = {cst_primitive_type_parse},
-  [CST_CLS(CstIdType_)]             = {cst_id_type_parse},
-  [CST_CLS(CstReferenceType_)]      = {cst_reference_type_parse},
-  [CST_CLS(CstType_)]               = {cst_type_parse},
-  [CST_CLS(CstTypeDef_)]            = {cst_type_def_parse},
-  [CST_CLS(CstGenericParam_)]       = {cst_generic_param_parse},
-  [CST_CLS(CstVarOrTypeExpr_)]      = {cst_var_or_type_expr_parse},
-  [CST_CLS(CstGenericOrArrayType_)] = {cst_generic_or_array_type_parse},
+  [CST_CLS(CstNode_)]                  = {nil_parse},
+  [CST_CLS(CstProgram_)]               = {nil_parse},
+  [CST_CLS(CstBlock_)]                 = {nil_parse},
+  [CST_CLS(CstPrintStmt_)]             = {nil_parse},
+  [CST_CLS(CstUnaryExp_)]              = {nil_parse},
+  [CST_CLS(CstBinaryExp_)]             = {nil_parse},
+  [CST_CLS(CstPrimaryExp_)]            = {cst_primary_exp_parse},
+  [CST_CLS(CstReturnStmt_)]            = {nil_parse},
+  [CST_CLS(CstIfStmt_)]                = {nil_parse},
+  [CST_CLS(CstAssertStmt_)]            = {nil_parse},
+  [CST_CLS(CstVarDeclStmt_)]           = {nil_parse},
+  [CST_CLS(CstVarExpr_)]               = {cst_var_exp_parse},
+  [CST_CLS(CstIndexExpr_)]             = {unimplemented_parse},
+  [CST_CLS(CstIdExpr_)]                = {cst_id_exp_parse},
+  [CST_CLS(CstAssignmentExpr_)]        = {unimplemented_parse},
+  [CST_CLS(CstInPlaceBinaryStmt_)]     = {nil_parse},
+  [CST_CLS(CstWhileStmt_)]             = {nil_parse},
+  [CST_CLS(CstForStmt_)]               = {nil_parse},
+  [CST_CLS(CstFunctionDef_)]           = {cst_function_def_parse},
+  [CST_CLS(CstFunctionParam_)]         = {cst_function_param_parse},
+  [CST_CLS(CstFunctionCall_)]          = {cst_function_call_parse},
+  [CST_CLS(CstFunctionCallArgs_)]      = {nil_parse},
+  [CST_CLS(CstExpressionStmt_)]        = {nil_parse},
+  [CST_CLS(CstNoopExpr_)]              = {nil_parse},
+  [CST_CLS(CstNoopStmt_)]              = {nil_parse},
+  [CST_CLS(CstClassDef_)]              = {cst_class_def_parse},
+  [CST_CLS(CstClassMemberDecl_)]       = {cst_class_member_decl_parse},
+  [CST_CLS(CstClassConstructor_)]      = {unimplemented_parse},
+  [CST_CLS(CstClassConstructorParam_)] = {unimplemented_parse},
+  [CST_CLS(CstDotExpr_)]               = {unimplemented_parse},
+  [CST_CLS(CstUnionType_)]             = {cst_union_type_parse},
+  [CST_CLS(CstTupleType_)]             = {cst_tuple_type_parse},
+  [CST_CLS(CstPrimitiveType_)]         = {cst_primitive_type_parse},
+  [CST_CLS(CstIdType_)]                = {cst_id_type_parse},
+  [CST_CLS(CstReferenceType_)]         = {cst_reference_type_parse},
+  [CST_CLS(CstType_)]                  = {cst_type_parse},
+  [CST_CLS(CstArrayValueExpr_)]        = {unimplemented_parse},
+  [CST_CLS(CstRangeExpr_)]             = {unimplemented_parse},
+  [CST_CLS(CstTypeDef_)]               = {cst_type_def_parse},
+  [CST_CLS(CstTypeMemberDecl_)]        = {nil_parse},
+  [CST_CLS(CstGenericParam_)]          = {cst_generic_param_parse},
+  [CST_CLS(CstVarOrTypeExpr_)]         = {cst_var_or_type_expr_parse},
+  [CST_CLS(CstIndexOrGenericArgs_)]    = {nil_parse},
+  [CST_CLS(CstGenericOrArrayType_)]    = {cst_generic_or_array_type_parse},
+  [CST_CLS(CstGenericOrArrayExpr_)]    = {cst_generic_or_array_expr_parse},
 };
+
 
 static ParseRule_* get_rule(int info) {
   ParseRule_* ret = &parse_rules[info];
