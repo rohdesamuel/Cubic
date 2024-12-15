@@ -154,6 +154,7 @@ static AstFunctionDef_* init_ast_function_def(FunctionType_* function_type, Toke
   scope_addexisting(scope, fn_frame->fn_symbol);
 
   ret->fn_symbol = fn_frame->fn_symbol;
+  ret->fn_type = (Type_*)function_type;
 
   return ret;
 }
@@ -222,27 +223,18 @@ static void defer_class_specialization(AstParser_* parser, const CstNode_* cst_n
     .parsed_node = (AstNode_*)ast_node,
     .name = ast_node->name,
   };
+  list_push(&parser->specialization_work_queue, &item);
 }
 
-static Type_* defer_function_specialization(AstParser_* parser, const CstNode_* cst_node, AstFunctionDef_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
-  const TypeExpr_* type_expr = parse_type(cst_node, allocator);
- 
-  Type_* fn_type = make_placeholder_ty(type_expr, scope, allocator);
-  fn_type->opt_name = ((CstFunctionDef_*)(cst_node))->name;
-
-  Frame_* fn_frame = frame_createfrom(scope->frame, scope, fn_type);
-  Scope_* fn_scope = fn_frame->scope;
-  scope_addexisting(scope, fn_frame->fn_symbol);
-
+static void defer_function_specialization(AstParser_* parser, const CstNode_* cst_node, AstFunctionDef_* ast_node, Scope_* scope, MemoryAllocator_* allocator) {
   AstParseWork_ item = {
     .origin_scope = scope,
     .origin_node = cst_node,
     .parsed_node = (AstNode_*)ast_node,
-    .name = fn_type->opt_name,
+    .name = ast_node->fn_symbol->name,
   };
 
   list_push(&parser->specialization_work_queue, &item);
-  return fn_type;
 }
 
 static void do_resolution_work(AstParser_* parser, AstResolutionWork_* item) {
@@ -630,24 +622,30 @@ static AstNode_* cst_function_def_parse(AstParser_* parser, CstNode_* node, Scop
   const TypeExpr_* type_expr = parse_type(node, allocator);
   
   const TypeExprFunction_* fn_type_expr = (TypeExprFunction_*)type_expr;
-  Type_* fn_type = make_function_ty(def->name, NULL, NULL, type_expr, scope, allocator);
-  queue_type_resolution(parser, fn_type, scope);
-
   Type_* ret_ty = defer_type_resolution(parser, fn_type_expr->ret_type, scope, allocator);
-  for (ListNode_* n = fn_type_expr->params.head; n != NULL; n = n->next) {
-    TypeExpr_* param_type_expr = list_val(n, TypeExpr_*);
-    Type_* param_ty = defer_type_resolution(parser, param_type_expr, scope, allocator);
-    list_push(&((FunctionType_*)fn_type)->params, &param_ty);
-  }
-
+  Type_* fn_type = make_function_ty(def->name, NULL, ret_ty, type_expr, scope, allocator);
 
   Frame_* fn_frame = frame_createfrom(scope->frame, scope, fn_type);
   Scope_* fn_scope = fn_frame->scope;
   scope_addexisting(scope, fn_frame->fn_symbol);
 
+  for (ListNode_* n = type_expr->params.head; n != NULL; n = n->next) {
+    TypeExprGenericParam_* generic_param_type_expr = list_val(n, TypeExprGenericParam_*);
+    Type_* param_ty = defer_type_resolution(parser, (TypeExpr_*)generic_param_type_expr, fn_scope, allocator);
+    frame_addtype(fn_frame, &generic_param_type_expr->name, param_ty, fn_scope);
+  }
+
+  for (ListNode_* n = fn_type_expr->params.head; n != NULL; n = n->next) {
+    TypeExprFunctionParam_* param_type_expr = list_val(n, TypeExprFunctionParam_*);
+    Type_* param_ty = defer_type_resolution(parser, (TypeExpr_*)param_type_expr, fn_scope, allocator);
+    frame_addparam(fn_frame, &param_type_expr->name, param_ty);
+    list_push(&((FunctionType_*)fn_type)->params, &param_ty);
+  }
+
   ret->fn_symbol = fn_frame->fn_symbol;
   ret->fn_type = fn_type;
-  return NULL;
+  defer_function_specialization(parser, node, ret, scope, allocator);
+  return (AstNode_*)ret;
 
   astlist_init(&ret->function_params, allocator);
   for (CstListNode_* n = def->function_params.head; n != NULL; n = n->next) {
@@ -656,7 +654,6 @@ static AstNode_* cst_function_def_parse(AstParser_* parser, CstNode_* node, Scop
   }
   ret->body = do_parse(parser, def->body, fn_scope, allocator);
 
-  return NULL;// (AstNode_*)ret;
 }
 
 static AstNode_* cst_function_param_parse(AstParser_* parser, CstNode_* node, Scope_* scope, MemoryAllocator_* allocator) {

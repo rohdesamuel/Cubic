@@ -311,7 +311,6 @@ static void var_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstVarExpr_* expr = (AstVarExpr_*)n;
   expr->expr->top_type = expr->base.top_type;
   do_analysis(analyzer, (AstNode_*)expr->expr);
-  expr->base.type = expr->expr->type;
 }
 
 static void id_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
@@ -326,8 +325,6 @@ static void id_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
     error(analyzer_, n, "Could not find type for variable '%.*s'", expr->name.length, expr->name.start);
     return;
   }
-
-  expr->base.type = sym->ty;
 }
 
 static void index_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
@@ -345,8 +342,6 @@ static void index_expr_analysis(Analyzer_* analyzer, AstNode_* n) {
     error(analyzer_, n, "Prefix expression does not evaluate to an array.");
     return;
   }
-
-  expr->base.type = type_as(ArrayType_, type_valtype(expr->prefix->type))->el_type;
 }
 
 inline static bool node_is_assignable(AstNode_* n) {
@@ -511,6 +506,13 @@ static void expression_statement_analysis(Analyzer_* analyzer, AstNode_* n) {
 
 static void function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstFunctionDef_* def = (AstFunctionDef_*)n;
+  // TODO: analyze generic functions
+  if (def->base.base.specializations.count) {
+    for (AstListNode_* n = def->base.base.specializations.head; n != NULL; n = n->next) {
+      do_analysis(analyzer, n->node);
+    }
+    return;
+  }
 
   def->base.type = def->fn_symbol->ty;
 
@@ -525,12 +527,6 @@ static void function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
   }
 
   do_analysis(analyzer, def->body);
-
-  if (def->base.base.specializations.count) {
-    for (AstListNode_* n = def->base.base.specializations.head; n != NULL; n = n->next) {
-      do_analysis(analyzer, n->node);
-    }
-  }
 }
 
 static void generic_function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
@@ -564,7 +560,6 @@ static void function_call_analysis(Analyzer_* analyzer, AstNode_* node) {
   }
 
   FunctionType_* fn_type = type_as(FunctionType_, call->prefix->type);
-  call->base.type = fn_type->ret_ty;
   call->args->fn_type = (Type_*)fn_type;
 
   do_analysis(analyzer, (AstNode_*)call->args);

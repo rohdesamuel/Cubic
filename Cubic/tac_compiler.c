@@ -1712,6 +1712,13 @@ static Location_ expression_statement_code_gen(TacChunk_* chunk, AstNode_* node)
 
 static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstFunctionDef_* def = (AstFunctionDef_*)node;
+  if (def->base.base.specializations.count) {
+    for (AstListNode_* n = def->base.base.specializations.head; n != NULL; n = n->next) {
+      function_def_code_gen(chunk, n->node);
+    }
+    return EMPTY_LOC;
+  }
+
   FunctionSymbol_* fn = &def->fn_symbol->fn;
 
   Location_ fn_loc = tac_alloc_fn_label(chunk, &def->fn_symbol->name);
