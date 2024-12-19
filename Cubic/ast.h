@@ -52,7 +52,9 @@
   AST_NODE(AstGenericParam_), \
   AST_NODE(AstGenericParams_), \
   AST_NODE(AstVarOrTypeExpr_), \
-  AST_NODE(AstIndexOrGenericArgs_)
+  AST_NODE(AstIndexOrGenericArgs_), \
+  AST_NODE(AstGenericClassDef_), \
+  AST_NODE(AstGenericFunctionDef_)
 
 #define GENERATE_ASTNODE(NODE) AST_CLS(NODE)
 
@@ -76,7 +78,7 @@ typedef struct AstNode_ {
 
   const struct CstNode_* parent;
   struct Scope_* scope;
-  AstList_ specializations;
+  
   int line;
 } AstNode_;
 
@@ -152,6 +154,7 @@ typedef struct AstVarDeclStmt_ {
 
   Token_ name;
   Type_* decl_type;
+  Symbol_* sym;
 
   AstExpr_* expr;
 } AstVarDeclStmt_;
@@ -226,6 +229,7 @@ typedef struct AstIdExpr_ {
   struct AstExpr_ base;
 
   Token_ name;
+  Symbol_* sym;
 } AstIdExpr_;
 
 // Var ::= PrefixExpr '[' Expr ']'
@@ -317,9 +321,8 @@ typedef struct AstGenericParam_ {
 // GenericParams ::= '[' GenericParam {',' GenericParam} ']'
 typedef struct AstGenericParams_ {
   struct AstNode_ base;
-  Token_ generic_str;
+  
   AstList_ params;
-  ListOf_(ConstraintType_*) type_params;
 } AstGenericParams_;
 
 // TypeMemberDecl ::= [Id ':'] Type {'|' Type}
@@ -342,6 +345,7 @@ typedef struct AstTypeDef_ {
 typedef struct AstFunctionDef_ {
   struct AstExpr_ base;
   struct Symbol_* fn_symbol;
+  struct Frame_* fn_frame;
   Type_* fn_type;
 
   struct AstNode_* body;
@@ -351,8 +355,11 @@ typedef struct AstFunctionDef_ {
 
 // GenericFunctionDef ::= 'function' [Id] [GenericParams] FunctionBody 'end'
 typedef struct AstGenericFunctionDef_ {
-  AstFunctionDef_ base;
+  struct AstNode_ base;
+  const struct AstFunctionDef_* generic_def;
   struct AstGenericParams_* generic_params;
+
+  AstList_ fn_specializations;
 } AstGenericFunctionDef_;
 
 // FunctionParam ::= (Id [':' UnionType])
@@ -360,6 +367,7 @@ typedef struct AstFunctionParam_ {
   struct AstNode_ base;
   Token_ name;
   Type_* type;
+  Symbol_* sym;
 } AstFunctionParam_;
 
 // FunctionCall ::= PrefixExpr FunctionCallArgs
@@ -377,7 +385,7 @@ typedef struct AstFunctionCallArgs_ {
   AstList_ args;
 } AstFunctionCallArgs_;
 
-// ClassDef ::= 'struct' Id [GenericParams] {ClassMemberDecl} 'end'
+// ClassDef ::= 'class' Id [GenericParams] {ClassMemberDecl} 'end'
 typedef struct AstClassDef_ {
   struct AstNode_ base;
   Token_ name;
@@ -386,6 +394,14 @@ typedef struct AstClassDef_ {
   Type_* class_type;
 } AstClassDef_;
 
+// GenericFunctionDef ::= 'class' Id [GenericParams] {ClassMemberDecl} 'end'
+typedef struct AstGenericClassDef_ {
+  struct AstNode_ base;
+  struct AstClassDef_* generic_def;
+  struct AstGenericParams_* generic_params;
+
+  AstList_ class_specializations;
+} AstGenericClassDef_;
 
 // ClassMemberDecl_ ::= IdList ':' UnionType ['=' ExprList]
 typedef struct AstClassMemberDecl_ {

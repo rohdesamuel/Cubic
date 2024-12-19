@@ -467,6 +467,8 @@ static CstNode_* FunctionParam(Parser_* parser, Scanner_* scanner) {
 static CstNode_* FunctionDef(Parser_* parser, Scanner_* scanner) {
   MemoryAllocator_* allocator = parser->allocator;
   CstFunctionDef_* def = MAKE_CST_NODE(allocator, CstFunctionDef_, parser->current.line);
+  CstGenericFunctionDef_* generic_def = NULL;
+
   if (match(parser, scanner, TK_ID)) {
     def->name = parse_variable(parser, &parser->previous);
   } else {
@@ -474,8 +476,10 @@ static CstNode_* FunctionDef(Parser_* parser, Scanner_* scanner) {
   }
 
   if (check(parser, TK_LBRACKET)) {
-    cstlist_init(&def->generic_params, parser->allocator);
-    GenericParams(parser, scanner, &def->generic_params);
+    generic_def = MAKE_CST_NODE(allocator, CstGenericFunctionDef_, parser->current.line);
+    generic_def->function_def = def;
+    cstlist_init(&generic_def->generic_params, parser->allocator);
+    GenericParams(parser, scanner, &generic_def->generic_params);
   }
 
   cstlist_init(&def->function_params, allocator);
@@ -506,7 +510,7 @@ static CstNode_* FunctionDef(Parser_* parser, Scanner_* scanner) {
     def->body = BlockStatement(parser, scanner);
   }
 
-  return (CstNode_*)def;
+  return generic_def ? (CstNode_*)generic_def : (CstNode_*)def;
 }
 
 static CstNode_* ExpressionStmt(Parser_* parser, Scanner_* scanner) {

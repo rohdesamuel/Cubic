@@ -143,14 +143,19 @@ const TypeExpr_* make_function_typeexpr(Token_ name, const TypeExpr_* return_typ
 
   TypeExprFunction_* ret = alloc_typeexpr(allocator, TypeExprFunction_);
   ret->base.name = token_string("function");
-  ret->base.params = *type_params;
+
+  if (type_params) {
+    ret->base.params = *type_params;
+  }
 
   ret->name = name;
   ret->ret_type = return_type;
   ret->params = *params;
 
-  for (ListNode_* n = type_params->head; n != NULL; n = n->next) {
-    assert(list_val(n, TypeExprGenericParam_*)->base.cls == TYPE_EXPR_CLS(TypeExprGenericParam_));
+  if (type_params) {
+    for (ListNode_* n = type_params->head; n != NULL; n = n->next) {
+      assert(list_val(n, TypeExprGenericParam_*)->base.cls == TYPE_EXPR_CLS(TypeExprGenericParam_));
+    }
   }
 
   return (const TypeExpr_*)ret;

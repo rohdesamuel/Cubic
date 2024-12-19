@@ -1,3 +1,4 @@
+#if 0
 #include "parser.h"
 #include "ast.h"
 #include "ast_internal.h"
@@ -648,3 +649,4 @@ static ParseRule_* get_rule(int info) {
   assertf(ret->fn, "Could not find analysis rule for AST class: %d", info);
   return ret;
 }
+#endif

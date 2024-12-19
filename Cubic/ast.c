@@ -23,7 +23,6 @@ AstNode_* make_ast_node(MemoryAllocator_* allocator, int cls, size_t size, struc
   ret->cls = cls;
   ret->scope = scope;
   ret->parent = node;
-  astlist_init(&ret->specializations, allocator);
 
   if (node) {
     ret->line = ret->parent->line;

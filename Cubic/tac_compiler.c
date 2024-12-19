@@ -1515,9 +1515,7 @@ static Location_ emit_decl_var(TacChunk_* chunk, Token_ var_name, Symbol_* var_s
 
 static Location_ var_decl_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
-  Symbol_* sym = scope_find(node->scope, &stmt->name);
-
-  return emit_decl_var(chunk, stmt->name, sym, stmt->expr, node->line);
+  return emit_decl_var(chunk, stmt->name, stmt->sym, stmt->expr, node->line);
 }
 
 static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
@@ -1530,7 +1528,7 @@ static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
 static Location_ id_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
 
-  Symbol_* sym = scope_find(node->scope, &expr->name);
+  Symbol_* sym = expr->sym;
 
   switch (sym->type) {
     case SYMBOL_CLS_VAR:
@@ -1710,15 +1708,16 @@ static Location_ expression_statement_code_gen(TacChunk_* chunk, AstNode_* node)
   return EMPTY_LOC;
 }
 
+static Location_ generic_function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
+  AstGenericFunctionDef_* def = (AstGenericFunctionDef_*)node;
+  for (AstListNode_* n = def->fn_specializations.head; n != NULL; n = n->next) {
+    code_gen(chunk, n->node);
+  }
+  return EMPTY_LOC;
+}
+
 static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstFunctionDef_* def = (AstFunctionDef_*)node;
-  if (def->base.base.specializations.count) {
-    for (AstListNode_* n = def->base.base.specializations.head; n != NULL; n = n->next) {
-      function_def_code_gen(chunk, n->node);
-    }
-    return EMPTY_LOC;
-  }
-
   FunctionSymbol_* fn = &def->fn_symbol->fn;
 
   Location_ fn_loc = tac_alloc_fn_label(chunk, &def->fn_symbol->name);
@@ -1756,8 +1755,7 @@ static Location_ function_def_code_gen(TacChunk_* chunk, AstNode_* node) {
 
 static Location_ function_param_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstFunctionParam_* param = AST_CAST(AstFunctionParam_, node);
-  Symbol_* sym = scope_find(node->scope, &param->name);
-  return emit_decl_var(chunk, param->name, sym, NULL, node->line);
+  return emit_decl_var(chunk, param->name, param->sym, NULL, node->line);
 }
 
 static Location_ function_body_code_gen(TacChunk_* chunk, AstNode_* node) {
@@ -2132,6 +2130,8 @@ static CodeGenRule_ code_gen_rules[] = {
   [AST_CLS(AstGenericParams_)]         = {noop_code_gen},
   [AST_CLS(AstVarOrTypeExpr_)]         = {noop_code_gen},
   [AST_CLS(AstIndexOrGenericArgs_)]    = {noop_code_gen},
+  [AST_CLS(AstGenericClassDef_)]       = {noop_code_gen},
+  [AST_CLS(AstGenericFunctionDef_)]    = {generic_function_def_code_gen},
 };
 
 // Static assert to make sure that all node types are accounted for.

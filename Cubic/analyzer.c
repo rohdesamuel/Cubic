@@ -506,14 +506,6 @@ static void expression_statement_analysis(Analyzer_* analyzer, AstNode_* n) {
 
 static void function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstFunctionDef_* def = (AstFunctionDef_*)n;
-  // TODO: analyze generic functions
-  if (def->base.base.specializations.count) {
-    for (AstListNode_* n = def->base.base.specializations.head; n != NULL; n = n->next) {
-      do_analysis(analyzer, n->node);
-    }
-    return;
-  }
-
   def->base.type = def->fn_symbol->ty;
 
   FunctionType_* fn_type = type_as(FunctionType_, def->fn_type);
@@ -529,9 +521,26 @@ static void function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
   do_analysis(analyzer, def->body);
 }
 
-static void generic_function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
-  assertf(false, "unimplemented");
+static void ast_generic_function_def_analysis(Analyzer_* analyzer, AstNode_* n) {
+  AstGenericFunctionDef_* def = (AstGenericFunctionDef_*)n;
+  for (AstListNode_* n = def->fn_specializations.head; n != NULL; n = n->next) {
+    do_analysis(analyzer, n->node);
+  }
+
+  // TODO: analyze generic functions
+  //def->base.type = def->fn_symbol->ty;
+  //
+  //FunctionType_* fn_type = type_as(FunctionType_, def->fn_type);
+  //FunctionSymbol_* fn = &def->fn_symbol->fn;
+  //fn_type->ret_ty = def->return_type;
+  //
+  //for (AstListNode_* n = def->function_params.head; n != NULL; n = n->next) {
+  //  do_analysis(analyzer, n->node);
+  //}
+  //
+  //do_analysis(analyzer, def->body);
 }
+
 static void function_param_analysis(Analyzer_* analyzer, AstNode_* n) {
   AstFunctionParam_* param = (AstFunctionParam_*)n;
   
@@ -609,17 +618,28 @@ static void ast_tmp_decl_analysis(Analyzer_* analyzer, AstNode_* n) {
   decl->base.type = decl->expr->type;
 }
 
+static void ast_generic_class_def_analysis(Analyzer_* analyzer, AstNode_* node) {
+  AstGenericClassDef_* def = (AstGenericClassDef_*)node;
+
+  // TODO: analyze generic class members.
+  //for (AstListNode_* n = def->members.head; n != NULL; n = n->next) {
+  //  do_analysis(analyzer, n->node);
+  //}
+  for (AstListNode_* n = def->class_specializations.head; n != NULL; n = n->next) {
+    do_analysis(analyzer, n->node);
+  }
+
+  //if (semantictype_hascycle(&def->class_type)) {
+  //  error(analyzer_, node, "struct \"%.*s\" has a cycle", cls_sym->name.length, cls_sym->name.start);
+  //  return;
+  //}
+}
+
 static void ast_class_def_analysis(Analyzer_* analyzer, AstNode_* node) {
   AstClassDef_* def = (AstClassDef_*)node;
 
   for (AstListNode_* n = def->members.head; n != NULL; n = n->next) {
     do_analysis(analyzer, n->node);
-  }
-
-  if (def->base.specializations.count) {
-    for (AstListNode_* n = def->base.specializations.head; n != NULL; n = n->next) {
-      do_analysis(analyzer, n->node);
-    }
   }
 
   //if (semantictype_hascycle(&def->class_type)) {
@@ -876,6 +896,8 @@ AnalysisRule_ analysis_rules[] = {
   [AST_CLS(AstGenericParams_)]          = {generic_params_analysis},
   [AST_CLS(AstVarOrTypeExpr_)]          = {index_or_type_expr_analysis},
   [AST_CLS(AstIndexOrGenericArgs_)]     = {index_or_generic_args_analysis},
+  [AST_CLS(AstGenericClassDef_)]        = {ast_generic_class_def_analysis},
+  [AST_CLS(AstGenericFunctionDef_)]     = {ast_generic_function_def_analysis},
 };
 
 // Static assert to make sure that all node types are accounted for.

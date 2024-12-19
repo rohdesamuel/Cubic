@@ -127,18 +127,25 @@ static const TypeExpr_* cst_generic_or_array_expr_parse(const CstNode_* node, Me
   return make_generic_or_array_typeexpr(prefix, &args, allocator);
 }
 
-static const TypeExpr_* cst_function_def_parse(const CstNode_* node, MemoryAllocator_* allocator) {
-  CstFunctionDef_* cst = (CstFunctionDef_*)node;
-  
-  ListOf_(TypeExpr_*) type_params = { 0 };
-  ListOf_(TypeExpr_*) params = { 0 };
-  list_of(&type_params, TypeExpr_*, allocator);
-  list_of(&params, TypeExpr_*, allocator);
+static const TypeExpr_* cst_generic_function_def_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  CstGenericFunctionDef_* cst = (CstGenericFunctionDef_*)node;
+  TypeExpr_* fn_type_expr = (TypeExpr_*)do_parse((CstNode_*)cst->function_def, allocator);
+
+  list_of(&fn_type_expr->params, TypeExpr_*, allocator);
 
   for (CstListNode_* n = cst->generic_params.head; n != NULL; n = n->next) {
     const TypeExpr_* param = do_parse(n->node, allocator);
-    list_push(&type_params, &param);
+    list_push(&fn_type_expr->params, &param);
   }
+
+  return fn_type_expr;
+}
+
+static const TypeExpr_* cst_function_def_parse(const CstNode_* node, MemoryAllocator_* allocator) {
+  CstFunctionDef_* cst = (CstFunctionDef_*)node;
+  
+  ListOf_(TypeExpr_*) params = { 0 };
+  list_of(&params, TypeExpr_*, allocator);
 
   for (CstListNode_* n = cst->function_params.head; n != NULL; n = n->next) {
     const TypeExpr_* param = do_parse(n->node, allocator);
@@ -149,7 +156,7 @@ static const TypeExpr_* cst_function_def_parse(const CstNode_* node, MemoryAlloc
     /* name = */ cst->name,
     /* ret = */ do_parse(cst->return_type, allocator),
     /* params =  */ &params,
-    /* type_params =  */ &type_params,
+    /* type_params =  */ NULL,
     allocator);
 }
 
@@ -288,6 +295,8 @@ static ParseRule_ parse_rules[] = {
   [CST_CLS(CstIndexOrGenericArgs_)]    = {nil_parse},
   [CST_CLS(CstGenericOrArrayType_)]    = {cst_generic_or_array_type_parse},
   [CST_CLS(CstGenericOrArrayExpr_)]    = {cst_generic_or_array_expr_parse},
+  [CST_CLS(CstGenericFunctionDef_)]    = {cst_generic_function_def_parse},
+  [CST_CLS(CstGenericClassDef_)]       = {unimplemented_parse},
 };
 
 

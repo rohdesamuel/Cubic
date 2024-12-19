@@ -57,7 +57,9 @@
   CST_NODE(CstVarOrTypeExpr_), \
   CST_NODE(CstIndexOrGenericArgs_), \
   CST_NODE(CstGenericOrArrayType_), \
-  CST_NODE(CstGenericOrArrayExpr_)
+  CST_NODE(CstGenericOrArrayExpr_), \
+  CST_NODE(CstGenericFunctionDef_), \
+  CST_NODE(CstGenericClassDef_)
 
 #define GENERATE_CSTNODE(NODE) CST_CLS(NODE)
 
@@ -347,11 +349,18 @@ typedef struct CstTypeDef_ {
 typedef struct CstFunctionDef_ {
   CstNode_ base;
   Token_ name;
-  CstList_ generic_params;
   CstList_ function_params;
   CstNode_* return_type;
   CstNode_* body;
 } CstFunctionDef_;
+
+// FunctionDef ::= 'function' [Id] [GenericParams] '(' [FunctionParamList] [',' '...'] ')' ['->' UnionType] Statement 'end'
+typedef struct CstGenericFunctionDef_ {
+  CstNode_ base;
+  Token_ name;
+  CstList_ generic_params;
+  CstFunctionDef_* function_def;
+} CstGenericFunctionDef_;
 
 // FunctionParam ::= (['in' | 'out'] Id [':' UnionType])
 typedef struct CstFunctionParam_ {
