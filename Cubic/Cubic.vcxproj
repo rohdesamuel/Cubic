@@ -201,7 +201,6 @@
     <ClCompile Include="type_parser.c" />
     <ClCompile Include="type_tree.c" />
     <ClCompile Include="value.c" />
-    <ClCompile Include="vm.c" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="syntax.txt" />
@@ -237,7 +236,6 @@
     <ClInclude Include="type_parser.h" />
     <ClInclude Include="type_tree.h" />
     <ClInclude Include="value.h" />
-    <ClInclude Include="vm.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

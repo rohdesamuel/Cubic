@@ -639,7 +639,7 @@ static AstNode_* cst_generic_function_def_parse(AstParser_* parser, CstNode_* no
   for (ListNode_* n = type_expr->params.head; n != NULL; n = n->next) {
     TypeExprGenericParam_* generic_param_type_expr = list_val(n, TypeExprGenericParam_*);
     Type_* param_ty = defer_type_resolution(parser, (TypeExpr_*)generic_param_type_expr, fn_scope, allocator);
-    fn_type->
+    //fn_type->
     frame_addtype(fn_frame, &generic_param_type_expr->name, param_ty, fn_scope);
   }
 
