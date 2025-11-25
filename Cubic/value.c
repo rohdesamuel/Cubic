@@ -50,6 +50,7 @@ void value_print(Value_ value, RuntimeType_ info) {
     case TYPE_CLS(Uint64Type_): printf("%llu", AS_UINT64(value)); break;
     case TYPE_CLS(FloatType_):  printf("%f", AS_FLOAT(value)); break;
     case TYPE_CLS(DoubleType_): printf("%f", AS_DOUBLE(value)); break;
+    case TYPE_CLS(StringType_): printf("%.*s", AS_STRING(value)->length, AS_STRING(value)->chars); break;
   }
 }
 

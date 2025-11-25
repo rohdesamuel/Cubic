@@ -126,7 +126,6 @@ static InterpretResult run(VM vm) {
     } while (0)
 
   for (;;) {
-
 //#define DEBUG_TRACE_EXECUTION
 #ifdef DEBUG_TRACE_EXECUTION
     //printf("\n==== Execution Trace ====");

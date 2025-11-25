@@ -230,28 +230,31 @@ static CstNode_* parse_unary_type(Parser_* parser, Scanner_* scanner) {
       CstGenericOrArrayType_* generic_type = MAKE_CST_NODE(parser->allocator, CstGenericOrArrayType_, token.line);
       generic_type->prefix = ret;
       cstlist_init(&generic_type->args, parser->allocator);
-      do {
-        advance(parser, scanner);
-
-        CstNode_* arg = NULL;
-        Value_ maybe_val = { 0 };
-        if (parse_value(parser, &maybe_val)) {
-          CstPrimaryExp_* exp = MAKE_CST_NODE(parser->allocator, CstPrimaryExp_, parser->previous.line);
-          exp->value = maybe_val;
-          exp->type = parser->previous.type;
-          arg = (CstNode_*)exp;
-        } else {
-          arg = parse_unary_type(parser, scanner);
-        }
-        cstlist_append(&generic_type->args, arg);
-
-      } while (match(parser, scanner, TK_COMMA));
-
-      ret = (CstNode_*)generic_type;
-
       if (!match(parser, scanner, TK_RBRACKET)) {
-        error(parser, "type malformed, expected ']' at end of type.");
-        return ret;
+        do {
+          advance(parser, scanner);
+
+          CstNode_* arg = NULL;
+          Value_ maybe_val = { 0 };
+          if (parse_value(parser, &maybe_val)) {
+            CstPrimaryExp_* exp = MAKE_CST_NODE(parser->allocator, CstPrimaryExp_, parser->previous.line);
+            exp->value = maybe_val;
+            exp->type = parser->previous.type;
+            arg = (CstNode_*)exp;
+          } else {
+            arg = parse_unary_type(parser, scanner);
+          }
+          cstlist_append(&generic_type->args, arg);
+
+        } while (match(parser, scanner, TK_COMMA));
+        ret = (CstNode_*)generic_type;
+
+        if (!match(parser, scanner, TK_RBRACKET)) {
+          error(parser, "type malformed, expected ']' at end of type.");
+          return ret;
+        }
+      } else {
+        ret = (CstNode_*)generic_type;
       }
     } while (match(parser, scanner, TK_LBRACKET));
   }

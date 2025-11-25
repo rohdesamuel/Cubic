@@ -210,6 +210,11 @@
     <None Include="vars.cub" />
     <None Include="while_loops.cub" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\cubiclib\cubiclib.vcxproj">
+      <Project>{3eb3b45f-3a42-41f7-831f-06627535cc5d}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

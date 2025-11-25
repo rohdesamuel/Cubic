@@ -369,6 +369,9 @@ static const Type_* resolve_typeexpr_recur(const TypeExpr_* type, Scope_* scope,
       return ret->primitive_ty;
     }
 
+    case TYPE_EXPR_CLS(TypeExprPrimary_):
+      return make_primary_ty(type, scope, allocator);
+
     case TYPE_EXPR_CLS(TypeExprSymbol_):
     {
       const TypeExprSymbol_* type_expr_symbol = (const TypeExprSymbol_*)type;
@@ -558,7 +561,20 @@ static const Type_* resolve_typeexpr_recur(const TypeExpr_* type, Scope_* scope,
       if (tmpl->params.count) {
         return apply_template(tmpl, &ty->args, scope, type_env, errors, allocator);
       } else {
-        assertf(false, "unimplemented");
+        const Type_* el_type = prefix;
+        TypeExpr_* arity_expr = list_val(ty->args.head, TypeExpr_*);
+        const Type_* arity_ty = resolve_typeexpr_recur(arity_expr, scope, type_env, errors, allocator);
+
+        if (arity_ty->cls == TYPE_CLS(PrimaryType_)) {
+          const PrimaryType_* arity = type_cast(PrimaryType_, arity_ty);
+
+          assertf(arity->type == TK_INTEGER, "Array arity must be defined as integer.");
+          return make_array_ty((Type_*)prefix, arity->val.as.i, type, scope, allocator);
+        } else {
+          assert(false && "Dynamic arrays are unimplemented.");
+        }
+
+        for (int i = 0; i < ty->args.count; ++i) {}
       }
 
       break;

@@ -489,7 +489,7 @@ void tac_compiler_compile(TacCompiler_* compiler, struct AstNode_* root) {
   Location_ empty_ret = EMPTY_LOC;
   emit_return(&compiler->chunk, &empty_ret, 0);
 
-  tac_compiler_print(compiler);
+  // tac_compiler_print(compiler);
 }
 
 void tac_compiler_clear(TacCompiler_* compiler) {

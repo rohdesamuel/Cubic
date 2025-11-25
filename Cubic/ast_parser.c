@@ -510,20 +510,19 @@ static AstNode_* cst_var_decl_parse(AstParser_* parser, CstNode_* node, Scope_* 
     ret->decl_type = ret->expr->type;
   }
 
-  Symbol_* var_sym = frame_addvar(scope->frame, &ret->name, ret->decl_type, scope);
+  ret->sym = frame_addvar(scope->frame, &ret->name, ret->decl_type, scope);
   if (stmt->expr) {
     ret->expr = (AstExpr_*)(do_parse(parser, stmt->expr, scope, allocator));
     if (!stmt->opt_type) {
-      var_sym->ty = ret->expr->type;
+      ret->sym->ty = ret->expr->type;
       ret->decl_type = ret->expr->type;
     }
   }
 
   if (stmt->decl_token == TK_VAR) {
     ret->decl_type = make_var_ty(ret->decl_type, ret->decl_type->tmpl, scope, allocator);
-    var_sym->ty = ret->decl_type;
+    ret->sym->ty = ret->decl_type;
   }
-
   return (AstNode_*)ret;
 }
 
@@ -542,7 +541,8 @@ static AstNode_* cst_id_expr_parse(AstParser_* parser, CstNode_* node, Scope_* s
   
   const TypeExpr_* type_expr = parse_type(node, allocator);
   ret->base.type = defer_type_resolution(parser, type_expr, scope, allocator);
-
+  ret->sym = scope_find(scope, &ret->name);
+  
   return (AstNode_*)ret;
 }
 

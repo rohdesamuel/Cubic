@@ -9,12 +9,12 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
+    <Filter Include="Source Files\test files">
+      <UniqueIdentifier>{d1b6d482-a183-4872-81f5-12b1e2265bc0}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
-    <Filter Include="Source Files\test files">
-      <UniqueIdentifier>{d1b6d482-a183-4872-81f5-12b1e2265bc0}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -144,9 +144,6 @@
     <ClCompile Include="ast_initializer.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="type_tree.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ast_resolver.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -230,9 +227,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="type_parser.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="type_tree.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ast_internal.h">

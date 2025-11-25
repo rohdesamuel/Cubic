@@ -116,7 +116,8 @@ typedef enum {
   TYPE_OP(ConstraintType_) DELIM \
   TYPE_OP(TupleType_) DELIM \
   TYPE_OP(GenericParamType_) DELIM \
-  TYPE_OP(FunctionType_)
+  TYPE_OP(FunctionType_) DELIM \
+  TYPE_OP(PrimaryType_)
 
 #define GENERATE_TYPE_ENUMS(TYPE) TYPE_CLS(TYPE)
 #define GENERATE_TYPE_UNION(TYPE) TYPE_NAME(TYPE)
@@ -192,6 +193,12 @@ DEF_PRIMITIVE_TY(String);
 typedef struct PrimitiveType_ {
   Type_ self;
 } PrimitiveType_;
+
+typedef struct PrimaryType_{
+  Type_ self;
+  TokenType_ type;
+  Value_ val;
+} PrimaryType_;
 
 typedef struct UnaryType_ {
   Type_ self;
@@ -322,6 +329,7 @@ Type_* make_ref_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_*
 Type_* make_in_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 Type_* make_out_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 Type_* make_array_ty(Type_* el_type, size_t count, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
+Type_* make_primary_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator);
 
 // Class types are singletons. For each class type, there is only one Type_*
 // instance.

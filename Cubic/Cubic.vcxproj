@@ -199,7 +199,6 @@
     <ClCompile Include="type.c" />
     <ClCompile Include="type_expr.c" />
     <ClCompile Include="type_parser.c" />
-    <ClCompile Include="type_tree.c" />
     <ClCompile Include="value.c" />
   </ItemGroup>
   <ItemGroup>
@@ -234,7 +233,6 @@
     <ClInclude Include="type_checker.h" />
     <ClInclude Include="type_expr.h" />
     <ClInclude Include="type_parser.h" />
-    <ClInclude Include="type_tree.h" />
     <ClInclude Include="value.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

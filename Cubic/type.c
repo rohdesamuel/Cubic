@@ -64,6 +64,15 @@ Type_* make_placeholder_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, M
   return (Type_*)ret;
 }
 
+Type_* make_primary_ty(const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator) {
+  TypeExprPrimary_* expr = typeexpr_as(TypeExprPrimary_, tmpl);
+  PrimaryType_* ret = (PrimaryType_*)type_alloc_ty(allocator, scope, tmpl, PrimaryType_);
+  ret->val = expr->value;
+  ret->type = expr->type;
+  ret->self.id = type_id_calc((Type_*)ret);
+  return (Type_*)ret;
+}
+
 Type_* make_const_ty(Type_* sub_type, const struct TypeExpr_* tmpl, struct Scope_* scope, MemoryAllocator_* allocator) {
   ConstType_* ret = type_alloc_ty(allocator, scope, tmpl, ConstType_);
   ret->unary.ty = sub_type;

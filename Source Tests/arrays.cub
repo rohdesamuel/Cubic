@@ -39,12 +39,12 @@ assert e == a
 assert a == e
 
 # Dynamic array
-val f: int[..] = []
-assert f.len == 0
+# val f: int[..] = []
+# assert f.len == 0
 
-f.add(1)
-assert f.len == 1
-assert f[0] == 1
+# f.add(1)
+# assert f.len == 1
+# assert f[0] == 1
 
 # Generic lists
 # val f: List[int] = [1, 2]

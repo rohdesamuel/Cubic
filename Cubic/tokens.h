@@ -1,7 +1,8 @@
 #ifndef TOKENS__H
 #define TOKENS__H
 
-#include "common.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 typedef enum {
   TK_EOF,
@@ -82,7 +83,7 @@ typedef struct Token_ {
 
 bool token_eq(Token_ a, Token_ b);
 Token_ token_string(const char* str);
-Token_ token_concat(Token_ l, Token_ r, MemoryAllocator_* allocator);
+Token_ token_concat(Token_ l, Token_ r, struct MemoryAllocator_* allocator);
 uint64_t token_hash(Token_ t);
 
 #endif  // TOKENS__H
