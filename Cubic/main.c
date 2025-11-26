@@ -2,7 +2,6 @@
 
 #include "chunk.h"
 #include "debug.h"
-#include "lexer.h"
 #include "scanner.h"
 
 
