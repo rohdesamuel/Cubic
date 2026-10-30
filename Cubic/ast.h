@@ -154,7 +154,6 @@ typedef struct AstVarDeclStmt_ {
 
   Token_ name;
   Type_* decl_type;
-  Symbol_* sym;
 
   AstExpr_* expr;
 } AstVarDeclStmt_;
@@ -229,7 +228,6 @@ typedef struct AstIdExpr_ {
   struct AstExpr_ base;
 
   Token_ name;
-  Symbol_* sym;
 } AstIdExpr_;
 
 // Var ::= PrefixExpr '[' Expr ']'

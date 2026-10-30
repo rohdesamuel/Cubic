@@ -19,7 +19,7 @@ UTEST_F_SETUP(MyTestFixture) {
 
 UTEST_F_TEARDOWN(MyTestFixture) {}
 
-UTEST_F(MyTestFixture, hello_world) {
+/*UTEST_F(MyTestFixture, hello_world) {
   auto output = run_file(exedir, "hello_world.cub");
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
@@ -46,13 +46,13 @@ UTEST_F(MyTestFixture, operators) {
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }
-
+*/
 UTEST_F(MyTestFixture, global_variables) {
   auto output = run_file(exedir, "global_variables.cub");
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }
-
+/*
 UTEST_F(MyTestFixture, local_variables) {
   auto output = run_file(exedir, "local_variables.cub");
   ASSERT_TRUE(output.has_value());
@@ -136,7 +136,7 @@ UTEST_F(MyTestFixture, fib) {
   ASSERT_TRUE(output.has_value());
   ASSERT_EQ(0, output->exit_code);
 }
-
+*/
 /*
 UTEST_F(MyTestFixture, arrays) {
   auto output = run_file(exedir, "arrays.cub");

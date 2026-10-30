@@ -1515,7 +1515,8 @@ static Location_ emit_decl_var(TacChunk_* chunk, Token_ var_name, Symbol_* var_s
 
 static Location_ var_decl_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstVarDeclStmt_* stmt = (AstVarDeclStmt_*)node;
-  return emit_decl_var(chunk, stmt->name, stmt->sym, stmt->expr, node->line);
+  Symbol_* sym = scope_find(node->scope, &stmt->name);
+  return emit_decl_var(chunk, stmt->name, sym, stmt->expr, node->line);
 }
 
 static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
@@ -1528,7 +1529,7 @@ static Location_ var_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
 static Location_ id_expr_code_gen(TacChunk_* chunk, AstNode_* node) {
   AstIdExpr_* expr = (AstIdExpr_*)node;
 
-  Symbol_* sym = expr->sym;
+  Symbol_* sym = scope_find(node->scope, &expr->name);
 
   switch (sym->type) {
     case SYMBOL_CLS_VAR:
@@ -2067,7 +2068,7 @@ static Location_ in_place_binary_stmt_code_gen(TacChunk_* chunk, AstNode_* node)
   AstInPlaceBinaryStmt_* expr = (AstInPlaceBinaryStmt_*)node;
   Location_ dst = code_gen(chunk, (AstNode_*)expr->left);
   Location_ tmp;
-    if (dst.type == LOCATION_TYPE_VAL) {
+  if (dst.type == LOCATION_TYPE_VAL) {
     tmp = dst;
   } else {
     tmp = tac_alloc_val(chunk, Int_Ty->size);
@@ -2077,7 +2078,7 @@ static Location_ in_place_binary_stmt_code_gen(TacChunk_* chunk, AstNode_* node)
   Location_ res = emit_binary_op(
     chunk, expr->bin_op, tmp, src,
     type_valtype(expr->left->type), type_valtype(expr->right->type),
-    expr->left->type, node->line);
+    type_valtype(expr->left->type), node->line);
 
   emit_set_variable(chunk, &dst, &res, expr->left->type, node->line);
 
